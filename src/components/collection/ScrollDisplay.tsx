@@ -16,7 +16,8 @@ import { money } from '../../lib/format';
 import { SlabView } from '../SlabView';
 import { Caption } from './GridView';
 
-const GAP = space.s;
+// Room between cases: the slab now has a real case edge and shadow, so neighbours need air.
+const GAP = space.xxxl;
 const REFLECTION = { opacity: 0.28, height: 0.34 } as const;
 
 type ItemProps = {
