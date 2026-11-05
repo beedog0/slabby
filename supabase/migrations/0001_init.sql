@@ -1,6 +1,9 @@
+-- The vault table is `slabs`, not `cards`: the Slabby 1.0 project already has a `cards` catalog
+-- table and `collection_items`, which 2.0 leaves untouched.
+
 -- users: Supabase auth
 
-create table cards (
+create table slabs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users not null,
   cert_number text,                 -- PSA cert, null for raw
@@ -74,14 +77,14 @@ create table con_sessions (
 
 -- Row-level security. Per-user tables are keyed by user_id; shared price/cert tables are
 -- readable by any signed-in user and written only by Edge Functions (service role bypasses RLS).
-alter table cards enable row level security;
+alter table slabs enable row level security;
 alter table pricing_rules enable row level security;
 alter table con_sessions enable row level security;
 alter table cert_cache enable row level security;
 alter table price_points enable row level security;
 alter table price_daily enable row level security;
 
-create policy "own cards" on cards for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own slabs" on slabs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own rules" on pricing_rules for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own con sessions" on con_sessions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
@@ -89,5 +92,5 @@ create policy "read certs" on cert_cache for select to authenticated using (true
 create policy "read price points" on price_points for select to authenticated using (true);
 create policy "read price daily" on price_daily for select to authenticated using (true);
 
-create index cards_user_idx on cards (user_id, status);
+create index slabs_user_idx on slabs (user_id, status);
 create index price_points_key_idx on price_points (card_key, observed_at desc);

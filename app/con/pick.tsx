@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { BackIcon, Hairline, IconButton } from '../../src/components/ui';
 import { rowFor } from '../../src/pricing/portfolio';
+import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
 import { useVault } from '../../src/store/vault';
 import { color, size, space, type } from '../../src/theme/tokens';
@@ -15,9 +16,10 @@ export default function PickCard() {
   const insets = useSafeAreaInsets();
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
+  const prices = usePrices((s) => s.byKey);
   const rows = useMemo(
     () => cards.filter((c) => c.status === 'owned' && c.plan !== 'hold').map((c) => rowFor(c, rules)),
-    [cards, rules],
+    [cards, rules, prices],
   );
 
   return (
