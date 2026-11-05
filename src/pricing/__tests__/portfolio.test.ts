@@ -59,3 +59,31 @@ describe('detailFor', () => {
     expect(detailFor(rowFor({ ...card, paidCents: null }, DEFAULT_RULES, price), 90).gainCents).toBeNull();
   });
 });
+
+describe('collection', () => {
+  const { collection } = require('../portfolio');
+  const mk = (id: string, plan: string, status: string, market: number | null, extra = {}) => ({
+    card: { id, plan, status, soldCents: null, soldAt: null, ...extra },
+    price: market == null ? null : { marketCents: market },
+  });
+  const rows = [
+    mk('a', 'hold', 'owned', 100),
+    mk('b', 'sell', 'owned', 300),
+    mk('c', 'trade', 'owned', 200),
+    mk('d', 'hold', 'sold', 50, { soldCents: 400, soldAt: '2026-11-01' }),
+    mk('e', 'hold', 'sold', 50, { soldCents: 100, soldAt: '2026-11-03' }),
+    mk('f', 'hold', 'owned', null),
+  ];
+  it('lists owned cards by value with a total', () => {
+    const r = collection(rows, 'all');
+    expect(r.rows.map((x: any) => x.card.id)).toEqual(['b', 'c', 'a', 'f']);
+    expect(r.totalCents).toBe(600);
+  });
+  it('filters holds, for sale (incl. trade), and sold newest first', () => {
+    expect(collection(rows, 'hold').rows.map((x: any) => x.card.id)).toEqual(['a', 'f']);
+    expect(collection(rows, 'sell').rows.map((x: any) => x.card.id)).toEqual(['b', 'c']);
+    const sold = collection(rows, 'sold');
+    expect(sold.rows.map((x: any) => x.card.id)).toEqual(['e', 'd']);
+    expect(sold.totalCents).toBe(500);
+  });
+});

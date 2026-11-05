@@ -62,7 +62,14 @@ export default function Vault() {
       <View style={[styles.gutter, { paddingTop: space.section }]}>
         <SectionHeader
           title="Holds"
-          right={<Text style={[type.text, { color: color.secondary }]}>{summary.forSaleCount} listed</Text>}
+          right={
+            <Pressable accessibilityRole="link" hitSlop={10} onPress={() => router.push('/collection')}>
+              <Text style={[type.text, { color: color.secondary }]}>
+                All {cards.filter((c) => c.status === 'owned').length}
+                <Chevron />
+              </Text>
+            </Pressable>
+          }
         />
         {holds.map((r) => (
           <View key={r.card.id}>

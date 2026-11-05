@@ -102,3 +102,23 @@ export function detailFor(row: CardRow, days: 30 | 90): DetailNumbers | null {
     series: p.series90.slice(-(days + 1)),
   };
 }
+
+export type CollectionFilter = 'all' | 'hold' | 'sell' | 'sold';
+
+/** Collection list: filter, sort by value (sold cards by sale date), and total. */
+export function collection(rows: CardRow[], filter: CollectionFilter): { rows: CardRow[]; totalCents: number } {
+  const keep = rows.filter((r) => {
+    const c = r.card;
+    if (filter === 'sold') return c.status === 'sold';
+    if (c.status !== 'owned') return false;
+    if (filter === 'hold') return c.plan === 'hold';
+    if (filter === 'sell') return c.plan === 'sell' || c.plan === 'trade';
+    return true;
+  });
+  const value = (r: CardRow) => (r.card.status === 'sold' ? r.card.soldCents ?? 0 : r.price?.marketCents ?? 0);
+  const sorted =
+    filter === 'sold'
+      ? [...keep].sort((a, b) => (b.card.soldAt ?? '').localeCompare(a.card.soldAt ?? ''))
+      : [...keep].sort((a, b) => value(b) - value(a));
+  return { rows: sorted, totalCents: sorted.reduce((s, r) => s + value(r), 0) };
+}
