@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import certsJson from '../mocks/certs.json';
 import type { Card } from '../types';
 import { supabase } from './supabase';
+import { uuid } from './sync';
 
 /** Raw PSA public API response body (GetByCertNumber). Only the fields we use. */
 export type PsaCertPayload = {
@@ -121,7 +122,7 @@ export function cardFromCert(payload: PsaCertPayload, extra: { paidCents: number
   const p = payload.PSACert;
   const brand = parseBrand(p.Brand);
   return {
-    id: `psa-${p.CertNumber}`,
+    id: uuid(),
     certNumber: p.CertNumber,
     grader: 'psa',
     grade: gradeFrom(p.CardGrade ?? p.GradeDescription),

@@ -80,6 +80,12 @@ export default function Vault() {
             <Chevron />
           </Text>
         </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/settings/account')} style={styles.quietLink}>
+          <Text style={[type.text, { color: color.secondary }]}>
+            Back up
+            <Chevron />
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
