@@ -4,8 +4,8 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { CardThumb } from '../src/components/CardThumb';
@@ -63,7 +63,13 @@ export default function Scan() {
     setResult(null);
   };
 
+  // Ask for the camera as soon as the screen opens; the system prompt only shows once.
+  useEffect(() => {
+    if (Platform.OS !== 'web' && permission && !permission.granted && permission.canAskAgain) requestPermission();
+  }, [permission?.status]);
+
   const canUseCamera = Platform.OS !== 'web' && permission?.granted;
+  const denied = Platform.OS !== 'web' && !!permission && !permission.granted && !permission.canAskAgain;
 
   return (
     <View style={{ flex: 1, backgroundColor: SCAN_BG }}>
@@ -103,7 +109,13 @@ export default function Scan() {
         {!canUseCamera ? (
           <View style={styles.manual}>
             {Platform.OS !== 'web' && permission && !permission.granted ? (
-              <PrimaryButton title="Allow camera" onPress={requestPermission} style={{ backgroundColor: color.canvas }} />
+              <Pressable
+                accessibilityRole="button"
+                onPress={denied ? () => Linking.openSettings() : requestPermission}
+                style={({ pressed }) => [styles.lightButton, pressed && { opacity: 0.8 }]}
+              >
+                <Text style={[type.button, { color: color.ink }]}>{denied ? 'Turn on camera in Settings' : 'Allow camera'}</Text>
+              </Pressable>
             ) : null}
             <TextInput
               value={manual}
@@ -213,6 +225,13 @@ const corner = (c: string) => ({
 });
 
 const styles = StyleSheet.create({
+  lightButton: {
+    height: size.button,
+    borderRadius: radius.button,
+    backgroundColor: color.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s },
   navBtn: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
   viewfinder: { flex: 1, alignItems: 'center', paddingTop: space.xxxl },
