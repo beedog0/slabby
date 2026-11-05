@@ -58,3 +58,27 @@ export function summarize(rows: CardRow[]): VaultSummary {
   }
   return { valueCents, monthDeltaCents, forSaleCount, floorTotalCents };
 }
+
+export type ConSummary = {
+  soldCents: number;
+  soldCount: number;
+  /** Cards for sale plus cards sold this session: the "of 14". */
+  totalCount: number;
+  floorTotalCents: number;
+};
+
+/** Con mode header numbers. Sold = sold since the session started. */
+export function conSummary(rows: CardRow[], startedAt: string): ConSummary {
+  let soldCents = 0, soldCount = 0, forSale = 0, floorTotalCents = 0;
+  for (const r of rows) {
+    const c = r.card;
+    if (c.status === 'sold' && c.soldAt && c.soldAt >= startedAt) {
+      soldCents += c.soldCents ?? 0;
+      soldCount++;
+    } else if (c.status === 'owned' && c.plan === 'sell') {
+      forSale++;
+      floorTotalCents += r.floor ?? 0;
+    }
+  }
+  return { soldCents, soldCount, totalCount: forSale + soldCount, floorTotalCents };
+}

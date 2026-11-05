@@ -46,3 +46,10 @@ export function monthLine(deltaCents: number): string {
 export function rowTitle(c: { name: string; setName: string | null }): string {
   return c.setName && /^\d+$/.test(c.setName) ? `${c.name} ${c.setName}` : c.name;
 }
+
+/** "3h 12m" / "12m" since an ISO time. */
+export function elapsed(sinceIso: string, now = Date.now()): string {
+  const mins = Math.max(0, Math.floor((now - Date.parse(sinceIso)) / 60000));
+  const h = Math.floor(mins / 60);
+  return h ? `${h}h ${mins % 60}m` : `${mins}m`;
+}
