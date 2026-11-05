@@ -6,19 +6,19 @@
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import type React from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CardRow } from '../../pricing/portfolio';
 import { color, size, space, type } from '../../theme/tokens';
 import { prefetchArt } from '../ArtImage';
-import { MiniChart, trendTint } from '../MiniChart';
-import { money } from '../../lib/format';
+import { gradeLabel, money, rowTitle } from '../../lib/format';
 import { SlabView } from '../SlabView';
-import { Caption } from './GridView';
 
 // Room between cases: the slab now has a real case edge and shadow, so neighbours need air.
 const GAP = space.xxxl;
-const REFLECTION = { opacity: 0.28, height: 0.34 } as const;
+// Kept short so the caption sits above the fold under the home header.
+const REFLECTION = { opacity: 0.18, height: 0.18 } as const;
 
 type ItemProps = {
   row: CardRow;
@@ -75,6 +75,23 @@ export function ScrollDisplay({ rows, screenW }: { rows: CardRow[]; screenW: num
   const i = Math.min(index, Math.max(0, rows.length - 1));
   const current = rows[i];
 
+  // The caption fades out with the drag and is invisible at the halfway point, which is exactly
+  // where the index rounds over, so its text swaps unseen and fades back in with the next slab.
+  const captionOpacity = useMemo(() => {
+    if (rows.length < 2) return 1;
+    const input: number[] = [];
+    const output: number[] = [];
+    rows.forEach((_, n) => {
+      if (n > 0) {
+        input.push((n - 0.5) * step);
+        output.push(0);
+      }
+      input.push(n * step);
+      output.push(1);
+    });
+    return x.interpolate({ inputRange: input, outputRange: output, extrapolate: 'clamp' });
+  }, [rows, step, x]);
+
   useEffect(() => {
     prefetchArt(rows.map((r) => r.card.imageFrontUrl));
   }, [rows]);
@@ -120,47 +137,83 @@ export function ScrollDisplay({ rows, screenW }: { rows: CardRow[]; screenW: num
         )}
       />
       {current ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityHint="Opens this slab"
-          onPress={() => router.push(`/card/${current.card.id}`)}
-          style={styles.caption}
-        >
-          <Caption row={current} center />
-          <CurrentInfo row={current} />
-          <Text style={[type.caption, { color: color.secondary }]}>
-            {i + 1} of {rows.length}
-          </Text>
-        </Pressable>
+        <Animated.View style={{ opacity: captionOpacity }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityHint="Opens this slab"
+            onPress={() => router.push(`/card/${current.card.id}`)}
+            style={styles.caption}
+          >
+            <SwipeCaption row={current} />
+            <Text style={[type.caption, { color: color.secondary, paddingTop: space.l }]}>
+              {i + 1} of {rows.length}
+            </Text>
+          </Pressable>
+        </Animated.View>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * Name, value, then one line that depends on the slab: gain vs paid for holds, ask and floor for
+ * slabs for sale, the sale vs paid for sold ones. The 30-day chart lives on the detail screen.
+ */
+function SwipeCaption({ row }: { row: CardRow }) {
+  const { card, price } = row;
+  const sold = card.status === 'sold';
+  const selling = !sold && (card.plan === 'sell' || card.plan === 'trade');
+  const value = sold ? card.soldCents : price?.marketCents;
+  const muted = { color: color.secondary };
+  const ink = { color: color.ink };
+  const signed = (cents: number) => (
+    <Text style={{ color: cents >= 0 ? color.gain : color.loss }}>{`${cents >= 0 ? '+' : ''}${money(cents)}`}</Text>
+  );
+
+  let line: React.ReactNode;
+  if (selling && row.ask != null) {
+    line = (
+      <>
+        Ask <Text style={ink}>{money(row.ask)}</Text>
+        {row.floor != null ? (
+          <>
+            {' · '}floor <Text style={{ color: color.loss }}>{money(row.floor)}</Text>
+          </>
+        ) : null}
+      </>
+    );
+  } else if (value != null && card.paidCents != null) {
+    line = (
+      <>
+        {signed(value - card.paidCents)}
+        {sold ? ' · sold, paid ' : ' · paid '}
+        <Text style={ink}>{money(card.paidCents)}</Text>
+      </>
+    );
+  } else if (sold) {
+    line = 'Sold';
+  } else if (price) {
+    line = card.grader === 'raw' ? 'TCGplayer market' : 'eBay sold, 30 days';
+  } else {
+    line = 'No sales found yet';
+  }
+
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Text numberOfLines={1} style={[type.body, ink]}>
+        {rowTitle(card)}
+      </Text>
+      {card.grader === 'raw' ? (
+        <Text style={[type.secondary, muted, { paddingTop: 2 }]}>{gradeLabel(card.grader, card.grade, card.condition)}</Text>
+      ) : null}
+      <Text style={[type.rowPrice, ink, { paddingTop: space.xs }]}>{value != null ? money(value) : '—'}</Text>
+      <Text numberOfLines={1} style={[type.secondary, muted, { paddingTop: 2 }]}>
+        {line}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  caption: { alignItems: 'center', gap: space.s, paddingHorizontal: space.gutter, paddingTop: space.s },
+  caption: { alignItems: 'center', minHeight: size.touch, paddingHorizontal: space.gutter, paddingTop: space.l },
 });
-
-/** The centered slab at a glance: its 30-day line, and ask/floor when it's for sale. */
-function CurrentInfo({ row }: { row: CardRow }) {
-  const series = row.price?.series90.slice(-31) ?? [];
-  const selling = row.card.status === 'owned' && (row.card.plan === 'sell' || row.card.plan === 'trade');
-  if (series.length < 2 && !selling) return null;
-  return (
-    <View style={{ alignItems: 'center', gap: space.xs }}>
-      {series.length > 1 ? <MiniChart values={series} width={160} height={28} /> : null}
-      {selling && row.ask != null ? (
-        <Text style={[type.secondary, { color: color.secondary }]}>
-          Ask <Text style={{ color: color.ink }}>{money(row.ask)}</Text>
-          {row.floor != null ? (
-            <>
-              {' · '}Floor <Text style={{ color: color.ink }}>{money(row.floor)}</Text>
-            </>
-          ) : null}
-        </Text>
-      ) : series.length > 1 ? (
-        <Text style={[type.secondary, { color: trendTint(series) }]}>30 days</Text>
-      ) : null}
-    </View>
-  );
-}
