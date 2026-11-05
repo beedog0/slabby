@@ -6,7 +6,7 @@ import { useEffect, useMemo } from 'react';
 import { ActionSheetIOS, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
-import { MiniChart } from '../src/components/MiniChart';
+import { ValueChart } from '../src/components/MiniChart';
 import { EmptyVault } from '../src/components/collection/EmptyVault';
 import { FilterTabs } from '../src/components/collection/FilterTabs';
 import { GridView } from '../src/components/collection/GridView';
@@ -47,6 +47,10 @@ export default function Home() {
   const all = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   const summary = useMemo(() => summarize(all), [all]);
   const list = useMemo(() => collection(all, filter), [all, filter]);
+  const asOf = useMemo(
+    () => list.rows.map((r) => r.price?.asOf).filter((d): d is string => !!d).sort().pop(),
+    [list],
+  );
   const valueLine = useMemo(() => (filter === 'sold' ? [] : collectionSeries(list.rows, 30)), [list, filter]);
   const owned = cards.filter((c) => c.status === 'owned').length;
   const isEmpty = cards.length === 0;
@@ -106,7 +110,7 @@ export default function Home() {
               <Text style={[type.text, { color: color.secondary }]}>{subline}</Text>
               {valueLine.length > 1 ? (
                 <View style={{ paddingTop: space.m }}>
-                  <MiniChart values={valueLine} width={contentW} />
+                  <ValueChart values={valueLine} width={contentW} asOf={asOf} />
                 </View>
               ) : null}
             </View>
