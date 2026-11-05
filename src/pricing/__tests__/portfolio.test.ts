@@ -105,3 +105,12 @@ describe('collection value line', () => {
     expect(trendOf([3])).toBe('flat');
   });
 });
+
+import { gridPrices } from '../../components/PriceChart';
+
+describe('chart gridlines', () => {
+  it('picks two round prices inside the range', () => {
+    expect(gridPrices(118_000, 142_000)).toEqual([120_000, 140_000]);
+    expect(gridPrices(5_000, 5_000)).toEqual([5_000]);
+  });
+});
