@@ -48,7 +48,7 @@ export function SlabViewer({ card, visible, onClose }: { card: Card; visible: bo
     enter.setValue(0);
     Animated.parallel([
       Animated.spring(enter, { toValue: 1, friction: 8, tension: 70, useNativeDriver: true }),
-      Animated.spring(yaw, { toValue: REST_YAW, friction: 7, tension: 40, useNativeDriver: true }),
+      Animated.spring(yaw, { toValue: REST_YAW, friction: 7, tension: 40, useNativeDriver: false }),
     ]).start();
   }, [visible, yaw, pitch, zoom, enter, hint, g]);
 
@@ -60,8 +60,8 @@ export function SlabViewer({ card, visible, onClose }: { card: Card; visible: bo
     const was = Math.round((g.startYaw - REST_YAW) / 180) % 2 !== 0;
     if (flipped !== was) Haptics.selectionAsync().catch(() => {});
     g.yaw = target;
-    Animated.spring(yaw, { toValue: target, velocity: vx * 1000 * DEG_PER_PT, friction: 9, tension: 38, useNativeDriver: true }).start();
-    Animated.spring(pitch, { toValue: REST_PITCH, friction: 7, tension: 50, useNativeDriver: true }).start();
+    Animated.spring(yaw, { toValue: target, velocity: vx * 1000 * DEG_PER_PT, friction: 9, tension: 38, useNativeDriver: false }).start();
+    Animated.spring(pitch, { toValue: REST_PITCH, friction: 7, tension: 50, useNativeDriver: false }).start();
   };
 
   const reset = () => {
@@ -69,8 +69,8 @@ export function SlabViewer({ card, visible, onClose }: { card: Card; visible: bo
     g.yaw = target;
     g.zoom = 1;
     Animated.parallel([
-      Animated.spring(yaw, { toValue: target, friction: 8, tension: 50, useNativeDriver: true }),
-      Animated.spring(pitch, { toValue: REST_PITCH, friction: 8, tension: 50, useNativeDriver: true }),
+      Animated.spring(yaw, { toValue: target, friction: 8, tension: 50, useNativeDriver: false }),
+      Animated.spring(pitch, { toValue: REST_PITCH, friction: 8, tension: 50, useNativeDriver: false }),
       Animated.spring(zoom, { toValue: 1, friction: 8, tension: 60, useNativeDriver: true }),
     ]).start();
   };
@@ -129,7 +129,7 @@ export function SlabViewer({ card, visible, onClose }: { card: Card; visible: bo
     <Modal visible={visible} animationType="fade" presentationStyle="overFullScreen" transparent statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.page} {...pan.panHandlers}>
         <Animated.View style={{ transform: [{ scale }], opacity: enter }}>
-          <Slab3D card={card} width={slabW} yaw={yaw} pitch={pitch} />
+          <Slab3D card={card} width={slabW} yaw={yaw} pitch={pitch} sharp />
         </Animated.View>
         <Animated.Text style={[type.secondary, styles.hint, { bottom: insets.bottom + space.xxl, opacity: hint }]}>
           Drag to turn · pinch to zoom

@@ -104,8 +104,8 @@ function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; wi
 
   function springBack() {
     Animated.parallel([
-      Animated.spring(yaw, { toValue: REST_YAW, friction: 5, tension: 55, useNativeDriver: true }),
-      Animated.spring(pitch, { toValue: REST_PITCH, friction: 5, tension: 55, useNativeDriver: true }),
+      Animated.spring(yaw, { toValue: REST_YAW, friction: 5, tension: 55, useNativeDriver: false }),
+      Animated.spring(pitch, { toValue: REST_PITCH, friction: 5, tension: 55, useNativeDriver: false }),
     ]).start();
   }
 

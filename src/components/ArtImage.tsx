@@ -16,7 +16,9 @@ export function prefetchArt(urls: (string | null | undefined)[]) {
   if (list.length) Image.prefetch(list, 'memory-disk').catch(() => {});
 }
 
-export function ArtImage({ uri, style, recyclingKey }: { uri: string; style?: StyleProp<ImageStyle>; recyclingKey?: string }) {
+/** `sharp` keeps the full 1000 px decode instead of one sized to the view, so a zoomed-in
+ *  slab is crisp on its first frame rather than sharpening a moment later. */
+export function ArtImage({ uri, style, recyclingKey, sharp = false }: { uri: string; style?: StyleProp<ImageStyle>; recyclingKey?: string; sharp?: boolean }) {
   return (
     <Image
       source={{ uri: hiResArt(uri) }}
@@ -26,6 +28,7 @@ export function ArtImage({ uri, style, recyclingKey }: { uri: string; style?: St
       transition={0}
       recyclingKey={recyclingKey}
       priority="high"
+      allowDownscaling={!sharp}
     />
   );
 }
