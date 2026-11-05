@@ -6,6 +6,7 @@ import { useEffect, useMemo } from 'react';
 import { ActionSheetIOS, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
+import { MiniChart } from '../src/components/MiniChart';
 import { EmptyVault } from '../src/components/collection/EmptyVault';
 import { FilterTabs } from '../src/components/collection/FilterTabs';
 import { GridView } from '../src/components/collection/GridView';
@@ -14,9 +15,8 @@ import { ShelfView } from '../src/components/collection/ShelfView';
 import { ViewSwitch } from '../src/components/collection/ViewSwitch';
 import { IconButton, PrimaryButton, ScanIcon } from '../src/components/ui';
 import { money, monthLine } from '../src/lib/format';
-import { collection, rowFor, summarize, type CollectionFilter } from '../src/pricing/portfolio';
+import { collection, collectionSeries, rowFor, summarize, type CollectionFilter } from '../src/pricing/portfolio';
 import { refreshPrices } from '../src/services/comps';
-import { useCon } from '../src/store/con';
 import { useDisplay } from '../src/store/display';
 import { usePrices } from '../src/store/prices';
 import { useRules } from '../src/store/rules';
@@ -38,7 +38,6 @@ export default function Home() {
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
   const prices = usePrices((s) => s.byKey);
-  const conActive = useCon((s) => s.session != null);
   const { mode, filter, setMode, setFilter } = useDisplay();
 
   useEffect(() => {
@@ -48,6 +47,7 @@ export default function Home() {
   const all = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   const summary = useMemo(() => summarize(all), [all]);
   const list = useMemo(() => collection(all, filter), [all, filter]);
+  const valueLine = useMemo(() => (filter === 'sold' ? [] : collectionSeries(list.rows, 30)), [list, filter]);
   const owned = cards.filter((c) => c.status === 'owned').length;
   const isEmpty = cards.length === 0;
 
@@ -99,6 +99,11 @@ export default function Home() {
             <View style={styles.value}>
               {count > 0 ? <Text style={[type.displayS, { color: color.ink }]}>{money(list.totalCents)}</Text> : null}
               <Text style={[type.text, { color: color.secondary }]}>{subline}</Text>
+              {valueLine.length > 1 ? (
+                <View style={{ paddingTop: space.m }}>
+                  <MiniChart values={valueLine} width={contentW} />
+                </View>
+              ) : null}
             </View>
 
             <View style={styles.controls}>
@@ -134,7 +139,7 @@ export default function Home() {
             </Pressable>
           </>
         ) : (
-          <PrimaryButton title={conActive ? 'Back to con mode' : 'Start con mode'} onPress={() => router.push('/con')} />
+          <PrimaryButton title="Start con mode" onPress={() => router.push('/con')} />
         )}
       </View>
     </View>
