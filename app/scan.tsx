@@ -78,7 +78,7 @@ export default function Scan() {
           style={StyleSheet.absoluteFill}
           facing="back"
           enableTorch={torch}
-          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'code39'] }}
           onBarcodeScanned={result ? undefined : ({ data }) => handle(data)}
         />
       ) : null}
@@ -104,7 +104,7 @@ export default function Scan() {
           ))}
         </View>
         <Text style={[type.text, { color: 'rgba(255,255,255,0.75)', textAlign: 'center', paddingTop: space.xl }]}>
-          {busy ? 'Checking with PSA' : 'Line up the QR on the PSA label'}
+          {busy ? 'Checking with PSA' : 'Line up the QR or barcode on the back of the slab'}
         </Text>
         {!canUseCamera ? (
           <View style={styles.manual}>
