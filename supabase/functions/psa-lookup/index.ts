@@ -34,7 +34,12 @@ Deno.serve(async (req) => {
     await admin.from('psa_queue').upsert({ cert_number: cert, requested_by: user.id });
     return json({ status: 'pending' });
   }
-  if (!res.ok) return json({ status: 'error', message: `PSA ${res.status}` }, 502);
+  if (!res.ok) {
+    // Keep PSA's own words (quota, auth, WAF page) so failures can be told apart in the logs.
+    const detail = (await res.text().catch(() => '')).slice(0, 200);
+    console.error(`psa ${res.status}: ${detail}`);
+    return json({ status: 'error', message: `PSA ${res.status}`, detail }, 502);
+  }
 
   const payload = await res.json();
   // PSA answers unknown certs with 200 and an empty PSACert or a "No data found" message.
