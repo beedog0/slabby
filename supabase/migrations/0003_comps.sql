@@ -13,8 +13,8 @@ create table card_refs (
 alter table card_refs enable row level security;
 create policy "read card refs" on card_refs for select to authenticated using (true);
 
-alter table cards add column card_key text;
-create index cards_card_key_idx on cards (card_key);
+alter table slabs add column card_key text;
+create index slabs_card_key_idx on slabs (card_key);
 
 -- price_points stays in the schema for a future source with individual sales; PPT gives daily
 -- aggregates, so comps-nightly writes price_daily directly.

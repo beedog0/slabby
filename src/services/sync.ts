@@ -5,7 +5,7 @@ import { cardKey } from '../pricing/cardKey';
 import type { Card, PricingRules } from '../types';
 import { supabase } from './supabase';
 
-/** RFC 4122 v4. Card ids must be uuids to match the cards table. */
+/** RFC 4122 v4. Card ids must be uuids to match the slabs table. */
 export function uuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -134,7 +134,7 @@ async function userId(): Promise<string | null> {
 export async function pushCards(cards: Card[]): Promise<void> {
   const uid = await userId();
   if (!supabase || !uid || !cards.length) return;
-  await supabase.from('cards').upsert(cards.filter((c) => isUuid(c.id)).map((c) => toRow(c, uid)));
+  await supabase.from('slabs').upsert(cards.filter((c) => isUuid(c.id)).map((c) => toRow(c, uid)));
 }
 
 export async function pushRules(rules: PricingRules): Promise<void> {
@@ -148,7 +148,7 @@ export async function pull(): Promise<{ cards: Card[]; rules: PricingRules | nul
   const uid = await userId();
   if (!supabase || !uid) return null;
   const [cards, rules] = await Promise.all([
-    supabase.from('cards').select('*').order('created_at', { ascending: false }),
+    supabase.from('slabs').select('*').order('created_at', { ascending: false }),
     supabase.from('pricing_rules').select('*').maybeSingle(),
   ]);
   if (cards.error) return null;

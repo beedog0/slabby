@@ -18,7 +18,7 @@
 ```sql
 -- users: Supabase auth
 
-create table cards (
+create table slabs (   -- named cards in the original spec; renamed because Slabby 1.0 already owns cards
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users not null,
   cert_number text,                 -- PSA cert, null for raw
