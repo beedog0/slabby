@@ -1,13 +1,15 @@
 {
   "expo": {
-    "name": "slabby",
+    "name": "Slabby",
     "slug": "slabby",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "app.slabby",
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -20,6 +22,22 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Slabby uses the camera to read the QR code on your PSA label.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-apple-authentication"
+    ],
+    "scheme": "slabby",
+    "experiments": {
+      "typedRoutes": false
     }
   }
 }
