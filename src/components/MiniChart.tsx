@@ -2,7 +2,7 @@
 
 import Svg, { Path } from 'react-native-svg';
 import { trendOf } from '../pricing/portfolio';
-import { color } from '../theme/tokens';
+import { color, size } from '../theme/tokens';
 import { PriceChart } from './PriceChart';
 import { downsample, sparkPath } from './Sparkline';
 
@@ -25,5 +25,5 @@ export function MiniChart({ values, width, height = 40 }: { values: number[]; wi
 /** The home value line with light reference points: gridline prices on the right, start and end dates. */
 export function ValueChart({ values, width, asOf }: { values: number[]; width: number; asOf?: string }) {
   if (values.length < 2) return null;
-  return <PriceChart values={values} paidCents={null} width={width} height={84} tint={trendTint(values)} asOf={asOf} compact />;
+  return <PriceChart values={values} paidCents={null} width={width} height={size.homeChart} tint={trendTint(values)} asOf={asOf} compact />;
 }

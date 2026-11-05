@@ -148,3 +148,51 @@ export function collectionSeries(rows: CardRow[], days = 30): number[] {
     }, 0),
   );
 }
+
+export type FilterStats = {
+  /** Market value of the filtered owned cards, or sale total for Sold. */
+  totalCents: number;
+  count: number;
+  /** All / Holds: 30-day change in market value. */
+  monthDeltaCents: number;
+  /** For sale: sum of floors. */
+  floorTotalCents: number;
+  /** Sold: sale price minus paid, for sold cards with a known paid price. */
+  profitCents: number;
+};
+
+/** Header numbers for one collection filter, so every filter fills the same lines. */
+export function filterStats(rows: CardRow[]): FilterStats {
+  let totalCents = 0, monthDeltaCents = 0, floorTotalCents = 0, profitCents = 0;
+  for (const r of rows) {
+    const c = r.card;
+    if (c.status === 'sold') {
+      totalCents += c.soldCents ?? 0;
+      if (c.soldCents != null && c.paidCents != null) profitCents += c.soldCents - c.paidCents;
+      continue;
+    }
+    if (!r.price) continue;
+    totalCents += r.price.marketCents;
+    monthDeltaCents += r.price.marketCents - valueAgo(r.price, 30);
+    floorTotalCents += r.floor ?? 0;
+  }
+  return { totalCents, count: rows.length, monthDeltaCents, floorTotalCents, profitCents };
+}
+
+/** Running total of sale prices per day over the last `days` days, oldest first. */
+export function soldSeries(rows: CardRow[], days = 30, now = new Date()): number[] {
+  const end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const start = end - days * 86_400_000;
+  const out = new Array<number>(days + 1).fill(0);
+  let before = 0;
+  for (const r of rows) {
+    const c = r.card;
+    if (c.status !== 'sold' || !c.soldAt || c.soldCents == null) continue;
+    const t = Date.parse(c.soldAt.slice(0, 10));
+    if (Number.isNaN(t) || t > end) continue;
+    if (t < start) before += c.soldCents;
+    else out[Math.round((t - start) / 86_400_000)] += c.soldCents;
+  }
+  let run = before;
+  return out.map((v) => (run += v));
+}

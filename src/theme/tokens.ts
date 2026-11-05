@@ -62,6 +62,8 @@ export const size = {
   shelfFront: 10,
   carouselSlabW: 220,
   viewIcon: 40,
+  /** Home value chart; its slot keeps this height on every filter so the tabs never move. */
+  homeChart: 84,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };
