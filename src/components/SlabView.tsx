@@ -1,150 +1,132 @@
-// The slab hero. With the card's photo (TCGplayer art): the PSA label drawn from data above the
-// art shown as a 3D card (Card3D). Without one: a drawn PSA-proportion case with the label.
-// When the Blender frame-18 render lands (assets/slab/psa/), the case below is swapped for the
-// image and the label/photo are composited into its quads with Skia. The props stay the same.
+// The slab hero: a PSA-proportion acrylic case with depth, the label in its pocket and the card
+// seated in the clear insert below it (src/components/slab). Static in lists; on the card screen
+// (`interactive`) drag tilts it and a tap opens the full-screen viewer to spin it 360°.
+// When the Blender render lands (SLAB_ASSET_BRIEF.md), it replaces the drawn faces; the props
+// stay the same.
 
-import { StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Animated, PanResponder, StyleSheet, View } from 'react-native';
 import { ArtImage } from './ArtImage';
-import { color, card3d, radius, shadow, size, slabPose } from '../theme/tokens';
-import { Card3D } from './Card3D';
+import { color, shadow, size, slabPose } from '../theme/tokens';
+import { Slab3D } from './slab/Slab3D';
+import { SlabViewer } from './slab/SlabViewer';
 import type { Card } from '../types';
+
+export { labelNameLine, labelSetLine } from './slab/label';
 
 type Props = {
   card: Card;
   width?: number;
   /** Apply the hero pose (rotateY −7°, rotateX +3°). Off for flat uses. */
   posed?: boolean;
-  /** Drag to tilt the card (detail screen). */
+  /** Drag to tilt, tap to open the 360° viewer (card screen). */
   interactive?: boolean;
+  /** Tells the screen a tilt drag is under way, so it can hold its scroll still. */
+  onDragChange?: (dragging: boolean) => void;
 };
 
-const LANG: Record<string, string> = { ja: 'JPN', en: '', ko: 'KOR', zh: 'CHN' };
+const REST_YAW = parseFloat(slabPose.rotateY);
+const REST_PITCH = parseFloat(slabPose.rotateX);
+const TILT_YAW = 28;
+const TILT_PITCH = 22;
 
-/** "2023 POKEMON JPN SV2a" */
-export function labelSetLine(c: Card): string {
-  return [c.year, 'POKEMON', LANG[c.language] ?? c.language.toUpperCase(), c.setCode]
-    .filter(Boolean)
-    .join(' ');
-}
-
-/** "MEW ex #205": species uppercased, suffixes (ex, V, VMAX…) kept as printed. */
-export function labelNameLine(c: Card): string {
-  const [first, ...rest] = c.name.split(' ');
-  const keep = rest.filter((w) => !/^(alt|art|SAR|SIR)$/i.test(w));
-  return [first.toUpperCase(), ...keep].join(' ') + (c.number ? ` #${c.number}` : '');
-}
-
-const DESCRIPTOR: Record<number, string> = { 10: 'GEM MT', 9: 'MINT', 8: 'NM-MT', 7: 'NM' };
-
-export function SlabView({ card, width = size.heroW, posed = true, interactive = false }: Props) {
-  const k = width / size.heroW; // scale everything from the 190 pt hero
+export function SlabView({ card, width = size.heroW, posed = true, interactive = false, onDragChange }: Props) {
+  const label = `${card.name}, ${card.grader === 'raw' ? 'raw' : `${card.grader.toUpperCase()} ${card.grade}`}`;
   const height = (width * size.heroH) / size.heroW;
-  const isTen = card.grader === 'psa' && card.grade === 10;
 
   if (card.grader === 'raw') {
     // Raw cards: penny sleeve at the same card scale, no slab.
+    const w = width * 0.86;
     return (
-      <View
-        style={[
-          { width: width * 0.86, height: width * 0.86 * 1.4, borderRadius: 6 * k, backgroundColor: card.artColor ?? color.well },
-          shadow.slabContact,
-          posed && pose,
-        ]}
-        accessibilityLabel={`${card.name}, raw`}
-      >
-        {card.imageFrontUrl ? (
-          <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={[StyleSheet.absoluteFill, { borderRadius: 6 * k }]}
-          />
-        ) : null}
+      <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel={label}>
+        <View
+          style={[
+            { width: w, height: w * (88 / 63), borderRadius: w * 0.045, backgroundColor: card.artColor ?? color.well },
+            shadow.slabContact,
+            posed && { transform: [{ perspective: slabPose.perspective }, { rotateY: slabPose.rotateY }, { rotateX: slabPose.rotateX }] },
+          ]}
+        >
+          {card.imageFrontUrl ? (
+            <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={[StyleSheet.absoluteFill, { borderRadius: w * 0.045 }]} />
+          ) : null}
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sleeve, { borderRadius: w * 0.045 }]} />
+        </View>
       </View>
     );
   }
 
-  const label = (
-    <View style={[styles.label, { height: 52 * k, borderRadius: 3 * k, paddingHorizontal: 10 * k }]}>
-      <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={[styles.labelText, { fontSize: 9 * k }]}>
-          {labelSetLine(card)}
-        </Text>
-        <Text numberOfLines={1} style={[styles.labelText, { fontSize: 9 * k, fontWeight: '600' }]}>
-          {labelNameLine(card)}
-        </Text>
-        {card.certNumber && k > 0.75 ? (
-          <Text style={[styles.labelText, { fontSize: 7 * k, opacity: 0.55 }]}>{card.certNumber}</Text>
-        ) : null}
-      </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        {card.grade != null && DESCRIPTOR[card.grade] ? (
-          <Text style={[styles.labelText, { fontSize: 6 * k }]}>{DESCRIPTOR[card.grade]}</Text>
-        ) : null}
-        <Text style={[styles.grade, { fontSize: 16 * k, color: isTen ? color.psaRed : color.ink }]}>{card.grade}</Text>
-      </View>
-    </View>
-  );
-
-  if (card.imageFrontUrl) {
-    // Same footprint as the drawn slab so shelves and grids keep their rhythm.
-    const gap = 8 * k;
-    const cardW = Math.min(width, (height - 52 * k - gap) / card3d.aspect);
+  if (!interactive) {
     return (
-      <View
-        style={{ width, height, alignItems: 'center', gap }}
-        accessibilityLabel={`${card.name}, ${card.grader.toUpperCase()} ${card.grade}`}
-      >
-        <View style={[{ width: cardW }, posed && pose]}>{label}</View>
-        <Card3D uri={card.imageFrontUrl} width={cardW} posed={posed} interactive={interactive} />
+      <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel={label}>
+        <Slab3D card={card} width={width} yaw={posed ? REST_YAW : 0} pitch={posed ? REST_PITCH : 0} shadow={posed} />
       </View>
     );
+  }
+  return <TiltSlab card={card} width={width} height={height} label={label} onDragChange={onDragChange} />;
+}
+
+function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; width: number; height: number; label: string; onDragChange?: (d: boolean) => void }) {
+  const yaw = useRef(new Animated.Value(REST_YAW)).current;
+  const pitch = useRef(new Animated.Value(REST_PITCH)).current;
+  const [open, setOpen] = useState(false);
+  const cb = useRef(onDragChange);
+  cb.current = onDragChange;
+
+  const pan = useRef(
+    PanResponder.create({
+      // Claim the touch the moment it lands on the slab, and keep it: the scroll view and the
+      // screen's swipe-back never see a drag that started here.
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+      onPanResponderGrant: () => {
+        yaw.stopAnimation();
+        pitch.stopAnimation();
+        cb.current?.(true);
+      },
+      onPanResponderMove: (_, s) => {
+        yaw.setValue(REST_YAW + TILT_YAW * Math.tanh(s.dx / 110));
+        pitch.setValue(REST_PITCH - TILT_PITCH * Math.tanh(s.dy / 110));
+      },
+      onPanResponderRelease: (_, s) => {
+        cb.current?.(false);
+        const tap = Math.abs(s.dx) < 6 && Math.abs(s.dy) < 6;
+        springBack();
+        if (tap) setOpen(true);
+      },
+      onPanResponderTerminate: () => {
+        cb.current?.(false);
+        springBack();
+      },
+    }),
+  ).current;
+
+  function springBack() {
+    Animated.parallel([
+      Animated.spring(yaw, { toValue: REST_YAW, friction: 5, tension: 55, useNativeDriver: true }),
+      Animated.spring(pitch, { toValue: REST_PITCH, friction: 5, tension: 55, useNativeDriver: true }),
+    ]).start();
   }
 
   return (
+    <>
     <View
-      style={[{ width, height }, posed && pose, posed && shadow.slabAmbient]}
-      accessibilityLabel={`${card.name}, ${card.grader.toUpperCase()} ${card.grade}`}
+      style={{ width, height, alignItems: 'center', justifyContent: 'center' }}
+      accessible
+      accessibilityRole="imagebutton"
+      accessibilityLabel={label}
+      accessibilityHint="Opens the slab full screen"
+      onAccessibilityTap={() => setOpen(true)}
+      {...pan.panHandlers}
     >
-      <View style={[styles.case, { borderRadius: radius.slab * k, padding: 10 * k }, shadow.slabContact]}>
-        {label}
-        <View
-          style={{
-            flex: 1,
-            marginTop: 8 * k,
-            borderRadius: 4 * k,
-            overflow: 'hidden',
-            backgroundColor: card.artColor ?? color.well,
-          }}
-        >
-          {card.imageFrontUrl ? (
-            <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={StyleSheet.absoluteFill} />
-          ) : null}
-        </View>
-      </View>
+      <Slab3D card={card} width={width} yaw={yaw} pitch={pitch} />
     </View>
+    <SlabViewer card={card} visible={open} onClose={() => setOpen(false)} />
+    </>
   );
 }
 
-const pose = {
-  transform: [
-    { perspective: slabPose.perspective },
-    { rotateY: slabPose.rotateY },
-    { rotateX: slabPose.rotateX },
-  ],
-};
-
 const styles = StyleSheet.create({
-  case: {
-    flex: 1,
-    backgroundColor: color.slabCase,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  label: {
-    backgroundColor: color.slabLabel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: color.hairline,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  labelText: { color: color.ink, fontWeight: '500', lineHeight: undefined },
-  grade: { fontWeight: '700', fontVariant: ['tabular-nums'] },
+  sleeve: { borderWidth: StyleSheet.hairlineWidth * 2, borderColor: 'rgba(0,0,0,0.10)', backgroundColor: 'rgba(255,255,255,0.06)' },
 });

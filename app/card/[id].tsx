@@ -2,7 +2,7 @@
 // Reference: 03-slab-detail.png. "More stats" (Phase 3) and the 1y range (needs history beyond
 // 90 days) are left out until they have data behind them, so nothing here is a dead tap.
 
-import { router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +29,7 @@ export default function SlabDetail() {
   const row = useCardRow(id);
   const update = useVault((s) => s.update);
   const [range, setRange] = useState<Range>('90');
+  const [tilting, setTilting] = useState(false);
 
   if (!row) return null;
   const { card, price } = row;
@@ -54,7 +55,10 @@ export default function SlabDetail() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
+      {/* iOS 26 pops a screen on a sideways swipe anywhere; keep that to the left edge here so a
+          drag on the slab tilts it instead of going back. */}
+      <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
+      <ScrollView scrollEnabled={!tilting} contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
         <View style={styles.nav}>
           <IconButton label="Back" onPress={() => router.back()}>
             <BackIcon />
@@ -65,7 +69,7 @@ export default function SlabDetail() {
         </View>
 
         <View style={styles.hero}>
-          <SlabView card={card} interactive />
+          <SlabView card={card} interactive onDragChange={setTilting} />
         </View>
 
         <View style={styles.titleRow}>
