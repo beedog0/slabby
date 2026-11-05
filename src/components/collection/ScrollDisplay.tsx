@@ -11,6 +11,8 @@ import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-nat
 import type { CardRow } from '../../pricing/portfolio';
 import { color, size, space, type } from '../../theme/tokens';
 import { prefetchArt } from '../ArtImage';
+import { MiniChart, trendTint } from '../MiniChart';
+import { money } from '../../lib/format';
 import { SlabView } from '../SlabView';
 import { Caption } from './GridView';
 
@@ -117,12 +119,18 @@ export function ScrollDisplay({ rows, screenW }: { rows: CardRow[]; screenW: num
         )}
       />
       {current ? (
-        <View style={styles.caption}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityHint="Opens this slab"
+          onPress={() => router.push(`/card/${current.card.id}`)}
+          style={styles.caption}
+        >
           <Caption row={current} center />
+          <CurrentInfo row={current} />
           <Text style={[type.caption, { color: color.secondary }]}>
             {i + 1} of {rows.length}
           </Text>
-        </View>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -131,3 +139,27 @@ export function ScrollDisplay({ rows, screenW }: { rows: CardRow[]; screenW: num
 const styles = StyleSheet.create({
   caption: { alignItems: 'center', gap: space.s, paddingHorizontal: space.gutter, paddingTop: space.s },
 });
+
+/** The centered slab at a glance: its 30-day line, and ask/floor when it's for sale. */
+function CurrentInfo({ row }: { row: CardRow }) {
+  const series = row.price?.series90.slice(-31) ?? [];
+  const selling = row.card.status === 'owned' && (row.card.plan === 'sell' || row.card.plan === 'trade');
+  if (series.length < 2 && !selling) return null;
+  return (
+    <View style={{ alignItems: 'center', gap: space.xs }}>
+      {series.length > 1 ? <MiniChart values={series} width={160} height={28} /> : null}
+      {selling && row.ask != null ? (
+        <Text style={[type.secondary, { color: color.secondary }]}>
+          Ask <Text style={{ color: color.ink }}>{money(row.ask)}</Text>
+          {row.floor != null ? (
+            <>
+              {' · '}Floor <Text style={{ color: color.ink }}>{money(row.floor)}</Text>
+            </>
+          ) : null}
+        </Text>
+      ) : series.length > 1 ? (
+        <Text style={[type.secondary, { color: trendTint(series) }]}>30 days</Text>
+      ) : null}
+    </View>
+  );
+}
