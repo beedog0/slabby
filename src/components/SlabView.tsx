@@ -1,9 +1,11 @@
-// The slab hero. Phase 1: a drawn PSA-proportion case with the label rendered from data.
+// The slab hero. With the card's photo (TCGplayer art): the PSA label drawn from data above the
+// art shown as a 3D card (Card3D). Without one: a drawn PSA-proportion case with the label.
 // When the Blender frame-18 render lands (assets/slab/psa/), the case below is swapped for the
 // image and the label/photo are composited into its quads with Skia. The props stay the same.
 
-import { StyleSheet, Text, View } from 'react-native';
-import { color, radius, shadow, size, slabPose } from '../theme/tokens';
+import { Image, StyleSheet, Text, View } from 'react-native';
+import { color, card3d, radius, shadow, size, slabPose } from '../theme/tokens';
+import { Card3D } from './Card3D';
 import type { Card } from '../types';
 
 type Props = {
@@ -11,6 +13,8 @@ type Props = {
   width?: number;
   /** Apply the hero pose (rotateY −7°, rotateX +3°). Off for flat uses. */
   posed?: boolean;
+  /** Drag to tilt the card (detail screen). */
+  interactive?: boolean;
 };
 
 const LANG: Record<string, string> = { ja: 'JPN', en: '', ko: 'KOR', zh: 'CHN' };
@@ -31,7 +35,7 @@ export function labelNameLine(c: Card): string {
 
 const DESCRIPTOR: Record<number, string> = { 10: 'GEM MT', 9: 'MINT', 8: 'NM-MT', 7: 'NM' };
 
-export function SlabView({ card, width = size.heroW, posed = true }: Props) {
+export function SlabView({ card, width = size.heroW, posed = true, interactive = false }: Props) {
   const k = width / size.heroW; // scale everything from the 190 pt hero
   const height = (width * size.heroH) / size.heroW;
   const isTen = card.grader === 'psa' && card.grade === 10;
@@ -46,45 +50,75 @@ export function SlabView({ card, width = size.heroW, posed = true }: Props) {
           posed && pose,
         ]}
         accessibilityLabel={`${card.name}, raw`}
-      />
+      >
+        {card.imageFrontUrl ? (
+          <Image
+            source={{ uri: card.imageFrontUrl }}
+            resizeMode="cover"
+            style={[StyleSheet.absoluteFill, { borderRadius: 6 * k }]}
+          />
+        ) : null}
+      </View>
+    );
+  }
+
+  const label = (
+    <View style={[styles.label, { height: 52 * k, borderRadius: 3 * k, paddingHorizontal: 10 * k }]}>
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={[styles.labelText, { fontSize: 9 * k }]}>
+          {labelSetLine(card)}
+        </Text>
+        <Text numberOfLines={1} style={[styles.labelText, { fontSize: 9 * k, fontWeight: '600' }]}>
+          {labelNameLine(card)}
+        </Text>
+        {card.certNumber && k > 0.75 ? (
+          <Text style={[styles.labelText, { fontSize: 7 * k, opacity: 0.55 }]}>{card.certNumber}</Text>
+        ) : null}
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        {card.grade != null && DESCRIPTOR[card.grade] ? (
+          <Text style={[styles.labelText, { fontSize: 6 * k }]}>{DESCRIPTOR[card.grade]}</Text>
+        ) : null}
+        <Text style={[styles.grade, { fontSize: 16 * k, color: isTen ? color.psaRed : color.ink }]}>{card.grade}</Text>
+      </View>
+    </View>
+  );
+
+  if (card.imageFrontUrl) {
+    // Same footprint as the drawn slab so shelves and grids keep their rhythm.
+    const gap = 8 * k;
+    const cardW = Math.min(width, (height - 52 * k - gap) / card3d.aspect);
+    return (
+      <View
+        style={{ width, height, alignItems: 'center', gap }}
+        accessibilityLabel={`${card.name}, ${card.grader.toUpperCase()} ${card.grade}`}
+      >
+        <View style={[{ width: cardW }, posed && pose]}>{label}</View>
+        <Card3D uri={card.imageFrontUrl} width={cardW} posed={posed} interactive={interactive} />
+      </View>
     );
   }
 
   return (
     <View
-      style={[{ width, height }, posed && pose, shadow.slabAmbient]}
+      style={[{ width, height }, posed && pose, posed && shadow.slabAmbient]}
       accessibilityLabel={`${card.name}, ${card.grader.toUpperCase()} ${card.grade}`}
     >
       <View style={[styles.case, { borderRadius: radius.slab * k, padding: 10 * k }, shadow.slabContact]}>
-        <View style={[styles.label, { height: 52 * k, borderRadius: 3 * k, paddingHorizontal: 10 * k }]}>
-          <View style={{ flex: 1 }}>
-            <Text numberOfLines={1} style={[styles.labelText, { fontSize: 9 * k }]}>
-              {labelSetLine(card)}
-            </Text>
-            <Text numberOfLines={1} style={[styles.labelText, { fontSize: 9 * k, fontWeight: '600' }]}>
-              {labelNameLine(card)}
-            </Text>
-            {card.certNumber ? (
-              <Text style={[styles.labelText, { fontSize: 7 * k, opacity: 0.55 }]}>{card.certNumber}</Text>
-            ) : null}
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            {card.grade != null && DESCRIPTOR[card.grade] ? (
-              <Text style={[styles.labelText, { fontSize: 6 * k }]}>{DESCRIPTOR[card.grade]}</Text>
-            ) : null}
-            <Text style={[styles.grade, { fontSize: 16 * k, color: isTen ? color.psaRed : color.ink }]}>
-              {card.grade}
-            </Text>
-          </View>
-        </View>
+        {label}
         <View
           style={{
             flex: 1,
             marginTop: 8 * k,
             borderRadius: 4 * k,
+            overflow: 'hidden',
             backgroundColor: card.artColor ?? color.well,
           }}
-        />
+        >
+          {card.imageFrontUrl ? (
+            <Image source={{ uri: card.imageFrontUrl }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+          ) : null}
+        </View>
       </View>
     </View>
   );

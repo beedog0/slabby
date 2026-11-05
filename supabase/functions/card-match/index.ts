@@ -4,6 +4,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { gradeKey, gradedDaily, rawDaily, type DailySales } from '../_shared/comps-math.ts';
 import { fetchComps, matchCard } from '../_shared/ppt.ts';
+import { tcgcsvMatch } from '../_shared/tcgcsv.ts';
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
 
@@ -20,7 +21,8 @@ Deno.serve(async (req) => {
   // details may have been fixed since.
   if (known.data?.tcgplayer_id) return json(known.data);
 
-  const m = await matchCard(c);
+  // PokemonPriceTracker first (it also has the prices); the TCGplayer catalog for what it misses.
+  const m = (await matchCard(c).catch(() => null)) ?? (await tcgcsvMatch(c).catch(() => null));
   const row = {
     card_key: c.cardKey,
     language: c.language ?? 'en',

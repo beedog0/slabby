@@ -64,7 +64,7 @@ export default function SlabDetail() {
         </View>
 
         <View style={styles.hero}>
-          <SlabView card={card} />
+          <SlabView card={card} interactive />
         </View>
 
         <View style={styles.titleRow}>

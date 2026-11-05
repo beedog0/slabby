@@ -104,3 +104,13 @@ export const slabPose = {
 
 /** Sparkline color thresholds: ±3% over 30 days. */
 export const trendThreshold = 0.03;
+
+/** The card-art hero: online card photo shown as a physical card that tilts under the finger. */
+export const card3d = {
+  aspect: 88 / 63, // height / width of a trading card
+  cornerRatio: 0.045, // corner radius as a share of width
+  maxTilt: 14, // degrees at full drag
+  dragRange: 120, // pt of drag for full tilt
+  sheenOpacity: 0.22, // white glare band at full tilt
+  edge: 'rgba(0,0,0,0.10)',
+} as const;
