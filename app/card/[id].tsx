@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
+import { shareSlab } from '../../src/components/share/ShareCard';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
@@ -41,9 +42,10 @@ export default function SlabDetail() {
     const toggle = forSale ? 'Move to holds' : 'Add to sell sheet';
     const run = (i: number) => {
       if (i === 0) update(card.id, { plan: forSale ? 'hold' : 'sell' });
+      if (i === 1) shareSlab(card);
     };
     if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions({ options: [toggle, 'Cancel'], cancelButtonIndex: 1 }, run);
+      ActionSheetIOS.showActionSheetWithOptions({ options: [toggle, 'Share card', 'Cancel'], cancelButtonIndex: 2 }, run);
     } else {
       Alert.alert(rowTitle(card), undefined, [{ text: toggle, onPress: () => run(0) }, { text: 'Cancel', style: 'cancel' }]);
     }

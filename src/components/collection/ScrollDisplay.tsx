@@ -33,9 +33,10 @@ type ItemProps = {
   slabW: number;
   slabH: number;
   onPress: (n: number) => void;
+  onLongPress?: (row: CardRow) => void;
 };
 
-const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: ItemProps) {
+const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress, onLongPress }: ItemProps) {
   const range = [(n - 1) * step, n * step, (n + 1) * step];
   const opacity = x.interpolate({ inputRange: range, outputRange: [0.5, 1, 0.5], extrapolate: 'clamp' });
   // Whole-degree lean and whole-point drop only, so the slab lands on exact pixels at rest.
@@ -47,6 +48,7 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: Item
       accessibilityRole="button"
       accessibilityLabel={row.card.name}
       onPress={() => onPress(n)}
+      onLongPress={onLongPress ? () => onLongPress(row) : undefined}
       style={{ width: step, alignItems: 'center', paddingTop: ITEM_TOP }}
     >
       <Animated.View style={{ transform: [{ translateY }, { rotate }], opacity, alignItems: 'center' }}>
@@ -72,7 +74,17 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: Item
  * `fitHeight` is the room left on screen below the tabs. The slab is sized so slab, reflection
  * and caption all fit in it, between MIN_SLAB_W and the full carousel size.
  */
-export function ScrollDisplay({ rows, screenW, fitHeight }: { rows: CardRow[]; screenW: number; fitHeight?: number }) {
+export function ScrollDisplay({
+  rows,
+  screenW,
+  fitHeight,
+  onLongPress,
+}: {
+  rows: CardRow[];
+  screenW: number;
+  fitHeight?: number;
+  onLongPress?: (row: CardRow) => void;
+}) {
   const maxW = Math.min(size.carouselSlabW, screenW - space.gutter * 2 - 80);
   const fitSlabH = fitHeight ? (fitHeight - ITEM_TOP - 3 - CAPTION_H) / (1 + REFLECTION.height) : Infinity;
   const slabW = Math.round(Math.max(MIN_SLAB_W, Math.min(maxW, (fitSlabH * size.heroW) / size.heroH)));
@@ -144,7 +156,7 @@ export function ScrollDisplay({ rows, screenW, fitHeight }: { rows: CardRow[]; s
         scrollEventThrottle={16}
         getItemLayout={(_, n) => ({ length: step, offset: step * n, index: n })}
         renderItem={({ item, index: n }) => (
-          <Item row={item} n={n} x={x} step={step} slabW={slabW} slabH={slabH} onPress={onPress} />
+          <Item row={item} n={n} x={x} step={step} slabW={slabW} slabH={slabH} onPress={onPress} onLongPress={onLongPress} />
         )}
       />
       {current ? (
