@@ -1,9 +1,21 @@
 import type { Card } from '../types';
 
+const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
 /**
  * Identity of a card independent of whose copy it is, so two users holding the same slab
  * share price history. Format: grader:grade:setCode:number:language, e.g. "psa:10:SV2a:205:ja".
+ * Other games add the game at the end ("psa:10:OP05:119:ja:onepiece"), then the variety when there
+ * is one ("…:onepiece:parallel"), because their parallels and alt arts share the card number.
+ * Pokémon keys stay as they were so existing price history still lines up. Edge Functions read grader and grade from the
+ * front, so the game must never go first.
  */
-export function cardKey(c: Pick<Card, 'grader' | 'grade' | 'setCode' | 'number' | 'language'>): string {
-  return [c.grader, c.grade ?? '', c.setCode ?? '', c.number ?? '', c.language || 'en'].join(':');
+export function cardKey(c: Pick<Card, 'grader' | 'grade' | 'setCode' | 'number' | 'language' | 'game' | 'variety'>): string {
+  const parts = [c.grader, c.grade ?? '', c.setCode ?? '', c.number ?? '', c.language || 'en'];
+  if (c.game && c.game !== 'pokemon') {
+    parts.push(c.game);
+    const v = slug(c.variety ?? '');
+    if (v) parts.push(v);
+  }
+  return parts.join(':');
 }

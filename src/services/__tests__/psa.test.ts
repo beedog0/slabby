@@ -28,9 +28,9 @@ describe('PSA payload mapping', () => {
     expect(titleName('UMBREON VMAX')).toBe('Umbreon VMAX');
   });
   it('parses the brand line', () => {
-    expect(parseBrand('POKEMON JAPANESE SV2a-POKEMON CARD 151')).toEqual({ language: 'ja', setCode: 'SV2a', setName: '151' });
+    expect(parseBrand('POKEMON JAPANESE SV2a-POKEMON CARD 151')).toEqual({ game: 'pokemon', language: 'ja', setCode: 'SV2a', setName: '151' });
     expect(parseBrand('POKEMON SWORD & SHIELD EVOLVING SKIES')).toMatchObject({ language: 'en', setCode: null });
-    expect(parseBrand('POKEMON SV8a JP-TERASTAL FEST ex')).toEqual({ language: 'ja', setCode: 'SV8a', setName: 'Terastal Fest ex' });
+    expect(parseBrand('POKEMON SV8a JP-TERASTAL FEST ex')).toEqual({ game: 'pokemon', language: 'ja', setCode: 'SV8a', setName: 'Terastal Fest ex' });
     expect(parseBrand('POKEMON SV-P JP PROMO')).toMatchObject({ language: 'ja', setCode: 'SV-P' });
     expect(parseBrand('POKEMON JPN SV2a-POKEMON CARD 151')).toMatchObject({ language: 'ja', setCode: 'SV2a' });
   });

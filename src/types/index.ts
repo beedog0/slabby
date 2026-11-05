@@ -3,9 +3,12 @@
 export type Grader = 'psa' | 'bgs' | 'cgc' | 'raw';
 export type Plan = 'hold' | 'sell' | 'trade';
 export type CardStatus = 'owned' | 'sold';
+export type Game = 'pokemon' | 'onepiece' | 'riftbound';
 
 export type Card = {
   id: string;
+  /** Missing on cards saved before other games existed: those are Pokémon. See src/lib/games.ts. */
+  game?: Game;
   certNumber: string | null;
   grader: Grader;
   grade: number | null;
@@ -13,6 +16,9 @@ export type Card = {
   setName: string | null;
   setCode: string | null;
   number: string | null;
+  /** PSA's Variety line: "PARALLEL", "MANGA", "SPECIAL ART RARE". One Piece and Riftbound reuse a
+   *  card number across printings, so for them it is part of the card's identity. */
+  variety?: string | null;
   language: string;
   year: number | null;
   imageFrontUrl: string | null;

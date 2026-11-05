@@ -1,6 +1,8 @@
 import {
   addDays,
   bareNumber,
+  numberMatches,
+  rawToday,
   gradeKey,
   gradedDaily,
   percentile,
@@ -82,5 +84,33 @@ describe('fromDaily', () => {
   });
   it('is null with no rows', () => {
     expect(fromDaily([])).toBeNull();
+  });
+});
+
+describe('other games', () => {
+  it('matches One Piece and Riftbound catalog numbers to label numbers', () => {
+    expect(numberMatches('OP05-119', '119')).toBe(true);
+    expect(numberMatches('OP05-119', '#119'.replace('#', ''))).toBe(true);
+    expect(numberMatches('OP05-119', '120')).toBe(false);
+    expect(numberMatches('OGN-001', '001')).toBe(true);
+    expect(numberMatches('001/298', '1')).toBe(true);
+    expect(numberMatches('T03a', 'T03A')).toBe(true);
+    expect(numberMatches('199/165', '199')).toBe(true);
+    expect(numberMatches('199/165', null)).toBe(false);
+  });
+
+  it('builds today from stored days and today\'s TCGplayer market', () => {
+    const row = rawToday(
+      [
+        { day: '2026-11-03', market_cents: 1000 },
+        { day: '2026-11-04', market_cents: 2000 },
+      ],
+      30,
+      '2026-11-05',
+    );
+    expect(row).toMatchObject({ day: '2026-11-05', market_cents: 3000, sales_30d: 0 });
+    expect(row!.low_cents).toBeGreaterThanOrEqual(1000);
+    expect(row!.high_cents).toBeLessThanOrEqual(3000);
+    expect(rawToday([], 12.5, '2026-11-05')).toMatchObject({ market_cents: 1250, low_cents: 1250, high_cents: 1250 });
   });
 });

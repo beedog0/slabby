@@ -13,6 +13,7 @@ import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { gradeLabel, money, pct, rowTitle } from '../../src/lib/format';
+import { GAMES, LANGUAGE_NAME, gameOf } from '../../src/lib/games';
 import { detailFor } from '../../src/pricing/portfolio';
 import { useCardRow } from '../../src/pricing/useCardRow';
 import { useVault } from '../../src/store/vault';
@@ -20,7 +21,6 @@ import { color, space, type } from '../../src/theme/tokens';
 
 type Range = '30' | '90';
 
-const LANGUAGE: Record<string, string> = { ja: 'Japanese', en: 'English', ko: 'Korean', zh: 'Chinese' };
 
 export default function SlabDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -49,7 +49,9 @@ export default function SlabDetail() {
     }
   };
 
-  const subtitle = [card.grader === 'raw' ? null : LANGUAGE[card.language] ?? card.language, gradeLabel(card.grader, card.grade, card.condition)]
+  // Pokémon is the default, so only other games are named.
+  const game = gameOf(card) === 'pokemon' ? null : GAMES[gameOf(card)].name;
+  const subtitle = [game, card.grader === 'raw' ? null : LANGUAGE_NAME[card.language] ?? card.language, gradeLabel(card.grader, card.grade, card.condition)]
     .filter(Boolean)
     .join(' · ');
 

@@ -106,3 +106,26 @@ export function rawDaily(points: RawPoint[], today: string, days = 90): DailyRow
 export function bareNumber(n: string | null | undefined): string {
   return (n ?? '').split('/')[0].replace(/^0+(?=\d)/, '').trim();
 }
+
+/**
+ * Whether a catalog number is the label's number. Pokémon prints "199/165"; One Piece prints
+ * "OP05-119" where the label says #119; Riftbound prints "OGN-001" or "001/298".
+ */
+export function numberMatches(catalog: string | null | undefined, label: string | null | undefined): boolean {
+  const want = bareNumber(label).toLowerCase();
+  if (!want) return false;
+  const have = bareNumber(catalog).toLowerCase();
+  if (have === want) return true;
+  const tail = (t: string) => bareNumber(t.split('-').pop()).toLowerCase();
+  return tail(have) === tail(want);
+}
+
+/**
+ * Today's raw row from today's TCGplayer market and the days already stored, for sources that
+ * only give the current price (TCGCSV). Same low/high window as rawDaily.
+ */
+export function rawToday(history: { day: string; market_cents: number }[], marketDollars: number, today: string): DailyRow | null {
+  const points: RawPoint[] = history.map((h) => ({ date: h.day, market: h.market_cents / 100 }));
+  points.push({ date: today, market: marketDollars });
+  return rawDaily(points, today, 1)[0] ?? null;
+}

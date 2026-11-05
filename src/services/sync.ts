@@ -2,7 +2,8 @@
 // every change is pushed, and on sign-in the server copy is pulled. Last write wins per card.
 
 import { cardKey } from '../pricing/cardKey';
-import type { Card, PricingRules } from '../types';
+import { gameOf } from '../lib/games';
+import type { Card, Game, PricingRules } from '../types';
 import { supabase } from './supabase';
 
 /** RFC 4122 v4. Card ids must be uuids to match the slabs table. */
@@ -18,6 +19,7 @@ export const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-
 export type CardRowDb = {
   id: string;
   user_id: string;
+  game: Game;
   cert_number: string | null;
   grader: Card['grader'];
   grade: number | null;
@@ -25,6 +27,7 @@ export type CardRowDb = {
   set_name: string | null;
   set_code: string | null;
   number: string | null;
+  variety: string | null;
   language: string;
   year: number | null;
   image_front_url: string | null;
@@ -46,6 +49,7 @@ export function toRow(c: Card, userId: string): CardRowDb {
   return {
     id: c.id,
     user_id: userId,
+    game: gameOf(c),
     cert_number: c.certNumber,
     grader: c.grader,
     grade: c.grade,
@@ -53,6 +57,7 @@ export function toRow(c: Card, userId: string): CardRowDb {
     set_name: c.setName,
     set_code: c.setCode,
     number: c.number,
+    variety: c.variety ?? null,
     language: c.language,
     year: c.year,
     image_front_url: c.imageFrontUrl,
@@ -74,6 +79,7 @@ export function toRow(c: Card, userId: string): CardRowDb {
 export function fromRow(r: CardRowDb): Card {
   return {
     id: r.id,
+    game: r.game ?? 'pokemon',
     certNumber: r.cert_number,
     grader: r.grader,
     grade: r.grade == null ? null : Number(r.grade),
@@ -81,6 +87,7 @@ export function fromRow(r: CardRowDb): Card {
     setName: r.set_name,
     setCode: r.set_code,
     number: r.number,
+    ...(r.variety ? { variety: r.variety } : {}),
     language: r.language ?? 'en',
     year: r.year,
     imageFrontUrl: r.image_front_url,

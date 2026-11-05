@@ -1,11 +1,12 @@
 // Label text from the card's data, as PSA prints it.
+import { GAMES, gameOf } from '../../lib/games';
 import type { Card } from '../../types';
 
 const LANG: Record<string, string> = { ja: 'JPN', en: '', ko: 'KOR', zh: 'CHN' };
 
-/** "2023 POKEMON JPN SV2a" */
+/** "2023 POKEMON JPN SV2a", "2023 ONE PIECE JPN OP05", "2025 RIFTBOUND SFD" */
 export function labelSetLine(c: Card): string {
-  return [c.year, 'POKEMON', LANG[c.language] ?? c.language.toUpperCase(), c.setCode]
+  return [c.year, GAMES[gameOf(c)].labelBrand, LANG[c.language] ?? c.language.toUpperCase(), c.setCode]
     .filter(Boolean)
     .join(' ');
 }

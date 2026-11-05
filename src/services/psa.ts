@@ -6,7 +6,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import certsJson from '../mocks/certs.json';
-import type { Card } from '../types';
+import { GAMES, gameFromBrand, gameOf } from '../lib/games';
+import type { Card, Game } from '../types';
 import { supabase } from './supabase';
 import { uuid } from './sync';
 
@@ -125,27 +126,39 @@ export function titleName(subject: string): string {
     .map((w, i) => {
       if (/^(ex|EX|GX|V|VMAX|VSTAR|SAR|SIR)$/.test(w)) return w;
       const lower = w.toLowerCase();
-      return i === 0 || w === w.toUpperCase() ? lower.charAt(0).toUpperCase() + lower.slice(1) : w;
+      if (!(i === 0 || w === w.toUpperCase())) return w;
+      // One Piece names run initials together: "MONKEY.D.LUFFY" → "Monkey.D.Luffy".
+      return lower.replace(/(^|\.)([a-z])/g, (_, dot, l) => dot + l.toUpperCase());
     })
     .join(' ');
 }
 
 /**
- * PSA's Brand is free text like "POKEMON JAPANESE SV2a-POKEMON CARD 151". Pull out the language
- * and, when present, a set code and a short set name. Best effort; the user can edit later.
+ * PSA's Brand is free text like "POKEMON JAPANESE SV2a-POKEMON CARD 151",
+ * "ONE PIECE JAPANESE OP05-AWAKENING OF THE NEW ERA" or "RIFTBOUND: LEAGUE OF LEGENDS SFD-SPIRITFORGED".
+ * Pull out the game, the language and, when present, a set code and a short set name. Best
+ * effort; the user can edit later. A brand naming no known game is read as Pokémon.
  */
-export function parseBrand(brand = ''): { language: string; setCode: string | null; setName: string | null } {
+export function parseBrand(brand = ''): { game: Game; language: string; setCode: string | null; setName: string | null } {
+  const game = gameFromBrand(brand) ?? 'pokemon';
   // Newer labels print "SV8a JP-..." or "SV-P JP PROMO" instead of "JAPANESE SV2a-...".
   const language = /JAPANESE|\bJPN?\b/i.test(brand) ? 'ja' : /KOREAN|\bKOR\b/i.test(brand) ? 'ko' : /CHINESE/i.test(brand) ? 'zh' : 'en';
-  const rest = brand.replace(/^POKEMON\s*/i, '').replace(/^(JAPANESE|KOREAN|CHINESE|JPN?)\s*/i, '');
-  const code = rest.match(/^((?:[A-Z]{1,4}\d{1,2}[a-z]?)|(?:[A-Z]{1,3}-P))(?:\s+(?:JPN?|KOR))?(?=[-\s]|$)-?/i);
+  const rest = brand
+    .trim()
+    .replace(GAMES[game].brand, '')
+    .replace(/^(?:(?:SIMPLIFIED|TRADITIONAL)\s+)?(JAPANESE|KOREAN|CHINESE|JPN?)\s*/i, '');
+  // Pokémon and One Piece codes are letters then digits (SV2a, SV-P, OP05, ST10, EB01, PRB01).
+  // Riftbound's are letters only (OGN, SFD), so they only count with the hyphen after them.
+  const code =
+    rest.match(/^((?:[A-Z]{1,4}\d{1,2}[a-z]?)|(?:[A-Z]{1,3}-P))(?:\s+(?:JPN?|KOR))?(?=[-\s]|$)-?/i) ??
+    (game === 'riftbound' ? rest.match(/^([A-Z]{2,4})-/i) : null);
   const setName = (code ? rest.slice(code[0].length) : rest)
     .replace(/^(?:JPN?|KOR)\b-?\s*/i, '')
     .replace(/^POKEMON CARD\s*/i, '')
     .trim();
   // Set codes print as letters, digits, then a lowercase variant letter: SV2a, SV-P, S12a.
   const setCode = code ? code[1].replace(/^[a-z]+/i, (l) => l.toUpperCase()).replace(/-p$/, '-P') : null;
-  return { language, setCode, setName: setName ? titleName(setName) : null };
+  return { game, language, setCode, setName: setName ? titleName(setName) : null };
 }
 
 /**
@@ -154,11 +167,11 @@ export function parseBrand(brand = ''): { language: string; setCode: string | nu
  */
 export function repairCard(c: Card): Card {
   let next = c;
-  if (c.grader !== 'raw' && !c.setCode && c.setName && /\bjpn?\b/i.test(c.setName)) {
+  if (gameOf(c) === 'pokemon' && c.grader !== 'raw' && !c.setCode && c.setName && /\bjpn?\b/i.test(c.setName)) {
     const b = parseBrand(`POKEMON ${c.setName}`);
     next = { ...next, language: b.language, setCode: b.setCode ?? next.setCode, setName: b.setName };
   }
-  const name = splitSuffix(c.name);
+  const name = gameOf(c) === 'pokemon' ? splitSuffix(c.name) : c.name;
   if (name !== c.name) next = { ...next, name };
   return next;
 }
@@ -174,13 +187,16 @@ export function cardFromCert(payload: PsaCertPayload, extra: { paidCents: number
   const brand = parseBrand(p.Brand);
   return {
     id: uuid(),
+    game: brand.game,
     certNumber: p.CertNumber,
     grader: 'psa',
     grade: gradeFrom(p.CardGrade ?? p.GradeDescription),
-    name: titleName(splitSuffix(p.Subject ?? 'Unknown card')),
+    // The glued-suffix fix ("PIKACHUex") is Pokémon-only; other games have names ending in "ex".
+    name: titleName(brand.game === 'pokemon' ? splitSuffix(p.Subject ?? 'Unknown card') : p.Subject ?? 'Unknown card'),
     setName: brand.setName,
     setCode: brand.setCode,
     number: p.CardNumber ?? null,
+    variety: p.Variety?.trim() || null,
     language: brand.language,
     year: p.Year ? Number(p.Year) || null : null,
     imageFrontUrl: null,
@@ -197,13 +213,26 @@ export function cardFromCert(payload: PsaCertPayload, extra: { paidCents: number
   };
 }
 
+/**
+ * One Piece and Riftbound collectors name sets by code ("OP05", "ST10", "OGN"), and the code is
+ * what tells two #119s apart, so a typed code becomes the set code. Pokémon is left as typed.
+ */
+function manualSet(game: Game, typed: string): { setName: string | null; setCode: string | null } {
+  const t = typed.trim();
+  if (game !== 'pokemon' && /^[A-Z]{2,4}-?\d{0,2}$/i.test(t)) return { setName: null, setCode: t.toUpperCase() };
+  return { setName: t || null, setCode: null };
+}
+
 export type ManualDetails = {
+  game: Game;
   cert: string | null;
   grader: Card['grader'];
   grade: number;
   name: string;
   setName: string;
   number: string;
+  /** Parallel, manga, alt art: what the label prints under the name. Optional. */
+  variety?: string;
   language: string;
   paidCents: number | null;
   plan: Card['plan'];
@@ -214,13 +243,14 @@ export function cardFromDetails(d: ManualDetails): Card {
   const now = new Date().toISOString();
   return {
     id: uuid(),
+    game: d.game,
     certNumber: d.cert,
     grader: d.grader,
     grade: d.grade,
     name: d.name.trim(),
-    setName: d.setName.trim() || null,
-    setCode: null,
+    ...manualSet(d.game, d.setName),
     number: d.number.trim().replace(/^#/, '') || null,
+    variety: d.variety?.trim() || null,
     language: d.language,
     year: null,
     imageFrontUrl: null,

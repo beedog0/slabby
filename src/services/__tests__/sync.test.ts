@@ -17,7 +17,7 @@ describe('row mapping', () => {
     expect(row).toMatchObject({ user_id: 'user-1', card_key: 'psa:10:SV2a:205:ja', paid_cents: 65_000 });
     const back = fromRow(row);
     const { artColor, ...rest } = mew;
-    expect(back).toEqual(rest);
+    expect(back).toEqual({ ...rest, game: 'pokemon' });
   });
   it('parses numeric grade strings from Postgres', () => {
     expect(fromRow({ ...toRow(mew, 'u'), grade: '9.5' as unknown as number }).grade).toBe(9.5);
