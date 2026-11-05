@@ -7,11 +7,18 @@ import { money } from '../lib/format';
 import { downsample } from './Sparkline';
 import { color, type } from '../theme/tokens';
 
-type Props = { values: number[]; paidCents: number | null; width: number; height?: number };
+type Props = {
+  values: number[];
+  paidCents: number | null;
+  width: number;
+  height?: number;
+  /** Line and dot color: green when the window is up, red when down. */
+  tint?: string;
+};
 
 const PAD = 8;
 
-export function PriceChart({ values: raw, paidCents, width, height = 140 }: Props) {
+export function PriceChart({ values: raw, paidCents, width, height = 140, tint = color.ink }: Props) {
   // ~16 points reads as a trend line, like the reference, instead of daily noise.
   const values = downsample(raw, 16);
   if (values.length < 2) {
@@ -39,8 +46,8 @@ export function PriceChart({ values: raw, paidCents, width, height = 140 }: Prop
         {paidY != null ? (
           <Line x1={0} x2={width} y1={paidY} y2={paidY} stroke={color.hairline} strokeWidth={1.5} strokeDasharray="3 5" />
         ) : null}
-        <Path d={d} stroke={color.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <Circle cx={x(values.length - 1)} cy={y(last)} r={6} fill={color.ink} />
+        <Path d={d} stroke={tint} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <Circle cx={x(values.length - 1)} cy={y(last)} r={6} fill={tint} />
       </Svg>
       {paidCents != null ? (
         <Text style={[type.secondary, { color: color.secondary, position: 'absolute', right: 0, top: labelTop }]}>

@@ -122,3 +122,29 @@ export function collection(rows: CardRow[], filter: CollectionFilter): { rows: C
       : [...keep].sort((a, b) => value(b) - value(a));
   return { rows: sorted, totalCents: sorted.reduce((s, r) => s + value(r), 0) };
 }
+
+/** Up, down or flat across a series (first point to last). Drives green/red on prices and lines. */
+export function trendOf(series: number[]): 'up' | 'down' | 'flat' {
+  if (series.length < 2) return 'flat';
+  const d = series[series.length - 1] - series[0];
+  return d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+}
+
+/**
+ * Daily value of the owned cards over the last `days` days, oldest first: each card's market
+ * series summed by day, aligned on today. A card with a shorter history counts at its first
+ * known value before that, so new comps don't read as a jump in the collection.
+ */
+export function collectionSeries(rows: CardRow[], days = 30): number[] {
+  const series = rows
+    .filter((r) => r.card.status === 'owned' && r.price && r.price.series90.length)
+    .map((r) => r.price!.series90.slice(-(days + 1)));
+  if (!series.length) return [];
+  const n = Math.max(...series.map((s) => s.length));
+  return Array.from({ length: n }, (_, i) =>
+    series.reduce((sum, s) => {
+      const j = i - (n - s.length);
+      return sum + (j >= 0 ? s[j] : s[0]);
+    }, 0),
+  );
+}

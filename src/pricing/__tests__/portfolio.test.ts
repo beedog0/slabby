@@ -87,3 +87,21 @@ describe('collection', () => {
     expect(sold.totalCents).toBe(500);
   });
 });
+
+import { collectionSeries, trendOf } from '../portfolio';
+
+describe('collection value line', () => {
+  const row = (series90: number[], status = 'owned') =>
+    ({ card: { status }, price: { series90 } }) as unknown as Parameters<typeof collectionSeries>[0][number];
+
+  it('sums owned cards by day, padding short histories with their first value', () => {
+    expect(collectionSeries([row([100, 110, 120]), row([50, 60])])).toEqual([150, 160, 180]);
+    expect(collectionSeries([row([100, 110]), row([999, 999], 'sold')])).toEqual([100, 110]);
+  });
+
+  it('reads the trend first to last', () => {
+    expect(trendOf([1, 5, 2])).toBe('up');
+    expect(trendOf([5, 1])).toBe('down');
+    expect(trendOf([3])).toBe('flat');
+  });
+});

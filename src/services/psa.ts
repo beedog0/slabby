@@ -27,7 +27,7 @@ export type PsaCertPayload = {
 };
 
 export type CertResult =
-  | { status: 'found'; cert: string; payload: PsaCertPayload; source: 'device' | 'cache' | 'psa' | 'mock' }
+  | { status: 'found'; cert: string; payload: PsaCertPayload; source: 'device' | 'cache' | 'psa' | 'mock' | 'label' }
   | { status: 'pending'; cert: string } // PSA daily quota hit; the Edge Function queued it
   | { status: 'not_found'; cert: string }
   | { status: 'error'; cert: string; message: string };
@@ -72,11 +72,36 @@ export async function lookupCert(cert: string): Promise<CertResult> {
   const res = await supabase.functions.invoke<{ status: string; payload?: PsaCertPayload; message?: string }>('psa-lookup', {
     body: { cert },
   });
-  if (res.error || !res.data) return { status: 'error', cert, message: res.error?.message ?? 'Lookup failed' };
-  if (res.data.status === 'pending') return { status: 'pending', cert };
-  if (res.data.status === 'not_found' || !res.data.payload) return { status: 'not_found', cert };
-  await remember(cert, res.data.payload);
-  return { status: 'found', cert, payload: res.data.payload, source: 'psa' };
+  if (res.data?.status === 'found' && res.data.payload) {
+    await remember(cert, res.data.payload);
+    return { status: 'found', cert, payload: res.data.payload, source: 'psa' };
+  }
+  if (res.data?.status === 'not_found') return { status: 'not_found', cert };
+
+  // The server's PSA token isn't approved yet, and PSA's keyless daily allowance is per network,
+  // so a shared cloud IP runs out but the phone's own connection usually doesn't.
+  const direct = await psaFromDevice(cert);
+  if (direct.status !== 'error') return direct;
+  if (res.data?.status === 'pending') return { status: 'pending', cert };
+  return { status: 'error', cert, message: res.error?.message ?? direct.message };
+}
+
+const PSA_URL = 'https://api.psacard.com/publicapi/cert/GetByCertNumber/';
+
+/** PSA's public cert endpoint, called from the phone without a token. No secrets on the device. */
+export async function psaFromDevice(cert: string): Promise<CertResult> {
+  try {
+    const r = await fetch(PSA_URL + cert, { headers: { Accept: 'application/json' } });
+    if (r.status === 429) return { status: 'pending', cert };
+    if (!r.ok) return { status: 'error', cert, message: `PSA ${r.status}` };
+    const body = (await r.json()) as PsaCertPayload & { IsValidRequest?: boolean; ServerMessage?: string };
+    if (!body?.PSACert?.CertNumber) return { status: 'not_found', cert };
+    const payload: PsaCertPayload = { PSACert: body.PSACert };
+    await remember(cert, payload);
+    return { status: 'found', cert, payload, source: 'psa' };
+  } catch (e) {
+    return { status: 'error', cert, message: e instanceof Error ? e.message : 'PSA unreachable' };
+  }
 }
 
 async function remember(cert: string, payload: unknown) {
@@ -110,11 +135,37 @@ export function titleName(subject: string): string {
  * and, when present, a set code and a short set name. Best effort; the user can edit later.
  */
 export function parseBrand(brand = ''): { language: string; setCode: string | null; setName: string | null } {
-  const language = /JAPANESE/i.test(brand) ? 'ja' : /KOREAN/i.test(brand) ? 'ko' : /CHINESE/i.test(brand) ? 'zh' : 'en';
-  const rest = brand.replace(/^POKEMON\s*/i, '').replace(/^(JAPANESE|KOREAN|CHINESE)\s*/i, '');
-  const code = rest.match(/^([A-Z]{1,4}\d{1,2}[a-z]?)-/);
-  const setName = (code ? rest.slice(code[0].length) : rest).replace(/^POKEMON CARD\s*/i, '').trim();
-  return { language, setCode: code ? code[1] : null, setName: setName ? titleName(setName) : null };
+  // Newer labels print "SV8a JP-..." or "SV-P JP PROMO" instead of "JAPANESE SV2a-...".
+  const language = /JAPANESE|\bJPN?\b/i.test(brand) ? 'ja' : /KOREAN|\bKOR\b/i.test(brand) ? 'ko' : /CHINESE/i.test(brand) ? 'zh' : 'en';
+  const rest = brand.replace(/^POKEMON\s*/i, '').replace(/^(JAPANESE|KOREAN|CHINESE|JPN?)\s*/i, '');
+  const code = rest.match(/^((?:[A-Z]{1,4}\d{1,2}[a-z]?)|(?:[A-Z]{1,3}-P))(?:\s+(?:JPN?|KOR))?(?=[-\s]|$)-?/i);
+  const setName = (code ? rest.slice(code[0].length) : rest)
+    .replace(/^(?:JPN?|KOR)\b-?\s*/i, '')
+    .replace(/^POKEMON CARD\s*/i, '')
+    .trim();
+  // Set codes print as letters, digits, then a lowercase variant letter: SV2a, SV-P, S12a.
+  const setCode = code ? code[1].replace(/^[a-z]+/i, (l) => l.toUpperCase()).replace(/-p$/, '-P') : null;
+  return { language, setCode, setName: setName ? titleName(setName) : null };
+}
+
+/**
+ * Fix cards saved by earlier label reads: "Sv8a Jp" as the set (language left English, no set
+ * code) and "Pikachuex" with the suffix glued on. Returns the same object when nothing changes.
+ */
+export function repairCard(c: Card): Card {
+  let next = c;
+  if (c.grader !== 'raw' && !c.setCode && c.setName && /\bjpn?\b/i.test(c.setName)) {
+    const b = parseBrand(`POKEMON ${c.setName}`);
+    next = { ...next, language: b.language, setCode: b.setCode ?? next.setCode, setName: b.setName };
+  }
+  const name = splitSuffix(c.name);
+  if (name !== c.name) next = { ...next, name };
+  return next;
+}
+
+/** OCR often drops the space before the suffix: "PIKACHUex" → "PIKACHU ex". */
+export function splitSuffix(name: string): string {
+  return name.replace(/([a-z]{3,})(ex|GX|VMAX|VSTAR)$/i, '$1 $2');
 }
 
 /** A new vault card from a PSA payload. Paid and plan come from the scan sheet. */
@@ -126,7 +177,7 @@ export function cardFromCert(payload: PsaCertPayload, extra: { paidCents: number
     certNumber: p.CertNumber,
     grader: 'psa',
     grade: gradeFrom(p.CardGrade ?? p.GradeDescription),
-    name: titleName(p.Subject ?? 'Unknown card'),
+    name: titleName(splitSuffix(p.Subject ?? 'Unknown card')),
     setName: brand.setName,
     setCode: brand.setCode,
     number: p.CardNumber ?? null,
