@@ -10,9 +10,11 @@ export function labelSetLine(c: Card): string {
     .join(' ');
 }
 
-/** "MEW ex #205": species uppercased, suffixes (ex, V, VMAX…) kept as printed. */
+/** "SURFING PIKACHU VMAX #9", "MEW ex #205": PSA prints names in caps, except the lowercase "ex". */
 export function labelNameLine(c: Card): string {
-  const [first, ...rest] = c.name.split(' ');
-  const keep = rest.filter((w) => !/^(alt|art|SAR|SIR)$/i.test(w));
-  return [first.toUpperCase(), ...keep].join(' ') + (c.number ? ` #${c.number}` : '');
+  const words = c.name
+    .split(' ')
+    .filter((w) => w && !/^(alt|art|SAR|SIR)$/i.test(w))
+    .map((w) => (w === 'ex' ? w : w.toUpperCase()));
+  return words.join(' ') + (c.number ? ` #${c.number}` : '');
 }

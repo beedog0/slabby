@@ -55,7 +55,8 @@ export function slabLayout(width: number, grader: Grader = 'psa'): SlabLayout {
 
 /** Label paper and ink per grader (BGS black, CGC blue-white, PSA white). */
 export function labelInk(grader: Grader, grade: number | null) {
-  if (grader === 'bgs') return { paper: '#151517', ink: '#F5F5F7', grade: grade === 10 ? '#D9B45A' : '#E8E8ED', sub: 'rgba(245,245,247,0.6)' };
-  if (grader === 'cgc') return { paper: '#F4F8FD', ink: '#0B2A55', grade: '#1A56B8', sub: 'rgba(11,42,85,0.55)' };
-  return { paper: '#FCFCFA', ink: '#0A0A0A', grade: grade === 10 ? '#D01C2A' : '#0A0A0A', sub: 'rgba(10,10,10,0.55)' };
+  if (grader === 'bgs') return { paper: '#151517', ink: '#F5F5F7', grade: grade === 10 ? '#D9B45A' : '#E8E8ED', sub: 'rgba(245,245,247,0.6)', frame: null };
+  if (grader === 'cgc') return { paper: '#F4F8FD', ink: '#0B2A55', grade: '#1A56B8', sub: 'rgba(11,42,85,0.55)', frame: null };
+  // PSA labels carry a red frame printed just inside the paper edge.
+  return { paper: '#FCFCFA', ink: '#0A0A0A', grade: grade === 10 ? '#D01C2A' : '#0A0A0A', sub: 'rgba(10,10,10,0.55)', frame: '#D01C2A' };
 }
