@@ -43,7 +43,9 @@ function score(d: PptCard, c: { name: string; setName: string | null; setCode?: 
   const set = new Set(words(d.setName));
   let s = 0;
   for (const w of words(c.name)) if (name.has(w)) s += 2;
-  if (c.setCode && words(d.setName).concat(words(d.name)).includes(c.setCode.toLowerCase())) s += 3;
+  // PPT names Japanese sets "SV2a: Pokemon Card 151", "SV-P Promotional Cards".
+  const compact = (t: string | null | undefined) => (t ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (c.setCode && compact(d.setName).startsWith(compact(c.setCode))) s += 3;
   for (const w of words(c.setName)) if (set.has(w)) s += 1;
   return s;
 }
@@ -55,7 +57,11 @@ function score(d: PptCard, c: { name: string; setName: string | null; setCode?: 
  */
 export async function matchCard(c: { name: string; number: string | null; language: string; setName: string | null; setCode?: string | null }) {
   const want = bareNumber(c.number);
-  const full = c.name.replace(/\b(alt art|SAR|SIR|AR)\b/gi, '').replace(/-HOLO\b/i, '').trim();
+  const full = c.name
+    .replace(/\b(alt art|SAR|SIR|AR)\b/gi, '')
+    .replace(/-HOLO\b/i, '')
+    .replace(/([a-z]{3,})(ex|GX|VMAX|VSTAR)$/i, '$1 $2') // OCR: "Pikachuex"
+    .trim();
   const species = full.replace(/\b(ex|EX|GX|V|VMAX|VSTAR|V-UNION|LV\.?\s*X|BREAK|delta)\b.*$/, '').trim();
   const tries = [...new Set([full, species].filter(Boolean))];
   for (const search of tries) {

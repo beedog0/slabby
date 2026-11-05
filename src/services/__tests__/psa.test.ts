@@ -1,4 +1,4 @@
-import { cardFromCert, gradeFrom, lookupCert, parseBrand, parseCertFromQr, titleName } from '../psa';
+import { cardFromCert, gradeFrom, lookupCert, parseBrand, parseCertFromQr, repairCard, splitSuffix, titleName } from '../psa';
 
 
 describe('parseCertFromQr', () => {
@@ -30,6 +30,18 @@ describe('PSA payload mapping', () => {
   it('parses the brand line', () => {
     expect(parseBrand('POKEMON JAPANESE SV2a-POKEMON CARD 151')).toEqual({ language: 'ja', setCode: 'SV2a', setName: '151' });
     expect(parseBrand('POKEMON SWORD & SHIELD EVOLVING SKIES')).toMatchObject({ language: 'en', setCode: null });
+    expect(parseBrand('POKEMON SV8a JP-TERASTAL FEST ex')).toEqual({ language: 'ja', setCode: 'SV8a', setName: 'Terastal Fest ex' });
+    expect(parseBrand('POKEMON SV-P JP PROMO')).toMatchObject({ language: 'ja', setCode: 'SV-P' });
+    expect(parseBrand('POKEMON JPN SV2a-POKEMON CARD 151')).toMatchObject({ language: 'ja', setCode: 'SV2a' });
+  });
+
+  it('repairs Japanese cards saved by early label reads', () => {
+    expect(splitSuffix('PIKACHUex')).toBe('PIKACHU ex');
+    expect(splitSuffix('Mewtwo')).toBe('Mewtwo');
+    const fixed = repairCard({ grader: 'psa', setCode: null, setName: 'Sv8a Jp', name: 'Pikachuex', language: 'en' } as never);
+    expect(fixed).toMatchObject({ language: 'ja', setCode: 'SV8a', name: 'Pikachu ex' });
+    const ok = { grader: 'psa', setCode: 'SV2a', setName: '151', name: 'Mew ex', language: 'ja' } as never;
+    expect(repairCard(ok)).toBe(ok);
   });
 });
 

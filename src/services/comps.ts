@@ -85,10 +85,13 @@ function saveArt(key: string, url: string | null) {
   for (const c of vault.cards) if (!c.imageFrontUrl && cardKey(c) === key) vault.update(c.id, { imageFrontUrl: url });
 }
 
-/** Ask the server to match a newly added card to its price source and photo, then save the photo. */
-export async function matchNewCard(card: Card): Promise<void> {
-  if (!supabase) return;
-  const { data } = await supabase.functions.invoke<CardRef>('card-match', {
+/**
+ * Ask the server to match a newly added card to its price source and photo, then save the photo.
+ * Resolves to the server's answer, or null when the call itself failed (signed out, offline).
+ */
+export async function matchNewCard(card: Card): Promise<CardRef | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.functions.invoke<CardRef>('card-match', {
     body: {
       cardKey: cardKey(card),
       name: card.name,
@@ -98,7 +101,9 @@ export async function matchNewCard(card: Card): Promise<void> {
       setCode: card.setCode,
     },
   });
+  if (error || !data) return null;
   saveArt(cardKey(card), artFor(data));
+  return data;
 }
 
 const retried = new Set<string>();
@@ -109,6 +114,8 @@ const retried = new Set<string>();
  */
 export async function fillArt(cards: Card[]): Promise<void> {
   if (!supabase) return;
+  // Before the guest session exists, RLS hides card_refs and card-match answers 401.
+  if (!(await supabase.auth.getSession()).data.session) return;
   const missing = cards.filter((c) => !c.imageFrontUrl && c.status === 'owned');
   if (!missing.length) return;
   const keys = [...new Set(missing.map(cardKey))];
@@ -118,9 +125,10 @@ export async function fillArt(cards: Card[]): Promise<void> {
     const art = artFor(refs.get(key));
     if (art) saveArt(key, art);
     else if (!retried.has(key)) {
-      retried.add(key);
       const card = missing.find((c) => cardKey(c) === key)!;
-      await matchNewCard(card).catch(() => {});
+      // Only a real answer counts as tried; a failed call is retried on the next refresh.
+      const answer = await matchNewCard(card).catch(() => null);
+      if (answer) retried.add(key);
     }
   }
 }
