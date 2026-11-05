@@ -57,4 +57,11 @@ describe('parseLabel', () => {
     expect(parseLabel(['hello world'])).toBeNull();
     expect(parseLabel([])).toBeNull();
   });
+
+  it('reads a label with the year and brand on separate lines and OCR slips', () => {
+    const r = parseLabel(['2023', 'POKEM0N JPN SV2a-POKEMON CARD 151', '#205', 'MEW ex', 'GEM MT 10', '81234560']);
+    expect(r?.payload.PSACert).toMatchObject({ Year: '2023', CardNumber: '205', Subject: 'MEW ex', CardGrade: 'GEM MT 10', CertNumber: '81234560' });
+    expect(r?.payload.PSACert.Brand).toBe('POKEMON JAPANESE SV2a-POKEMON CARD 151');
+    expect(r?.complete).toBe(true);
+  });
 });

@@ -19,7 +19,10 @@ export type LabelLine = { text: string; x: number; y: number };
 // Case-sensitive on purpose: labels print grades in capitals, card names use "ex"/"EX" too.
 const GRADE_WORDS = /(?:^|\s)(GEM MT|GEM MINT|MINT|NM-MT\+?|NM\+?|EX-MT\+?|EX\+?|VG-EX\+?|VG\+?|GOOD\+?|FAIR|PR|AUTHENTIC|AUTH)(?=\s|$|\d)/;
 const GRADE_NUM = /^\s*(10|[1-9](?:\.5)?)(?!\d)/;
-const YEAR_BRAND = /\b((?:19|20)\d{2})\s+(P(?:OKEMON|\.?M\.?)\b.*)$/i;
+const YEAR_BRAND = /\b((?:19|20)\d{2})\s+(P(?:OK[EÉ]M[O0]N|\.?M\.?)\b.*)$/i;
+// Some labels (and some photos) split the year and the brand onto separate lines.
+const BRAND_ONLY = /^(P(?:OK[EÉ]M[O0]N|\.?M\.?)\b.*)$/i;
+const YEAR_ONLY = /^((?:19|20)\d{2})$/;
 const CERT = /^\d{8,10}$/;
 const VARIETY = /^(HOLO|REVERSE HOLO|1ST EDITION|SHADOWLESS|FULL ART|ALT(?:ERNATE)? ART|SPECIAL ART RARE|ILLUSTRATION RARE|SPECIAL ILLUSTRATION RARE|SECRET|RAINBOW|GOLD|PROMO|STAFF|ART RARE|SUPER RARE|ULTRA RARE|HYPER RARE)\b/i;
 
@@ -81,6 +84,18 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
     for (const token of t.split(' ')) if (CERT.test(token) && !cert) cert = token;
   });
 
+  // Year and brand on separate lines: "2023" then "POKEMON JAPANESE SV2a-...".
+  if (!brand) {
+    const i = lines.findIndex((l) => BRAND_ONLY.test(l.text));
+    if (i >= 0) {
+      brand = lines[i].text.replace(/#\s*[A-Z0-9-]+.*$/i, '').trim();
+      brandIndex = i;
+      year = lines.map((l) => l.text.match(YEAR_ONLY)?.[1]).find(Boolean);
+    }
+  }
+  // OCR reads O as 0 and drops accents; parseBrand expects "POKEMON".
+  if (brand) brand = brand.replace(/^P(?:OK[EÉ]M[O0]N)\b/i, 'POKEMON').replace(/\bJPN\b/i, 'JAPANESE');
+
   // A grade on its own line ("10") next to the grade words.
   if (gradeWord && !grade) {
     const lone = lines.find((l) => /^(10|[1-9](?:\.5)?)$/.test(l.text));
@@ -93,7 +108,7 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   if (!name && brandIndex >= 0) {
     for (const l of lines.slice(brandIndex + 1)) {
       const t = l.text.replace(/#\s*[A-Z0-9-]+/i, '').trim();
-      if (!t || t === gradeWord || (gradeWord && t.startsWith(gradeWord + ' ')) || CERT.test(t) || /^(10|[1-9](?:\.5)?)$/.test(t)) continue;
+      if (!t || YEAR_ONLY.test(t) || t === gradeWord || (gradeWord && t.startsWith(gradeWord + ' ')) || CERT.test(t) || /^(10|[1-9](?:\.5)?)$/.test(t)) continue;
       if (VARIETY.test(t)) {
         variety ??= t;
         continue;

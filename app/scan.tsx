@@ -38,6 +38,7 @@ export default function Scan() {
   const camera = useRef<CameraView>(null);
   const [reading, setReading] = useState(false);
   const [labelMiss, setLabelMiss] = useState(false);
+  const [seen, setSeen] = useState('');
 
   const handle = async (data: string) => {
     const cert = parseCertFromQr(data);
@@ -81,6 +82,7 @@ export default function Scan() {
       const photo = await camera.current.takePictureAsync({ quality: 0.9, skipProcessing: false });
       const lines = photo ? await LabelReader.recognize(photo.uri) : [];
       const parsed = parseLabel(lines);
+      setSeen(lines.slice(0, 4).map((l) => l.text).join(' · '));
       if (!parsed || !parsed.payload.PSACert.Subject) {
         setLabelMiss(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
@@ -151,7 +153,9 @@ export default function Scan() {
             : reading
               ? 'Reading the label'
               : labelMiss
-                ? 'Couldn’t read that. Fill the frame with the label and hold steady.'
+                ? seen
+                  ? `Couldn’t find a PSA label in “${seen.slice(0, 80)}”. Fill the frame with the label and hold steady.`
+                  : 'Couldn’t read any text. Move closer so the label fills the frame, and hold steady.'
                 : LabelReader
                   ? 'Scan the code on the back, or point at the front label and tap Read'
                   : 'Line up the QR or barcode on the back of the slab'}
