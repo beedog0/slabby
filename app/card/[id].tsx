@@ -102,6 +102,7 @@ export default function SlabDetail() {
                 paidCents={card.paidCents}
                 width={width - space.gutter * 2}
                 tint={trendTint(detail.series)}
+                asOf={price?.asOf}
               />
             </View>
             <Hairline />
