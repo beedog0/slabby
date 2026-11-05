@@ -13,7 +13,7 @@ import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
-import { matchNewCard, priceFor } from '../src/services/comps';
+import { matchNewCard, priceFor, refreshPrices } from '../src/services/comps';
 import { useVault } from '../src/store/vault';
 import { color, radius, size, space, type } from '../src/theme/tokens';
 
@@ -54,7 +54,9 @@ export default function Scan() {
     const dollars = parseInt(paid.replace(/[^0-9]/g, ''), 10);
     const card = cardFromCert(result.payload, { paidCents: Number.isFinite(dollars) ? dollars * 100 : null, plan });
     add(card);
-    matchNewCard(card).catch(() => {});
+    matchNewCard(card)
+      .then(() => refreshPrices([card]))
+      .catch(() => {});
     router.replace(`/card/${card.id}`);
   };
 
@@ -200,10 +202,16 @@ export default function Scan() {
                 {result.status === 'pending'
                   ? 'PSA’s daily lookup limit is used up. It will fill in tomorrow.'
                   : result.status === 'error'
-                    ? result.message
-                    : 'Check the number on the label and try again.'}
+                    ? 'PSA isn’t answering lookups right now. Add the details from the label instead.'
+                    : 'Check the number on the label, or add the details by hand.'}
               </Text>
-              <PrimaryButton title="Scan again" onPress={rescan} />
+              <PrimaryButton
+                title="Add details by hand"
+                onPress={() => router.push({ pathname: '/add', params: { cert: result.cert } })}
+              />
+              <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
+                <Text style={[type.text, { color: color.secondary }]}>Scan again</Text>
+              </Pressable>
             </>
           )}
         </View>
@@ -233,6 +241,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s },
+  quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center', marginTop: space.s },
   navBtn: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
   viewfinder: { flex: 1, alignItems: 'center', paddingTop: space.xxxl },
   frame: { width: 240, height: 110 },

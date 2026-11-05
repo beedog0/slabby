@@ -145,3 +145,43 @@ export function cardFromCert(payload: PsaCertPayload, extra: { paidCents: number
     createdAt: new Date().toISOString(),
   };
 }
+
+export type ManualDetails = {
+  cert: string | null;
+  grader: Card['grader'];
+  grade: number;
+  name: string;
+  setName: string;
+  number: string;
+  language: string;
+  paidCents: number | null;
+  plan: Card['plan'];
+};
+
+/** A vault card typed in by hand: when PSA can't look the cert up, or for BGS/CGC slabs. */
+export function cardFromDetails(d: ManualDetails): Card {
+  const now = new Date().toISOString();
+  return {
+    id: uuid(),
+    certNumber: d.cert,
+    grader: d.grader,
+    grade: d.grade,
+    name: d.name.trim(),
+    setName: d.setName.trim() || null,
+    setCode: null,
+    number: d.number.trim().replace(/^#/, '') || null,
+    language: d.language,
+    year: null,
+    imageFrontUrl: null,
+    paidCents: d.paidCents,
+    paidAt: now.slice(0, 10),
+    plan: d.plan,
+    floorOverrideCents: null,
+    askOverrideCents: null,
+    status: 'owned',
+    soldCents: null,
+    soldAt: null,
+    soldWhere: null,
+    createdAt: now,
+  };
+}
