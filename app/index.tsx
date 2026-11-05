@@ -1,130 +1,144 @@
-// Vault: slab hero, vault value, "Start con mode", holds list. Reference: 01-vault.png.
+// Home is the collection: what you own, shown on a shelf, one at a time, or as a grid.
+// Con mode starts from here. Supersedes the 01-vault.png layout at Bryan's request (collection-first).
 
 import { router } from 'expo-router';
 import { useEffect, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActionSheetIOS, Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CardThumb } from '../src/components/CardThumb';
-import { SlabView } from '../src/components/SlabView';
-import { Chevron, Hairline, IconButton, PrimaryButton, ScanIcon, SectionHeader } from '../src/components/ui';
-import { gradeLabel, money, monthLine, pct, rowTitle } from '../src/lib/format';
-import { rowFor, summarize, type CardRow } from '../src/pricing/portfolio';
+import Svg, { Circle } from 'react-native-svg';
+import { EmptyVault } from '../src/components/collection/EmptyVault';
+import { FilterTabs } from '../src/components/collection/FilterTabs';
+import { GridView } from '../src/components/collection/GridView';
+import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
+import { ShelfView } from '../src/components/collection/ShelfView';
+import { ViewSwitch } from '../src/components/collection/ViewSwitch';
+import { IconButton, PrimaryButton, ScanIcon } from '../src/components/ui';
+import { money, monthLine } from '../src/lib/format';
+import { collection, rowFor, summarize, type CollectionFilter } from '../src/pricing/portfolio';
 import { refreshPrices } from '../src/services/comps';
+import { useCon } from '../src/store/con';
+import { useDisplay } from '../src/store/display';
 import { usePrices } from '../src/store/prices';
 import { useRules } from '../src/store/rules';
 import { useVault } from '../src/store/vault';
 import { color, size, space, type } from '../src/theme/tokens';
 
-export default function Vault() {
+const EMPTY: Record<CollectionFilter, string> = {
+  all: 'Nothing here yet.',
+  hold: 'Nothing on hold.',
+  sell: 'Nothing marked for sale. Open a slab and set it to Sell.',
+  sold: 'Nothing sold yet.',
+};
+
+export default function Home() {
   const insets = useSafeAreaInsets();
+  const { width: screenW } = useWindowDimensions();
+  const contentW = screenW - space.gutter * 2;
+
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
-
   const prices = usePrices((s) => s.byKey);
+  const conActive = useCon((s) => s.session != null);
+  const { mode, filter, setMode, setFilter } = useDisplay();
+
   useEffect(() => {
     refreshPrices(cards);
   }, [cards]);
 
-  const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
-  const summary = useMemo(() => summarize(rows), [rows]);
-  const ownedCount = cards.filter((c) => c.status === 'owned').length;
-  const holds = rows.filter((r) => r.card.status === 'owned' && r.card.plan === 'hold');
-  const hero = useMemo(
-    () =>
-      rows
-        .filter((r) => r.card.status === 'owned' && r.card.grader !== 'raw')
-        .sort((a, b) => (b.price?.marketCents ?? 0) - (a.price?.marketCents ?? 0))[0]?.card,
-    [rows],
-  );
+  const all = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
+  const summary = useMemo(() => summarize(all), [all]);
+  const list = useMemo(() => collection(all, filter), [all, filter]);
+  const owned = cards.filter((c) => c.status === 'owned').length;
+  const isEmpty = cards.length === 0;
+
+  const more = () => {
+    const go = (i: number) => {
+      if (i === 0) router.push('/settings/pricing');
+      if (i === 1) router.push('/settings/account');
+    };
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions({ options: ['Pricing rules', 'Back up', 'Cancel'], cancelButtonIndex: 2 }, go);
+    } else {
+      go(0);
+    }
+  };
+
+  const count = list.rows.length;
+  const subline =
+    filter === 'all'
+      ? [`${owned} ${owned === 1 ? 'slab' : 'slabs'}`, Math.abs(summary.monthDeltaCents) >= 100 ? monthLine(summary.monthDeltaCents) : null]
+          .filter(Boolean)
+          .join(' · ')
+      : `${count} ${count === 1 ? 'slab' : 'slabs'}${filter === 'sold' ? ' sold' : ''}`;
 
   return (
-    <ScrollView
-      style={{ backgroundColor: color.canvas }}
-      contentContainerStyle={{ paddingTop: insets.top + space.l, paddingBottom: insets.bottom + space.xxl }}
-    >
-      <View style={styles.header}>
-        <Text style={[type.section, { color: color.ink }]}>Slabby</Text>
-        <IconButton label="Scan a slab" onPress={() => router.push('/scan')}>
-          <ScanIcon />
-        </IconButton>
-      </View>
-
-      <View style={styles.hero}>{hero ? <SlabView card={hero} /> : null}</View>
-
-      <View style={styles.value}>
-        <Text style={[type.displayM, { color: color.ink }]}>{money(summary.valueCents)}</Text>
-        <Text style={[type.text, { color: color.secondary }]}>{monthLine(summary.monthDeltaCents)}</Text>
-      </View>
-
-      <View style={styles.gutter}>
-        <PrimaryButton title="Start con mode" onPress={() => router.push('/con')} />
-      </View>
-
-      <View style={[styles.gutter, { paddingTop: space.l }]}>
-        <Pressable accessibilityRole="button" onPress={() => router.push('/collection')} style={styles.collectionRow}>
-          <Text style={[type.body, { color: color.ink }]}>My collection</Text>
-          <Text style={[type.text, { color: color.secondary }]}>
-            {ownedCount} {ownedCount === 1 ? 'card' : 'cards'}
-            <Chevron />
-          </Text>
-        </Pressable>
-        <Hairline />
-        <View style={{ height: space.section }} />
-        <SectionHeader
-          title="Holds"
-          right={<Text style={[type.text, { color: color.secondary }]}>{summary.forSaleCount} listed</Text>}
-        />
-        {holds.map((r) => (
-          <View key={r.card.id}>
-            <HoldRow row={r} />
-            <Hairline inset={size.thumbW + 14} />
+    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+      <ScrollView
+        contentContainerStyle={{ paddingTop: insets.top + space.l, paddingBottom: insets.bottom + size.button + space.xxxl + space.l }}
+      >
+        <View style={styles.header}>
+          <Text style={[type.section, { color: color.ink }]}>Slabby</Text>
+          <View style={{ flexDirection: 'row' }}>
+            <IconButton label="Scan a slab" onPress={() => router.push('/scan')}>
+              <ScanIcon />
+            </IconButton>
+            <IconButton label="More" onPress={more}>
+              <MoreIcon />
+            </IconButton>
           </View>
-        ))}
-        <Pressable
-          accessibilityRole="link"
-          onPress={() => router.push('/settings/pricing')}
-          style={styles.quietLink}
-        >
-          <Text style={[type.text, { color: color.secondary }]}>
-            Pricing rules
-            <Chevron />
-          </Text>
-        </Pressable>
-        <Pressable accessibilityRole="link" onPress={() => router.push('/settings/account')} style={styles.quietLink}>
-          <Text style={[type.text, { color: color.secondary }]}>
-            Back up
-            <Chevron />
-          </Text>
-        </Pressable>
+        </View>
+
+        {isEmpty ? (
+          <EmptyVault />
+        ) : (
+          <>
+            <View style={styles.value}>
+              {count > 0 ? <Text style={[type.displayS, { color: color.ink }]}>{money(list.totalCents)}</Text> : null}
+              <Text style={[type.text, { color: color.secondary }]}>{subline}</Text>
+            </View>
+
+            <View style={styles.controls}>
+              <FilterTabs value={filter} onChange={setFilter} />
+              <ViewSwitch value={mode} onChange={setMode} />
+            </View>
+
+            {count === 0 ? (
+              <View style={styles.gutter}>
+                <Text style={[type.text, { color: color.secondary, paddingTop: space.l }]}>{EMPTY[filter]}</Text>
+              </View>
+            ) : mode === 'scroll' ? (
+              <ScrollDisplay key={filter} rows={list.rows} screenW={screenW} />
+            ) : (
+              <View style={styles.gutter}>
+                {mode === 'shelf' ? (
+                  <ShelfView rows={list.rows} width={contentW} />
+                ) : (
+                  <GridView rows={list.rows} width={contentW} />
+                )}
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
+        {isEmpty ? (
+          <PrimaryButton title="Scan a slab" onPress={() => router.push('/scan')} />
+        ) : (
+          <PrimaryButton title={conActive ? 'Back to con mode' : 'Start con mode'} onPress={() => router.push('/con')} />
+        )}
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
-function HoldRow({ row }: { row: CardRow }) {
-  const { card, price, gain } = row;
+function MoreIcon() {
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => router.push(`/card/${card.id}`)}
-      style={styles.row}
-    >
-      <CardThumb card={card} />
-      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-        <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
-          {rowTitle(card)}
-        </Text>
-        <Text style={[type.secondary, { color: color.secondary }]}>
-          {gradeLabel(card.grader, card.grade, card.condition)}
-        </Text>
-      </View>
-      <View style={{ alignItems: 'flex-end', gap: 2 }}>
-        <Text style={[type.numberM, { color: color.ink }]}>{price ? money(price.marketCents) : '—'}</Text>
-        {gain != null ? (
-          <Text style={[type.secondary, { color: gain >= 0 ? color.gain : color.loss }]}>{pct(gain)}</Text>
-        ) : null}
-      </View>
-    </Pressable>
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color.ink}>
+      <Circle cx={5.5} cy={12} r={1.6} />
+      <Circle cx={12} cy={12} r={1.6} />
+      <Circle cx={18.5} cy={12} r={1.6} />
+    </Svg>
   );
 }
 
@@ -137,9 +151,23 @@ const styles = StyleSheet.create({
     paddingLeft: space.gutter,
     paddingRight: space.gutter - 10,
   },
-  hero: { height: 330, alignItems: 'center', justifyContent: 'center' },
-  value: { alignItems: 'center', gap: 6, paddingHorizontal: space.gutter, paddingBottom: space.xl + 4 },
-  row: { height: size.rowVault + 8, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  collectionRow: { minHeight: size.touch + 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  quietLink: { paddingVertical: space.l, minHeight: size.touch, justifyContent: 'center' },
+  value: { gap: 4, paddingHorizontal: space.gutter, paddingTop: space.xl },
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: space.gutter,
+    paddingRight: space.gutter - 10,
+    paddingTop: space.l,
+    paddingBottom: space.xl,
+  },
+  dock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: space.gutter,
+    paddingTop: space.s,
+    backgroundColor: color.canvas,
+  },
 });

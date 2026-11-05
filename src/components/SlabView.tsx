@@ -2,7 +2,7 @@
 // When the Blender frame-18 render lands (assets/slab/psa/), the case below is swapped for the
 // image and the label/photo are composited into its quads with Skia. The props stay the same.
 
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { color, radius, shadow, size, slabPose } from '../theme/tokens';
 import type { Card } from '../types';
 
@@ -46,13 +46,21 @@ export function SlabView({ card, width = size.heroW, posed = true }: Props) {
           posed && pose,
         ]}
         accessibilityLabel={`${card.name}, raw`}
-      />
+      >
+        {card.imageFrontUrl ? (
+          <Image
+            source={{ uri: card.imageFrontUrl }}
+            resizeMode="cover"
+            style={[StyleSheet.absoluteFill, { borderRadius: 6 * k }]}
+          />
+        ) : null}
+      </View>
     );
   }
 
   return (
     <View
-      style={[{ width, height }, posed && pose, shadow.slabAmbient]}
+      style={[{ width, height }, posed && pose, posed && shadow.slabAmbient]}
       accessibilityLabel={`${card.name}, ${card.grader.toUpperCase()} ${card.grade}`}
     >
       <View style={[styles.case, { borderRadius: radius.slab * k, padding: 10 * k }, shadow.slabContact]}>
@@ -64,7 +72,7 @@ export function SlabView({ card, width = size.heroW, posed = true }: Props) {
             <Text numberOfLines={1} style={[styles.labelText, { fontSize: 9 * k, fontWeight: '600' }]}>
               {labelNameLine(card)}
             </Text>
-            {card.certNumber ? (
+            {card.certNumber && k > 0.75 ? (
               <Text style={[styles.labelText, { fontSize: 7 * k, opacity: 0.55 }]}>{card.certNumber}</Text>
             ) : null}
           </View>
@@ -82,9 +90,14 @@ export function SlabView({ card, width = size.heroW, posed = true }: Props) {
             flex: 1,
             marginTop: 8 * k,
             borderRadius: 4 * k,
+            overflow: 'hidden',
             backgroundColor: card.artColor ?? color.well,
           }}
-        />
+        >
+          {card.imageFrontUrl ? (
+            <Image source={{ uri: card.imageFrontUrl }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+          ) : null}
+        </View>
       </View>
     </View>
   );
