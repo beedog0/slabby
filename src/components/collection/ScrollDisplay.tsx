@@ -1,7 +1,8 @@
 // One slab at a time, full size, swipe sideways through the collection.
-// The centered slab is posed and full scale; its neighbours sit smaller and quieter. Each slab
-// stands on a soft reflection (the Shoulder photo spread: flipped copy at 28%, faded within the
-// top third). Rows are memoized and art is prefetched, so nothing re-renders or reloads mid-swipe.
+// Cover Flow style: every slab stays full size (scaling makes iOS resample the art, which reads
+// as blur while swiping); neighbours lean away, drop back a little and dim. Each slab stands on a
+// reflection of its own bottom edge (flipped copy at 28%, fading out). Rows are memoized and art
+// is prefetched, so nothing re-renders or reloads mid-swipe.
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -14,7 +15,7 @@ import { SlabView } from '../SlabView';
 import { Caption } from './GridView';
 
 const GAP = space.s;
-const REFLECTION = { opacity: 0.28, height: 0.34, fadeAt: 0.38 } as const;
+const REFLECTION = { opacity: 0.28, height: 0.34 } as const;
 
 type ItemProps = {
   row: CardRow;
@@ -28,8 +29,10 @@ type ItemProps = {
 
 const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: ItemProps) {
   const range = [(n - 1) * step, n * step, (n + 1) * step];
-  const scale = x.interpolate({ inputRange: range, outputRange: [0.86, 1, 0.86], extrapolate: 'clamp' });
-  const opacity = x.interpolate({ inputRange: range, outputRange: [0.45, 1, 0.45], extrapolate: 'clamp' });
+  const opacity = x.interpolate({ inputRange: range, outputRange: [0.5, 1, 0.5], extrapolate: 'clamp' });
+  // Whole-degree lean and whole-point drop only, so the slab lands on exact pixels at rest.
+  const rotate = x.interpolate({ inputRange: range, outputRange: ['6deg', '0deg', '-6deg'], extrapolate: 'clamp' });
+  const translateY = x.interpolate({ inputRange: range, outputRange: [14, 0, 14], extrapolate: 'clamp' });
   const reflH = slabH * REFLECTION.height;
   return (
     <Pressable
@@ -38,15 +41,16 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: Item
       onPress={() => onPress(n)}
       style={{ width: step, alignItems: 'center', paddingTop: space.xl }}
     >
-      <Animated.View style={{ transform: [{ scale }], opacity, alignItems: 'center' }}>
-        <SlabView card={row.card} width={slabW} />
+      <Animated.View style={{ transform: [{ translateY }, { rotate }], opacity, alignItems: 'center' }}>
+        {/* Flat, not posed: the reflection meets a straight bottom edge, as in Cover Flow. */}
+        <SlabView card={row.card} width={slabW} posed={false} />
         <View pointerEvents="none" style={{ width: slabW, height: reflH, overflow: 'hidden', marginTop: 3 }}>
-          <View style={{ height: slabH, opacity: REFLECTION.opacity, transform: [{ scaleY: -1 }], marginTop: reflH - slabH }}>
-            <SlabView card={row.card} width={slabW} />
+          {/* Flipped about its centre, the slab's bottom edge lands at the top of this strip. */}
+          <View style={{ height: slabH, opacity: REFLECTION.opacity, transform: [{ scaleY: -1 }] }}>
+            <SlabView card={row.card} width={slabW} posed={false} />
           </View>
           <LinearGradient
             colors={[`${color.canvas}00`, color.canvas]}
-            // Fade within the top 38% of the slab's height (the visible strip is 34%), as in Shoulder.
             locations={[0, 1]}
             style={StyleSheet.absoluteFill}
           />
