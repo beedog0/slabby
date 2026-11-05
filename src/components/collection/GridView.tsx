@@ -25,7 +25,10 @@ export function GridView({ rows, width }: { rows: CardRow[]; width: number }) {
           <View style={styles.slab}>
             <SlabView card={r.card} width={slabW} posed={false} />
           </View>
-          <Caption row={r} />
+          {/* Same width as the slab, so the text lines up with its left edge. */}
+          <View style={{ width: slabW, alignSelf: 'center' }}>
+            <Caption row={r} />
+          </View>
         </Pressable>
       ))}
     </View>
