@@ -1,7 +1,7 @@
 import cards from '../../mocks/cards.json';
 import { DEFAULT_RULES, type Card } from '../../types';
 import { cardKey } from '../cardKey';
-import { rowFor, summarize } from '../portfolio';
+import { filterStats, rowFor, soldSeries, summarize } from '../portfolio';
 import { money, pct } from '../../lib/format';
 
 const all = cards as Card[];
@@ -112,5 +112,34 @@ describe('chart gridlines', () => {
   it('picks two round prices inside the range', () => {
     expect(gridPrices(118_000, 142_000)).toEqual([120_000, 140_000]);
     expect(gridPrices(5_000, 5_000)).toEqual([5_000]);
+  });
+});
+
+describe('filterStats and soldSeries', () => {
+  const sold = (id: string, soldCents: number, soldAt: string, paidCents: number | null = 10000): Card => ({
+    ...byName('Mew ex'),
+    id,
+    status: 'sold',
+    soldCents,
+    soldAt,
+    paidCents,
+  });
+
+  it('totals sales and profit for sold cards', () => {
+    const rows = [sold('s1', 15000, '2026-11-01'), sold('s2', 5000, '2026-11-03', null)].map((c) =>
+      rowFor(c, DEFAULT_RULES),
+    );
+    const s = filterStats(rows);
+    expect(s.totalCents).toBe(20000);
+    expect(s.profitCents).toBe(5000);
+    expect(s.count).toBe(2);
+  });
+
+  it('builds a running total of sales by day', () => {
+    const rows = [sold('a', 1000, '2026-10-01'), sold('b', 2000, '2026-11-03'), sold('c', 500, '2026-11-05')].map((c) =>
+      rowFor(c, DEFAULT_RULES),
+    );
+    const s = soldSeries(rows, 4, new Date('2026-11-05T12:00:00Z'));
+    expect(s).toEqual([1000, 1000, 3000, 3000, 3500]);
   });
 });
