@@ -2,7 +2,7 @@
 // Con mode starts from the … menu. Supersedes the 01-vault.png layout at Bryan's request (collection-first).
 
 import { router } from 'expo-router';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActionSheetIOS, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
@@ -45,7 +45,9 @@ const EMPTY: Record<CollectionFilter, { title: string; hint: string; chart: stri
 
 export default function Home() {
   const insets = useSafeAreaInsets();
-  const { width: screenW } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
+  // Where the display starts in the page; the swipe view sizes its slab to fit below it.
+  const [displayY, setDisplayY] = useState(0);
   const contentW = screenW - space.gutter * 2;
 
   const cards = useVault((s) => s.cards);
@@ -165,7 +167,14 @@ export default function Home() {
                 <EmptyFilter mode={mode} width={contentW} title={empty.title} hint={empty.hint} />
               </View>
             ) : mode === 'scroll' ? (
-              <ScrollDisplay key={filter} rows={list.rows} screenW={screenW} />
+              <View onLayout={(e) => setDisplayY(e.nativeEvent.layout.y)}>
+                <ScrollDisplay
+                  key={filter}
+                  rows={list.rows}
+                  screenW={screenW}
+                  fitHeight={displayY ? screenH - displayY - insets.bottom - space.s : undefined}
+                />
+              </View>
             ) : (
               <View style={styles.gutter}>
                 {mode === 'shelf' ? (

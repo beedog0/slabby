@@ -18,7 +18,12 @@ import { SlabView } from '../SlabView';
 // Room between cases: the slab now has a real case edge and shadow, so neighbours need air.
 const GAP = space.xxxl;
 // Kept short so the caption sits above the fold under the home header.
-const REFLECTION = { opacity: 0.18, height: 0.18 } as const;
+const REFLECTION = { opacity: 0.18, height: 0.12 } as const;
+// Room above the slab for the neighbours' lean.
+const ITEM_TOP = space.m;
+// Name, value, one line, then "1 of 9": a fixed block so the slab can be sized to what's left.
+const CAPTION_H = 110;
+const MIN_SLAB_W = 150;
 
 type ItemProps = {
   row: CardRow;
@@ -42,7 +47,7 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: Item
       accessibilityRole="button"
       accessibilityLabel={row.card.name}
       onPress={() => onPress(n)}
-      style={{ width: step, alignItems: 'center', paddingTop: space.xl }}
+      style={{ width: step, alignItems: 'center', paddingTop: ITEM_TOP }}
     >
       <Animated.View style={{ transform: [{ translateY }, { rotate }], opacity, alignItems: 'center' }}>
         {/* Flat, not posed: the reflection meets a straight bottom edge, as in Cover Flow. */}
@@ -63,8 +68,14 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: Item
   );
 });
 
-export function ScrollDisplay({ rows, screenW }: { rows: CardRow[]; screenW: number }) {
-  const slabW = Math.min(size.carouselSlabW, screenW - space.gutter * 2 - 80);
+/**
+ * `fitHeight` is the room left on screen below the tabs. The slab is sized so slab, reflection
+ * and caption all fit in it, between MIN_SLAB_W and the full carousel size.
+ */
+export function ScrollDisplay({ rows, screenW, fitHeight }: { rows: CardRow[]; screenW: number; fitHeight?: number }) {
+  const maxW = Math.min(size.carouselSlabW, screenW - space.gutter * 2 - 80);
+  const fitSlabH = fitHeight ? (fitHeight - ITEM_TOP - 3 - CAPTION_H) / (1 + REFLECTION.height) : Infinity;
+  const slabW = Math.round(Math.max(MIN_SLAB_W, Math.min(maxW, (fitSlabH * size.heroW) / size.heroH)));
   const slabH = (slabW * size.heroH) / size.heroW;
   const step = slabW + GAP;
   const side = (screenW - slabW) / 2;
@@ -145,7 +156,7 @@ export function ScrollDisplay({ rows, screenW }: { rows: CardRow[]; screenW: num
             style={styles.caption}
           >
             <SwipeCaption row={current} />
-            <Text style={[type.caption, { color: color.secondary, paddingTop: space.l }]}>
+            <Text style={[type.caption, { color: color.secondary, paddingTop: space.s }]}>
               {i + 1} of {rows.length}
             </Text>
           </Pressable>
@@ -202,10 +213,9 @@ function SwipeCaption({ row }: { row: CardRow }) {
     <View style={{ alignItems: 'center' }}>
       <Text numberOfLines={1} style={[type.body, ink]}>
         {rowTitle(card)}
+        {/* Graded slabs show their grade on the label; raw cards say so here. */}
+        {card.grader === 'raw' ? <Text style={muted}>{` · ${gradeLabel(card.grader, card.grade, card.condition)}`}</Text> : null}
       </Text>
-      {card.grader === 'raw' ? (
-        <Text style={[type.secondary, muted, { paddingTop: 2 }]}>{gradeLabel(card.grader, card.grade, card.condition)}</Text>
-      ) : null}
       <Text style={[type.rowPrice, ink, { paddingTop: space.xs }]}>{value != null ? money(value) : '—'}</Text>
       <Text numberOfLines={1} style={[type.secondary, muted, { paddingTop: 2 }]}>
         {line}
@@ -215,5 +225,5 @@ function SwipeCaption({ row }: { row: CardRow }) {
 }
 
 const styles = StyleSheet.create({
-  caption: { alignItems: 'center', minHeight: size.touch, paddingHorizontal: space.gutter, paddingTop: space.l },
+  caption: { alignItems: 'center', height: CAPTION_H, paddingHorizontal: space.gutter, paddingTop: space.m },
 });

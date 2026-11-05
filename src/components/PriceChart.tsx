@@ -48,6 +48,9 @@ export function gridPrices(lo: number, hi: number): number[] {
   return out.length > 2 ? [out[0], out[out.length - 1]] : out;
 }
 
+/** Space for a high/low price label between its point and the plot edge. */
+const POINT_ROOM = 20;
+
 export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false }: Props) {
   const values = downsample(raw, compact ? 24 : 32);
   const [scrub, setScrub] = useState<number | null>(null); // index into raw
@@ -60,7 +63,9 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
     const hi = Math.max(...all);
     const span = hi - lo || 1;
     const x = (i: number, n: number) => (n <= 1 ? 0 : (i / (n - 1)) * (plotW - PAD));
-    const y = (v: number) => PAD + (1 - (v - lo) / span) * (plotH - PAD * 2);
+    // On detail, leave room above the high and below the low for their price labels.
+    const edge = compact ? PAD : PAD + POINT_ROOM;
+    const y = (v: number) => edge + (1 - (v - lo) / span) * (plotH - edge * 2);
     return { lo, hi, x, y };
   }, [raw, paidCents, plotW, plotH, compact]);
 
@@ -101,11 +106,23 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
   const paidY = paidCents != null && !compact ? y(paidCents) : null;
   const labelStyle = [type.secondary, { color: color.secondary, fontSize: compact ? 11 : 12 }];
 
+  // Labels go above (high) or below (low) their point, flipped when that would leave the plot,
+  // so a low near the bottom never runs into the date row.
+  const POINT_LABEL_H = 16;
+  const pointTop = (py: number, above: boolean) => {
+    const up = py - 22;
+    const down = py + 6;
+    if (above) return up >= 0 ? up : down;
+    return down + POINT_LABEL_H <= plotH ? down : up;
+  };
+  // The low isn't worth marking when it's today's price: the big dot and the header already say it.
+  const markLow = loI !== raw.length - 1 && loI !== hiI && raw[loI] !== last;
+
   const point = (i: number, label: string, above: boolean) => {
     const px = rx(i);
     const left = Math.max(0, Math.min(plotW - 64, px - 32));
     return (
-      <Text key={label + i} style={[labelStyle, { position: 'absolute', left, width: 64, textAlign: 'center', top: above ? y(raw[i]) - 22 : y(raw[i]) + 6 }]}>
+      <Text key={label + i} style={[labelStyle, { position: 'absolute', left, width: 64, textAlign: 'center', top: pointTop(y(raw[i]), above) }]}>
         {label}
       </Text>
     );
@@ -123,7 +140,7 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
         ) : null}
         <Path d={d} stroke={tint} strokeWidth={compact ? 1.75 : 2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
         {!compact && hiI !== raw.length - 1 ? <Circle cx={rx(hiI)} cy={y(raw[hiI])} r={3} fill={color.ink} /> : null}
-        {!compact && loI !== raw.length - 1 && loI !== hiI ? <Circle cx={rx(loI)} cy={y(raw[loI])} r={3} fill={color.ink} /> : null}
+        {!compact && markLow ? <Circle cx={rx(loI)} cy={y(raw[loI])} r={3} fill={color.ink} /> : null}
         <Circle cx={rx(raw.length - 1)} cy={y(last)} r={compact ? 3.5 : 6} fill={tint} />
         {s != null ? (
           <>
@@ -134,7 +151,7 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
       </Svg>
 
       {/* Gridline prices on the right. */}
-      {grid.map((g) => (
+      {grid.filter((g) => paidY == null || s != null || Math.abs(y(g) - paidY) > 14).map((g) => (
         <Text key={`g${g}`} style={[labelStyle, { position: 'absolute', right: 0, width: LABEL_W - 6, textAlign: 'right', top: y(g) - 8 }]}>
           {money(g)}
         </Text>
@@ -142,7 +159,7 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
 
       {/* High and low on the line (detail only, hidden while scrubbing). */}
       {!compact && s == null && hiI !== raw.length - 1 ? point(hiI, money(raw[hiI]), true) : null}
-      {!compact && s == null && loI !== raw.length - 1 && loI !== hiI ? point(loI, money(raw[loI]), false) : null}
+      {!compact && s == null && markLow ? point(loI, money(raw[loI]), false) : null}
 
       {paidY != null && s == null ? (
         <Text style={[labelStyle, { position: 'absolute', right: 0, width: LABEL_W - 6, textAlign: 'right', top: paidY - 8 }]}>paid</Text>
