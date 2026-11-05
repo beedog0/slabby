@@ -3,7 +3,7 @@
 
 import { router } from 'expo-router';
 import { useEffect, useMemo } from 'react';
-import { ActionSheetIOS, Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActionSheetIOS, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { EmptyVault } from '../src/components/collection/EmptyVault';
@@ -53,11 +53,15 @@ export default function Home() {
 
   const more = () => {
     const go = (i: number) => {
-      if (i === 0) router.push('/settings/pricing');
-      if (i === 1) router.push('/settings/account');
+      if (i === 0) router.push('/add');
+      if (i === 1) router.push('/settings/pricing');
+      if (i === 2) router.push('/settings/account');
     };
     if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions({ options: ['Pricing rules', 'Back up', 'Cancel'], cancelButtonIndex: 2 }, go);
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Add by hand', 'Pricing rules', 'Back up', 'Cancel'], cancelButtonIndex: 3 },
+        go,
+      );
     } else {
       go(0);
     }
@@ -123,7 +127,12 @@ export default function Home() {
 
       <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
         {isEmpty ? (
-          <PrimaryButton title="Scan a slab" onPress={() => router.push('/scan')} />
+          <>
+            <PrimaryButton title="Scan a slab" onPress={() => router.push('/scan')} />
+            <Pressable accessibilityRole="link" onPress={() => router.push('/add')} style={styles.quiet}>
+              <Text style={[type.text, { color: color.secondary }]}>Add by hand</Text>
+            </Pressable>
+          </>
         ) : (
           <PrimaryButton title={conActive ? 'Back to con mode' : 'Start con mode'} onPress={() => router.push('/con')} />
         )}
@@ -161,6 +170,7 @@ const styles = StyleSheet.create({
     paddingTop: space.l,
     paddingBottom: space.xl,
   },
+  quiet: { height: size.touch, alignItems: 'center', justifyContent: 'center', marginTop: space.xs },
   dock: {
     position: 'absolute',
     left: 0,
