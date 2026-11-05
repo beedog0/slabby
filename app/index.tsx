@@ -27,6 +27,7 @@ export default function Vault() {
 
   const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   const summary = useMemo(() => summarize(rows), [rows]);
+  const ownedCount = cards.filter((c) => c.status === 'owned').length;
   const holds = rows.filter((r) => r.card.status === 'owned' && r.card.plan === 'hold');
   const hero = useMemo(
     () =>
@@ -59,17 +60,19 @@ export default function Vault() {
         <PrimaryButton title="Start con mode" onPress={() => router.push('/con')} />
       </View>
 
-      <View style={[styles.gutter, { paddingTop: space.section }]}>
+      <View style={[styles.gutter, { paddingTop: space.l }]}>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/collection')} style={styles.collectionRow}>
+          <Text style={[type.body, { color: color.ink }]}>My collection</Text>
+          <Text style={[type.text, { color: color.secondary }]}>
+            {ownedCount} {ownedCount === 1 ? 'card' : 'cards'}
+            <Chevron />
+          </Text>
+        </Pressable>
+        <Hairline />
+        <View style={{ height: space.section }} />
         <SectionHeader
           title="Holds"
-          right={
-            <Pressable accessibilityRole="link" hitSlop={10} onPress={() => router.push('/collection')}>
-              <Text style={[type.text, { color: color.secondary }]}>
-                All {cards.filter((c) => c.status === 'owned').length}
-                <Chevron />
-              </Text>
-            </Pressable>
-          }
+          right={<Text style={[type.text, { color: color.secondary }]}>{summary.forSaleCount} listed</Text>}
         />
         {holds.map((r) => (
           <View key={r.card.id}>
@@ -137,5 +140,6 @@ const styles = StyleSheet.create({
   hero: { height: 330, alignItems: 'center', justifyContent: 'center' },
   value: { alignItems: 'center', gap: 6, paddingHorizontal: space.gutter, paddingBottom: space.xl + 4 },
   row: { height: size.rowVault + 8, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  collectionRow: { minHeight: size.touch + 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   quietLink: { paddingVertical: space.l, minHeight: size.touch, justifyContent: 'center' },
 });
