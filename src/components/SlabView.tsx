@@ -3,7 +3,8 @@
 // When the Blender frame-18 render lands (assets/slab/psa/), the case below is swapped for the
 // image and the label/photo are composited into its quads with Skia. The props stay the same.
 
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { ArtImage } from './ArtImage';
 import { color, card3d, radius, shadow, size, slabPose } from '../theme/tokens';
 import { Card3D } from './Card3D';
 import type { Card } from '../types';
@@ -52,10 +53,7 @@ export function SlabView({ card, width = size.heroW, posed = true, interactive =
         accessibilityLabel={`${card.name}, raw`}
       >
         {card.imageFrontUrl ? (
-          <Image
-            source={{ uri: card.imageFrontUrl }}
-            resizeMode="cover"
-            style={[StyleSheet.absoluteFill, { borderRadius: 6 * k }]}
+          <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={[StyleSheet.absoluteFill, { borderRadius: 6 * k }]}
           />
         ) : null}
       </View>
@@ -116,7 +114,7 @@ export function SlabView({ card, width = size.heroW, posed = true, interactive =
           }}
         >
           {card.imageFrontUrl ? (
-            <Image source={{ uri: card.imageFrontUrl }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+            <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={StyleSheet.absoluteFill} />
           ) : null}
         </View>
       </View>

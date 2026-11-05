@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
+import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
@@ -75,7 +76,9 @@ export default function SlabDetail() {
             <Text style={[type.text, { color: color.secondary }]}>{subtitle}</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={[type.title, { color: color.ink }]}>{price ? money(price.marketCents) : '—'}</Text>
+            <Text style={[type.title, { color: detail ? trendTint(detail.series) : color.ink }]}>
+              {price ? money(price.marketCents) : '—'}
+            </Text>
             {detail?.gainCents != null && card.paidCents != null ? (
               <Text style={[type.text, { color: detail.gainCents >= 0 ? color.gain : color.loss }]}>
                 {detail.gainCents >= 0 ? '+' : ''}
@@ -90,7 +93,12 @@ export default function SlabDetail() {
         {detail ? (
           <View style={styles.gutter}>
             <View style={{ paddingTop: space.xxl, paddingBottom: space.xl }}>
-              <PriceChart values={detail.series} paidCents={card.paidCents} width={width - space.gutter * 2} />
+              <PriceChart
+                values={detail.series}
+                paidCents={card.paidCents}
+                width={width - space.gutter * 2}
+                tint={trendTint(detail.series)}
+              />
             </View>
             <Hairline />
             <View style={styles.rangeRow}>

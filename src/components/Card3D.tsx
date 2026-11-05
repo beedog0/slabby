@@ -4,7 +4,8 @@
 // RN Animated + PanResponder only, so no extra native modules.
 
 import { useRef } from 'react';
-import { Animated, Image, PanResponder, StyleSheet, View } from 'react-native';
+import { Animated, PanResponder, StyleSheet, View } from 'react-native';
+import { ArtImage } from './ArtImage';
 import { card3d, color, shadow, slabPose } from '../theme/tokens';
 
 type Props = {
@@ -54,7 +55,7 @@ export function Card3D({ uri, width, posed = true, interactive = false, accessib
       ]}
     >
       <View style={[styles.card, { borderRadius: radius }, shadow.slabContact]}>
-        <Image source={{ uri }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+        <ArtImage uri={uri} recyclingKey={uri} style={StyleSheet.absoluteFill} />
         <Animated.View
           pointerEvents="none"
           style={[
