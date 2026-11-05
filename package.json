@@ -7,9 +7,12 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.119.0",
     "expo": "~58.0.23",
+    "expo-apple-authentication": "~58.0.2",
     "expo-camera": "~58.0.14",
     "expo-constants": "~58.0.15",
     "expo-haptics": "~58.0.7",
+    "expo-image": "~58.0.18",
+    "expo-linear-gradient": "~58.0.3",
     "expo-linking": "~58.0.16",
     "expo-router": "~58.0.30",
     "expo-status-bar": "~58.0.4",
@@ -41,6 +44,9 @@
     "preset": "jest-expo",
     "testPathIgnorePatterns": [
       "/node_modules/"
+    ],
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
     ]
   }
 }

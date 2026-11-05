@@ -11,6 +11,7 @@ import { Hairline, PrimaryButton, ScanIcon } from '../../src/components/ui';
 import { elapsed, money } from '../../src/lib/format';
 import { conSummary, rowFor } from '../../src/pricing/portfolio';
 import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
+import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
 import { useVault } from '../../src/store/vault';
 import { color, radius, size, space, type } from '../../src/theme/tokens';
@@ -38,7 +39,8 @@ export default function ConMode() {
     return () => clearInterval(t);
   }, []);
 
-  const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules]);
+  const prices = usePrices((s) => s.byKey);
+  const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   if (!session) return null;
   const sum = conSummary(rows, session.startedAt);
 

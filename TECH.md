@@ -18,7 +18,7 @@
 ```sql
 -- users: Supabase auth
 
-create table cards (
+create table slabs (   -- named cards in the original spec; renamed because Slabby 1.0 already owns cards
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users not null,
   cert_number text,                 -- PSA cert, null for raw
@@ -104,6 +104,9 @@ create table con_sessions (
 5. Population fields come back null on the public API. Pop is a separate source (Phase 3).
 
 ### `services/comps.ts` — price comps
+
+> **Decision (2026-11-05):** comps come from the PokemonPriceTracker API (Bryan's API-plan key, 20k credits/day) instead of a direct eBay integration. Graded = eBay + Fanatics Collect sold per grade, as daily `{average, count}`; raw = TCGplayer market daily. It does not return individual listings, so `comps-nightly` writes `price_daily` directly (median and 10th/90th percentile of the trailing 30 days, weighted by sale count) and `price_points` stays unused for now. Cards map to TCGplayer product ids once via `card-match` into `card_refs`. Key: `PPT_API_KEY` Edge Function secret.
+
 
 - Graded: eBay sold listings for the card_key over 30 days. Use the eBay Browse/Marketplace Insights API where access is granted; otherwise a scheduled scraper in an Edge Function with a 24 h cache. Store every sale as a `price_points` row. Market = median; low/high = 10th/90th percentile to drop outliers.
 - Raw: TCGplayer market price via their API or the pokemontcg.io proxy. One row per day.
