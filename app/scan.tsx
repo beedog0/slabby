@@ -55,7 +55,7 @@ export default function Scan() {
     const card = cardFromCert(result.payload, { paidCents: Number.isFinite(dollars) ? dollars * 100 : null, plan });
     add(card);
     matchNewCard(card).catch(() => {});
-    router.back();
+    router.replace(`/card/${card.id}`);
   };
 
   const rescan = () => {

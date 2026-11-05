@@ -42,3 +42,20 @@ describe('summarize', () => {
     expect(summarize(sold).valueCents).toBe(owned - rows[0].price!.marketCents);
   });
 });
+
+describe('detailFor', () => {
+  const { detailFor, rowFor } = require('../portfolio');
+  const { DEFAULT_RULES } = require('../../types');
+  const price = { marketCents: 104000, lowCents: 96000, highCents: 112000, sales30d: 6, asOf: '2026-11-05', series90: Array.from({ length: 91 }, (_, i) => 80000 + i * 266) };
+  const card = { id: 'x', grader: 'psa', grade: 10, name: 'Mew ex', setName: '151', setCode: 'SV2a', number: '205', language: 'ja', paidCents: 65000, plan: 'hold', status: 'owned', askOverrideCents: null, floorOverrideCents: null };
+  it('gives gain vs paid and the window', () => {
+    const d = detailFor(rowFor(card, DEFAULT_RULES, price), 30);
+    expect(d.gainCents).toBe(39000);
+    expect(d.series).toHaveLength(31);
+    expect(d.change).toBeGreaterThan(0);
+  });
+  it('is null without comps and has no gain without paid', () => {
+    expect(detailFor(rowFor(card, DEFAULT_RULES, null), 90)).toBeNull();
+    expect(detailFor(rowFor({ ...card, paidCents: null }, DEFAULT_RULES, price), 90).gainCents).toBeNull();
+  });
+});

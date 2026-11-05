@@ -82,3 +82,23 @@ export function conSummary(rows: CardRow[], startedAt: string): ConSummary {
   }
   return { soldCents, soldCount, totalCount: forSale + soldCount, floorTotalCents };
 }
+
+export type DetailNumbers = {
+  /** Market minus paid. Null when paid is unknown. */
+  gainCents: number | null;
+  /** Change over the chosen window, as a fraction. */
+  change: number;
+  /** Daily market for the window, oldest first. */
+  series: number[];
+};
+
+/** Slab detail numbers for a 30- or 90-day window. Null without comps. */
+export function detailFor(row: CardRow, days: 30 | 90): DetailNumbers | null {
+  const p = row.price;
+  if (!p) return null;
+  return {
+    gainCents: row.card.paidCents != null ? p.marketCents - row.card.paidCents : null,
+    change: changeOver(p, days),
+    series: p.series90.slice(-(days + 1)),
+  };
+}
