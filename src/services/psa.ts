@@ -72,11 +72,36 @@ export async function lookupCert(cert: string): Promise<CertResult> {
   const res = await supabase.functions.invoke<{ status: string; payload?: PsaCertPayload; message?: string }>('psa-lookup', {
     body: { cert },
   });
-  if (res.error || !res.data) return { status: 'error', cert, message: res.error?.message ?? 'Lookup failed' };
-  if (res.data.status === 'pending') return { status: 'pending', cert };
-  if (res.data.status === 'not_found' || !res.data.payload) return { status: 'not_found', cert };
-  await remember(cert, res.data.payload);
-  return { status: 'found', cert, payload: res.data.payload, source: 'psa' };
+  if (res.data?.status === 'found' && res.data.payload) {
+    await remember(cert, res.data.payload);
+    return { status: 'found', cert, payload: res.data.payload, source: 'psa' };
+  }
+  if (res.data?.status === 'not_found') return { status: 'not_found', cert };
+
+  // The server's PSA token isn't approved yet, and PSA's keyless daily allowance is per network,
+  // so a shared cloud IP runs out but the phone's own connection usually doesn't.
+  const direct = await psaFromDevice(cert);
+  if (direct.status !== 'error') return direct;
+  if (res.data?.status === 'pending') return { status: 'pending', cert };
+  return { status: 'error', cert, message: res.error?.message ?? direct.message };
+}
+
+const PSA_URL = 'https://api.psacard.com/publicapi/cert/GetByCertNumber/';
+
+/** PSA's public cert endpoint, called from the phone without a token. No secrets on the device. */
+export async function psaFromDevice(cert: string): Promise<CertResult> {
+  try {
+    const r = await fetch(PSA_URL + cert, { headers: { Accept: 'application/json' } });
+    if (r.status === 429) return { status: 'pending', cert };
+    if (!r.ok) return { status: 'error', cert, message: `PSA ${r.status}` };
+    const body = (await r.json()) as PsaCertPayload & { IsValidRequest?: boolean; ServerMessage?: string };
+    if (!body?.PSACert?.CertNumber) return { status: 'not_found', cert };
+    const payload: PsaCertPayload = { PSACert: body.PSACert };
+    await remember(cert, payload);
+    return { status: 'found', cert, payload, source: 'psa' };
+  } catch (e) {
+    return { status: 'error', cert, message: e instanceof Error ? e.message : 'PSA unreachable' };
+  }
 }
 
 async function remember(cert: string, payload: unknown) {
