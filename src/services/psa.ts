@@ -27,7 +27,7 @@ export type PsaCertPayload = {
 };
 
 export type CertResult =
-  | { status: 'found'; cert: string; payload: PsaCertPayload; source: 'device' | 'cache' | 'psa' | 'mock' }
+  | { status: 'found'; cert: string; payload: PsaCertPayload; source: 'device' | 'cache' | 'psa' | 'mock' | 'label' }
   | { status: 'pending'; cert: string } // PSA daily quota hit; the Edge Function queued it
   | { status: 'not_found'; cert: string }
   | { status: 'error'; cert: string; message: string };

@@ -1,5 +1,6 @@
 // Scan: camera decodes the PSA label QR on device → cert → cache-first lookup → sheet →
-// "Add to vault". Reference: 02-scan.png. Comps never run on this path.
+// "Add to vault". When PSA can't answer, "Read front label" photographs the label and reads it on
+// device (Apple Vision), so no typing is needed. Reference: 02-scan.png. Comps never run on this path.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -14,7 +15,9 @@ import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
 import { matchNewCard, priceFor, refreshPrices } from '../src/services/comps';
+import { parseLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
+import { LabelReader } from '../modules/label-reader';
 import { color, radius, size, space, type } from '../src/theme/tokens';
 
 const LANG_NAME: Record<string, string> = { ja: 'Japanese', en: 'English', ko: 'Korean', zh: 'Chinese' };
@@ -32,6 +35,9 @@ export default function Scan() {
   const add = useVault((s) => s.add);
   const existing = useVault((s) => s.cards);
   const lastCert = useRef<string | null>(null);
+  const camera = useRef<CameraView>(null);
+  const [reading, setReading] = useState(false);
+  const [labelMiss, setLabelMiss] = useState(false);
 
   const handle = async (data: string) => {
     const cert = parseCertFromQr(data);
@@ -47,7 +53,7 @@ export default function Scan() {
 
   const preview = result?.status === 'found' ? cardFromCert(result.payload, { paidCents: null, plan }) : null;
   const price = preview ? priceFor(preview) : null;
-  const already = preview ? existing.some((c) => c.certNumber === preview.certNumber && c.status === 'owned') : false;
+  const already = preview?.certNumber ? existing.some((c) => c.certNumber === preview.certNumber && c.status === 'owned') : false;
 
   const addToVault = () => {
     if (result?.status !== 'found') return;
@@ -62,6 +68,39 @@ export default function Scan() {
 
   const rescan = () => {
     lastCert.current = null;
+    setLabelMiss(false);
+    setResult(null);
+  };
+
+  // Photograph the front label and read it on device. A cert from the back's code wins over OCR.
+  const readLabel = async () => {
+    if (!LabelReader || !camera.current || reading) return;
+    setReading(true);
+    setLabelMiss(false);
+    try {
+      const photo = await camera.current.takePictureAsync({ quality: 0.9, skipProcessing: false });
+      const lines = photo ? await LabelReader.recognize(photo.uri) : [];
+      const parsed = parseLabel(lines);
+      if (!parsed || !parsed.payload.PSACert.Subject) {
+        setLabelMiss(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        return;
+      }
+      const cert = result?.cert ?? lastCert.current ?? parsed.payload.PSACert.CertNumber;
+      parsed.payload.PSACert.CertNumber = cert ?? '';
+      lastCert.current = cert || null;
+      setResult({ status: 'found', cert: cert ?? '', payload: parsed.payload, source: 'label' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch {
+      setLabelMiss(true);
+    } finally {
+      setReading(false);
+    }
+  };
+
+  // From a failed lookup: close the sheet but keep the cert, so the label read can use it.
+  const toLabel = () => {
+    setLabelMiss(false);
     setResult(null);
   };
 
@@ -77,6 +116,7 @@ export default function Scan() {
     <View style={{ flex: 1, backgroundColor: SCAN_BG }}>
       {canUseCamera ? (
         <CameraView
+          ref={camera}
           style={StyleSheet.absoluteFill}
           facing="back"
           enableTorch={torch}
@@ -106,7 +146,15 @@ export default function Scan() {
           ))}
         </View>
         <Text style={[type.text, { color: 'rgba(255,255,255,0.75)', textAlign: 'center', paddingTop: space.xl }]}>
-          {busy ? 'Checking with PSA' : 'Line up the QR or barcode on the back of the slab'}
+          {busy
+            ? 'Checking with PSA'
+            : reading
+              ? 'Reading the label'
+              : labelMiss
+                ? 'Couldn’t read that. Fill the frame with the label and hold steady.'
+                : LabelReader
+                  ? 'Scan the code on the back, or point at the front label and tap Read'
+                  : 'Line up the QR or barcode on the back of the slab'}
         </Text>
         {!canUseCamera ? (
           <View style={styles.manual}>
@@ -133,13 +181,32 @@ export default function Scan() {
         ) : null}
       </View>
 
+      {canUseCamera && LabelReader && !result ? (
+        <View style={[styles.capture, { paddingBottom: insets.bottom + space.l }]}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={readLabel}
+            disabled={reading}
+            style={({ pressed }) => [styles.lightButton, (pressed || reading) && { opacity: 0.7 }]}
+          >
+            <Text style={[type.button, { color: color.ink }]}>{reading ? 'Reading…' : 'Read front label'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {result ? (
         <View style={[styles.sheet, { paddingBottom: insets.bottom + space.l }]}>
           <View style={styles.grabber} />
           {result.status === 'found' && preview ? (
             <>
               <Text style={[type.text, { color: color.gain, fontWeight: '500' }]}>
-                {result.source === 'mock' ? `Cert ${result.cert} · sample data` : `✓ Cert ${result.cert} verified with PSA`}
+                {result.source === 'mock'
+                  ? `Cert ${result.cert} · sample data`
+                  : result.source === 'label'
+                    ? result.cert
+                      ? `Read from the label · cert ${result.cert}`
+                      : 'Read from the label'
+                    : `✓ Cert ${result.cert} verified with PSA`}
               </Text>
               <View style={styles.cardRow}>
                 <CardThumb card={preview} />
@@ -200,15 +267,19 @@ export default function Scan() {
               </Text>
               <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
                 {result.status === 'pending'
-                  ? 'PSA’s daily lookup limit is used up. It will fill in tomorrow.'
-                  : result.status === 'error'
-                    ? 'PSA isn’t answering lookups right now. Add the details from the label instead.'
+                  ? 'PSA’s daily lookup limit is used up. Slabby can read the front label instead.'
+                  : LabelReader
+                    ? 'Turn the slab over and Slabby will read the front label instead.'
                     : 'Check the number on the label, or add the details by hand.'}
               </Text>
-              <PrimaryButton
-                title="Add details by hand"
-                onPress={() => router.push({ pathname: '/add', params: { cert: result.cert } })}
-              />
+              {LabelReader ? (
+                <PrimaryButton title="Read front label" onPress={toLabel} />
+              ) : (
+                <PrimaryButton
+                  title="Add details by hand"
+                  onPress={() => router.push({ pathname: '/add', params: { cert: result.cert } })}
+                />
+              )}
               <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
                 <Text style={[type.text, { color: color.secondary }]}>Scan again</Text>
               </Pressable>
@@ -240,6 +311,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  capture: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center', marginTop: space.s },
   navBtn: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
