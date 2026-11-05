@@ -22,7 +22,13 @@ export function useSync() {
       ready = true;
     };
 
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // No account yet: start a guest session so scans, prices and backup work right away.
+      // Signing in with Apple later carries the local vault over (mergeVault pushes it).
+      if (event === 'INITIAL_SESSION' && !session) {
+        supabase!.auth.signInAnonymously().catch(() => {});
+        return;
+      }
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') onSignIn().catch(() => {});
       if (event === 'SIGNED_OUT') ready = false;
     });
