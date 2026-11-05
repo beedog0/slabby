@@ -130,5 +130,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepValue: { minWidth: 84, textAlign: 'center', color: color.ink },
+  stepValue: { minWidth: 72, textAlign: 'center', color: color.ink },
 });
+
+export function SlidersIcon() {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={1.75} strokeLinecap="round">
+      <Path d="M4 8h9M19 8h1M4 16h1M11 16h9" />
+      <Path d="M16 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 18.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" />
+    </Svg>
+  );
+}

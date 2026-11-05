@@ -16,6 +16,11 @@ export const color = {
   // Slab-only surfaces (the slab is the one object with depth).
   slabCase: '#FFFFFF',
   slabLabel: '#FAFAFA',
+  // Display shelf: flat two-tone wood, no gradient. Furniture, so it may carry depth like the slab.
+  shelfTop: '#B48A5E',
+  shelfFront: '#8C6239',
+  /** Empty-state slab outline. */
+  ghost: '#D8D8DE',
 } as const;
 
 export const space = {
@@ -48,11 +53,17 @@ export const size = {
   thumbW: 36,
   thumbH: 50,
   heroW: 190,
-  heroH: 292,
+  heroH: 305, // 190 × PSA's 134.6/83.9
   sparkW: 56,
   sparkH: 24,
   stepper: 32,
   hairline: 1,
+  shelfTop: 6,
+  shelfFront: 10,
+  carouselSlabW: 220,
+  viewIcon: 40,
+  /** Home value chart; its slot keeps this height on every filter so the tabs never move. */
+  homeChart: 84,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };
@@ -88,6 +99,12 @@ export const shadow = {
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
   },
+  shelf: {
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+  },
   slabAmbient: {
     shadowColor: '#000',
     shadowOpacity: 0.28,
@@ -104,3 +121,4 @@ export const slabPose = {
 
 /** Sparkline color thresholds: ±3% over 30 days. */
 export const trendThreshold = 0.03;
+
