@@ -8,6 +8,7 @@ import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 import type { Card } from '../../types';
 import { ArtImage } from '../ArtImage';
+import { cardBack } from './cardBacks';
 import { code128B } from './code128';
 import { labelInk, type SlabLayout } from './geometry';
 import { labelNameLine, labelSetLine } from './label';
@@ -107,7 +108,7 @@ function Barcode({ value, width, height, ink }: { value: string; width: number; 
   );
 }
 
-export const FrontFace = memo(function FrontFace({ card, L }: { card: Card; L: SlabLayout }) {
+export const FrontFace = memo(function FrontFace({ card, L, sharp = false }: { card: Card; L: SlabLayout; sharp?: boolean }) {
   const hair = Math.max(StyleSheet.hairlineWidth, 0.35 * L.k);
   const ink = labelInk(card.grader, card.grade);
   const k = L.k;
@@ -178,7 +179,7 @@ export const FrontFace = memo(function FrontFace({ card, L }: { card: Card; L: S
         ]}
       >
         {card.imageFrontUrl ? (
-          <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={[StyleSheet.absoluteFill, { borderRadius: L.card.r }]} />
+          <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} sharp={sharp} style={[StyleSheet.absoluteFill, { borderRadius: L.card.r }]} />
         ) : null}
         <View pointerEvents="none" style={[styles.abs, { inset: 0, borderRadius: L.card.r, borderWidth: hair, borderColor: 'rgba(0,0,0,0.18)' }]} />
       </View>
@@ -187,6 +188,7 @@ export const FrontFace = memo(function FrontFace({ card, L }: { card: Card; L: S
 });
 
 export const BackFace = memo(function BackFace({ card, L }: { card: Card; L: SlabLayout }) {
+  const back = cardBack(card.language);
   const hair = Math.max(StyleSheet.hairlineWidth, 0.35 * L.k);
   const ink = labelInk(card.grader, card.grade);
   const k = L.k;
@@ -224,7 +226,7 @@ export const BackFace = memo(function BackFace({ card, L }: { card: Card; L: Sla
           },
         ]}
       />
-      {/* Card back: a plain deep blue with a soft centre; no artwork reproduced. */}
+      {/* Card back: the printed back for the card's language, or plain blue until we have it. */}
       <View
         style={[
           styles.abs,
@@ -233,10 +235,11 @@ export const BackFace = memo(function BackFace({ card, L }: { card: Card; L: Sla
         ]}
       >
         <LinearGradient colors={['#2A5AC0', '#1C3C88', '#132B66']} start={{ x: 0.5, y: 0.2 }} end={{ x: 0.5, y: 1 }} style={StyleSheet.absoluteFill} />
+        {back ? <ArtImage uri={back} recyclingKey={`back-${card.language}`} style={StyleSheet.absoluteFill} /> : null}
         <View
           style={[
             styles.abs,
-            { inset: 2.2 * k, borderRadius: L.card.r * 0.6, borderWidth: hair * 2, borderColor: 'rgba(255,255,255,0.18)' },
+            { inset: 2.2 * k, borderRadius: L.card.r * 0.6, borderWidth: back ? 0 : hair * 2, borderColor: 'rgba(255,255,255,0.18)' },
           ]}
         />
       </View>
