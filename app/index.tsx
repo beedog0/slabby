@@ -1,5 +1,5 @@
 // Home is the collection: what you own, shown on a shelf, one at a time, or as a grid.
-// Con mode starts from here. Supersedes the 01-vault.png layout at Bryan's request (collection-first).
+// Con mode starts from the … menu. Supersedes the 01-vault.png layout at Bryan's request (collection-first).
 
 import { router } from 'expo-router';
 import { useEffect, useMemo } from 'react';
@@ -53,17 +53,18 @@ export default function Home() {
 
   const more = () => {
     const go = (i: number) => {
-      if (i === 0) router.push('/add');
-      if (i === 1) router.push('/settings/pricing');
-      if (i === 2) router.push('/settings/account');
+      if (i === 0) router.push('/con');
+      if (i === 1) router.push('/add');
+      if (i === 2) router.push('/settings/pricing');
+      if (i === 3) router.push('/settings/account');
     };
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Add by hand', 'Pricing rules', 'Back up', 'Cancel'], cancelButtonIndex: 3 },
+        { options: ['Con mode', 'Add by hand', 'Pricing rules', 'Back up', 'Cancel'], cancelButtonIndex: 4 },
         go,
       );
     } else {
-      go(0);
+      go(1);
     }
   };
 
@@ -78,7 +79,11 @@ export default function Home() {
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + space.l, paddingBottom: insets.bottom + size.button + space.xxxl + space.l }}
+        contentContainerStyle={{
+          paddingTop: insets.top + space.l,
+          // The dock only shows on an empty vault; a full vault scrolls to the bottom edge.
+          paddingBottom: insets.bottom + (isEmpty ? size.button + space.xxxl + space.l : space.xxl),
+        }}
       >
         <View style={styles.header}>
           <Text style={[type.section, { color: color.ink }]}>Slabby</Text>
@@ -130,18 +135,15 @@ export default function Home() {
         )}
       </ScrollView>
 
-      <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
-        {isEmpty ? (
-          <>
-            <PrimaryButton title="Scan a slab" onPress={() => router.push('/scan')} />
-            <Pressable accessibilityRole="link" onPress={() => router.push('/add')} style={styles.quiet}>
-              <Text style={[type.text, { color: color.secondary }]}>Add by hand</Text>
-            </Pressable>
-          </>
-        ) : (
-          <PrimaryButton title="Start con mode" onPress={() => router.push('/con')} />
-        )}
-      </View>
+      {/* Con mode lives in the … menu; the dock is only for getting the first slab in. */}
+      {isEmpty ? (
+        <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
+          <PrimaryButton title="Scan a slab" onPress={() => router.push('/scan')} />
+          <Pressable accessibilityRole="link" onPress={() => router.push('/add')} style={styles.quiet}>
+            <Text style={[type.text, { color: color.secondary }]}>Add by hand</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
