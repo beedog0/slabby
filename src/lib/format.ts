@@ -1,0 +1,48 @@
+// Copy formatting. Uses a true minus sign (U+2212) for negatives, per the reference screens.
+
+const MINUS = '−';
+
+/** 1248000 → "$12,480". Drops cents unless asked. */
+export function money(cents: number, opts: { cents?: boolean } = {}): string {
+  const neg = cents < 0;
+  const abs = Math.abs(cents) / 100;
+  const s = abs.toLocaleString('en-US', {
+    minimumFractionDigits: opts.cents ? 2 : 0,
+    maximumFractionDigits: opts.cents ? 2 : 0,
+  });
+  return `${neg ? MINUS : ''}$${s}`;
+}
+
+/** 13000 → "130" (for "floor 130"). */
+export function bare(cents: number): string {
+  return Math.round(cents / 100).toLocaleString('en-US');
+}
+
+/** 0.6 → "+60%", -0.07 → "−7%". */
+export function pct(fraction: number): string {
+  const n = Math.round(fraction * 100);
+  if (n === 0) return '0%';
+  return `${n > 0 ? '+' : MINUS}${Math.abs(n)}%`;
+}
+
+/** Rule percent: 10 → "+10%", -5 → "−5%". */
+export function rulePct(n: number): string {
+  if (n === 0) return '0%';
+  return `${n > 0 ? '+' : MINUS}${Math.abs(n)}%`;
+}
+
+export function gradeLabel(grader: string, grade: number | null, condition?: string): string {
+  if (grader === 'raw') return condition ? `Raw · ${condition}` : 'Raw';
+  return `${grader.toUpperCase()} ${grade ?? ''}`.trim();
+}
+
+/** "Up $640 this month" / "Down $120 this month" / "Flat this month". */
+export function monthLine(deltaCents: number): string {
+  if (Math.abs(deltaCents) < 100) return 'Flat this month';
+  return `${deltaCents > 0 ? 'Up' : 'Down'} ${money(Math.abs(deltaCents))} this month`;
+}
+
+/** Row title: "Mew ex 151". Numeric set names (151) read as part of the card's name. */
+export function rowTitle(c: { name: string; setName: string | null }): string {
+  return c.setName && /^\d+$/.test(c.setName) ? `${c.name} ${c.setName}` : c.name;
+}

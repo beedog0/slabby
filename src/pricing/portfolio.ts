@@ -1,0 +1,60 @@
+// Derived numbers for lists and summaries. Pure; screens call these instead of doing math.
+
+import { changeOver, priceFor, valueAgo, type CardPrice } from '../services/comps';
+import type { Card, PricingRules } from '../types';
+import { quote, type Inputs } from './rules';
+
+export function inputsFor(card: Card, price: CardPrice, rules: PricingRules): Inputs {
+  return {
+    marketCents: price.marketCents,
+    low30Cents: price.lowCents,
+    paidCents: card.paidCents,
+    rules,
+    overrides: { ask: card.askOverrideCents, floor: card.floorOverrideCents },
+  };
+}
+
+export type CardRow = {
+  card: Card;
+  price: CardPrice | null;
+  /** Market vs paid, as a fraction. Null when either is unknown. */
+  gain: number | null;
+  /** 30-day trend, as a fraction. */
+  trend30: number;
+  ask: number | null;
+  floor: number | null;
+  buyTarget: number | null;
+  buyMax: number | null;
+};
+
+export function rowFor(card: Card, rules: PricingRules, price = priceFor(card)): CardRow {
+  if (!price) {
+    return { card, price, gain: null, trend30: 0, ask: null, floor: null, buyTarget: null, buyMax: null };
+  }
+  const q = quote(inputsFor(card, price, rules));
+  const gain = card.paidCents ? (price.marketCents - card.paidCents) / card.paidCents : null;
+  return { card, price, gain, trend30: changeOver(price, 30), ...q };
+}
+
+export type VaultSummary = {
+  valueCents: number;
+  /** Change in market value of owned cards over the last 30 days. */
+  monthDeltaCents: number;
+  forSaleCount: number;
+  /** Sum of floors for cards marked to sell. */
+  floorTotalCents: number;
+};
+
+export function summarize(rows: CardRow[]): VaultSummary {
+  let valueCents = 0, monthDeltaCents = 0, forSaleCount = 0, floorTotalCents = 0;
+  for (const r of rows) {
+    if (r.card.status !== 'owned' || !r.price) continue;
+    valueCents += r.price.marketCents;
+    monthDeltaCents += r.price.marketCents - valueAgo(r.price, 30);
+    if (r.card.plan === 'sell') {
+      forSaleCount++;
+      floorTotalCents += r.floor ?? 0;
+    }
+  }
+  return { valueCents, monthDeltaCents, forSaleCount, floorTotalCents };
+}
