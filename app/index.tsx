@@ -1,7 +1,7 @@
 // Vault: slab hero, vault value, "Start con mode", holds list. Reference: 01-vault.png.
 
 import { router } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardThumb } from '../src/components/CardThumb';
@@ -9,6 +9,8 @@ import { SlabView } from '../src/components/SlabView';
 import { Chevron, Hairline, IconButton, PrimaryButton, ScanIcon, SectionHeader } from '../src/components/ui';
 import { gradeLabel, money, monthLine, pct, rowTitle } from '../src/lib/format';
 import { rowFor, summarize, type CardRow } from '../src/pricing/portfolio';
+import { refreshPrices } from '../src/services/comps';
+import { usePrices } from '../src/store/prices';
 import { useRules } from '../src/store/rules';
 import { useVault } from '../src/store/vault';
 import { color, size, space, type } from '../src/theme/tokens';
@@ -18,7 +20,12 @@ export default function Vault() {
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
 
-  const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules]);
+  const prices = usePrices((s) => s.byKey);
+  useEffect(() => {
+    refreshPrices(cards);
+  }, [cards]);
+
+  const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   const summary = useMemo(() => summarize(rows), [rows]);
   const holds = rows.filter((r) => r.card.status === 'owned' && r.card.plan === 'hold');
   const hero = useMemo(

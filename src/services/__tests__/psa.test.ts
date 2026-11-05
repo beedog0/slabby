@@ -1,8 +1,5 @@
 import { cardFromCert, gradeFrom, lookupCert, parseBrand, parseCertFromQr, titleName } from '../psa';
 
-jest.mock('@react-native-async-storage/async-storage', () =>
-  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
-);
 
 describe('parseCertFromQr', () => {
   it('reads the cert from PSA label URLs', () => {
