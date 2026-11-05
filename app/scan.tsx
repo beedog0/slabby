@@ -13,7 +13,7 @@ import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
-import { matchNewCard, priceFor } from '../src/services/comps';
+import { matchNewCard, priceFor, refreshPrices } from '../src/services/comps';
 import { useVault } from '../src/store/vault';
 import { color, radius, size, space, type } from '../src/theme/tokens';
 
@@ -54,7 +54,9 @@ export default function Scan() {
     const dollars = parseInt(paid.replace(/[^0-9]/g, ''), 10);
     const card = cardFromCert(result.payload, { paidCents: Number.isFinite(dollars) ? dollars * 100 : null, plan });
     add(card);
-    matchNewCard(card).catch(() => {});
+    matchNewCard(card)
+      .then(() => refreshPrices([card]))
+      .catch(() => {});
     router.replace(`/card/${card.id}`);
   };
 

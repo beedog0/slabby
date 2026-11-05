@@ -7,7 +7,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Segmented } from '../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, Stepper } from '../src/components/ui';
-import { matchNewCard } from '../src/services/comps';
+import { matchNewCard, refreshPrices } from '../src/services/comps';
 import { cardFromDetails } from '../src/services/psa';
 import { useVault } from '../src/store/vault';
 import { color, space, type } from '../src/theme/tokens';
@@ -46,7 +46,9 @@ export default function AddByHand() {
       plan,
     });
     add(card);
-    matchNewCard(card).catch(() => {});
+    matchNewCard(card)
+      .then(() => refreshPrices([card]))
+      .catch(() => {});
     router.dismissTo('/');
     router.push(`/card/${card.id}`);
   };
