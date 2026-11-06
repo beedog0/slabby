@@ -106,12 +106,22 @@ describe('collection value line', () => {
   });
 });
 
-import { gridPrices } from '../../components/PriceChart';
+import { chartRange, indexAtX } from '../../components/PriceChart';
 
-describe('chart gridlines', () => {
-  it('picks two round prices inside the range', () => {
-    expect(gridPrices(118_000, 142_000)).toEqual([120_000, 140_000]);
-    expect(gridPrices(5_000, 5_000)).toEqual([5_000]);
+describe('chart scale and scrub', () => {
+  it('keeps a real range and widens a flat one to 4% of the value', () => {
+    expect(chartRange([12_400, 17_400])).toEqual({ lo: 12_400, hi: 17_400 });
+    const flat = chartRange([10_000, 10_100]);
+    expect(flat.hi - flat.lo).toBeCloseTo(404);
+    expect((flat.hi + flat.lo) / 2).toBe(10_050);
+  });
+
+  it('maps a finger position to the day under it, clamped to the ends', () => {
+    expect(indexAtX(8, 300, 91)).toBe(0);
+    expect(indexAtX(292, 300, 91)).toBe(90);
+    expect(indexAtX(150, 300, 91)).toBe(45);
+    expect(indexAtX(-40, 300, 91)).toBe(0);
+    expect(indexAtX(900, 300, 91)).toBe(90);
   });
 });
 
