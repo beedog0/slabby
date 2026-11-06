@@ -140,6 +140,14 @@ export async function openPrices(productId: number): Promise<SearchPrices | null
   return p;
 }
 
+/** Mocks only (no Supabase): the sample catalog card for a scanned slab, by set code and number. */
+export function mockProductId(c: { setCode: string | null; number: string | null }): number | null {
+  if (supabase || !c.number) return null;
+  const n = cardNumber(c.number);
+  const hit = mockCatalog.find((m) => m.setCode === c.setCode && cardNumber(m.number) === n);
+  return hit?.productId ?? null;
+}
+
 // ── mocks ────────────────────────────────────────────────────────────────────────────────────
 
 const shape = (pricesJson as Record<string, CardPrice>)['psa:10:EVS:215:en'];

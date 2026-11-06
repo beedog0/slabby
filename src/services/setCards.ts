@@ -67,6 +67,17 @@ export async function setCards(card: CatalogCard, n = 12): Promise<{ groupId: nu
   return { groupId, cards: all.filter((c) => c.productId !== card.productId && c.marketCents != null).slice(0, n) };
 }
 
+/**
+ * One booster pack of a set and its TCGplayer market (0012_pack_prices.sql), for "Pulled it" on
+ * the sell page. Null when the set has none, or before the column exists: a pull is then $0.
+ */
+export async function packFor(groupId: number): Promise<{ name: string; cents: number } | null> {
+  if (!supabase) return { name: 'Booster Pack', cents: 499 };
+  const { data, error } = await supabase.from('catalog_groups').select('pack_name, pack_cents').eq('group_id', groupId).limit(1).maybeSingle();
+  if (error || !data?.pack_cents) return null;
+  return { name: (data.pack_name as string | null) ?? 'Booster pack', cents: data.pack_cents as number };
+}
+
 /** Every single in a set (up to 600), highest market first. */
 export async function cardsInSet(groupId: number, limit = 600): Promise<Found[]> {
   if (!supabase) {

@@ -183,3 +183,25 @@ export function isFresh(fetchedAt: string | null | undefined, now = Date.now()):
   if (!fetchedAt) return false;
   return now - new Date(fetchedAt).getTime() < CACHE_HOURS * 3_600_000;
 }
+
+/** A sealed product that isn't one plain pack: bundles, boxes, blisters, sleeved retail, lots. */
+const NOT_ONE_PACK = /art bundle|bundle|sleeved|blister|box|case|display|\blot\b|set of|code|\d+\s*x\b|\bx\s*\d+|pack of|\d+[- ]pack/i;
+
+/**
+ * One booster pack's TCGplayer market for a set, so "Pulled it" can rate a sale against what the
+ * pack cost. Sealed products have no card number, so this reads them before catalogRows drops
+ * them. The plainest name wins ("Surging Sparks Booster Pack" over its art variants), then the
+ * cheapest. Null when the set has no priced single pack.
+ */
+export function packPrice(products: TcgProduct[], prices: TcgPrice[]): { name: string; cents: number } | null {
+  const market = new Map<number, number>();
+  for (const p of prices) {
+    const c = cents(p.marketPrice ?? p.midPrice);
+    if (c != null && (!market.has(p.productId) || c < market.get(p.productId)!)) market.set(p.productId, c);
+  }
+  const packs = products
+    .filter((p) => !ext(p, 'Number') && /booster pack/i.test(p.name) && !NOT_ONE_PACK.test(p.name) && market.has(p.productId))
+    .map((p) => ({ name: p.name.trim(), cents: market.get(p.productId)! }))
+    .sort((a, b) => a.name.length - b.name.length || a.cents - b.cents);
+  return packs[0] ?? null;
+}
