@@ -1,8 +1,9 @@
 // Search field and sort choice under the filter tabs. Always shown, so nothing below jumps.
 
-import { ActionSheetIOS, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { SORT_LABEL, type SortKey } from '../../pricing/arrange';
+import { openMenu } from '../menu/Menu';
 import { color, radius, size, space, type } from '../../theme/tokens';
 
 const SORTS: SortKey[] = ['value', 'gain', 'newest', 'name', 'mine'];
@@ -15,16 +16,11 @@ type Props = {
 };
 
 export function SearchSort({ query, onQuery, sort, onSort }: Props) {
-  const pickSort = () => {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { title: 'Sort by', options: [...SORTS.map((s) => SORT_LABEL[s]), 'Cancel'], cancelButtonIndex: SORTS.length },
-        (i) => i < SORTS.length && onSort(SORTS[i]),
-      );
-    } else {
-      onSort(SORTS[(SORTS.indexOf(sort) + 1) % SORTS.length]);
-    }
-  };
+  const pickSort = () =>
+    openMenu({
+      title: 'Sort by',
+      items: SORTS.map((s) => ({ label: SORT_LABEL[s], selected: s === sort, onPress: () => onSort(s) })),
+    });
   return (
     <View style={styles.row}>
       <View style={styles.field}>

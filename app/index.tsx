@@ -2,11 +2,9 @@
 // Con mode starts from the … menu. Supersedes the 01-vault.png layout at Bryan's request (collection-first).
 
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import {
-  ActionSheetIOS,
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +21,8 @@ import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
 import type { SlabActions } from '../src/components/collection/actions';
+import { openDropdown } from '../src/components/menu/Dropdown';
+import { openSlabMenu } from '../src/components/menu/Menu';
 import { shareSlab } from '../src/components/share/ShareCard';
 import { arrange, swapOrder } from '../src/pricing/arrange';
 import { shareSellSheet } from '../src/services/sellSheet';
@@ -138,51 +138,36 @@ export default function Home() {
     setSort('mine');
   };
 
-  const more = () => {
-    const items: [string, () => void][] = [
-      ['Con mode', () => router.push('/con')],
+  // Grouped by when you'd reach for it: at the con, around the shelf, then settings.
+  const moreRef = useRef<ComponentRef<typeof View>>(null);
+  const more = () =>
+    openDropdown(moreRef, [
       [
-        'Sell sheet',
-        () => shareSellSheet(all, DEFAULT_CON_NAME).catch(() => Alert.alert('Couldn’t make the sell sheet')),
-      ],
-      ['Arrange shelf', startArranging],
-      ['Add by hand', () => router.push('/add')],
-      ['Pricing rules', () => router.push('/settings/pricing')],
-      ['Back up', () => router.push('/settings/account')],
-    ];
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
+        { label: 'Con mode', onPress: () => router.push('/con') },
         {
-          options: [...items.map(([t]) => t), 'Cancel'],
-          cancelButtonIndex: items.length,
+          label: 'Sell sheet',
+          onPress: () =>
+            shareSellSheet(all, DEFAULT_CON_NAME).catch(() => Alert.alert('Couldn’t make the sell sheet')),
         },
-        (i) => items[i]?.[1](),
-      );
-    } else {
-      items[3][1]();
-    }
-  };
+      ],
+      [
+        { label: 'Arrange shelf', onPress: startArranging },
+        { label: 'Add by hand', onPress: () => router.push('/add') },
+      ],
+      [
+        { label: 'Pricing rules', onPress: () => router.push('/settings/pricing') },
+        { label: 'Back up', onPress: () => router.push('/settings/account') },
+      ],
+    ]);
 
   // Long-press any slab: pin it first, share it, or open it.
   const slabMenu = (row: CardRow) => {
     const pinned = pinnedId === row.card.id;
-    const items: [string, () => void][] = [
-      [pinned ? 'Unpin' : 'Pin to front', () => setPinned(pinned ? null : row.card.id)],
-      ['Share card', () => shareSlab(row.card)],
-      ['Open', () => router.push(`/card/${row.card.id}`)],
-    ];
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          title: rowTitle(row.card),
-          options: [...items.map(([t]) => t), 'Cancel'],
-          cancelButtonIndex: items.length,
-        },
-        (i) => items[i]?.[1](),
-      );
-    } else {
-      items[0][1]();
-    }
+    openSlabMenu(row.card, [
+      { label: pinned ? 'Unpin' : 'Pin to front', onPress: () => setPinned(pinned ? null : row.card.id) },
+      { label: 'Share card', onPress: () => shareSlab(row.card) },
+      { label: 'Open', onPress: () => router.push(`/card/${row.card.id}`) },
+    ]);
   };
 
   const actions: SlabActions = arranging
@@ -257,9 +242,11 @@ export default function Home() {
                 <IconButton label="Scan a slab" onPress={() => router.push('/scan')}>
                   <ScanIcon />
                 </IconButton>
-                <IconButton label="More" onPress={more}>
-                  <MoreIcon />
-                </IconButton>
+                <View ref={moreRef} collapsable={false}>
+                  <IconButton label="More" onPress={more}>
+                    <MoreIcon />
+                  </IconButton>
+                </View>
               </>
             )}
           </View>
