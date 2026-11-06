@@ -130,3 +130,107 @@ export function lastRawDay(points: RawPoint[]): LastSale | null {
   }
   return best;
 }
+
+// Recent sales (0008_recent_sales.sql) -------------------------------------------------------
+
+export type SalesDailyRow = { day: string; sales: number; avg_cents: number };
+
+/**
+ * One sales_daily row per day with a sale (count > 0, average > 0) in the last `days` days
+ * ending `today`, newest first.
+ */
+export function dailySales(sales: DailySales, today: string, days = 90): SalesDailyRow[] {
+  const since = addDays(today, -(days - 1));
+  const byDay = new Map<string, SalesDailyRow>();
+  for (const [date, s] of Object.entries(sales ?? {})) {
+    if (!s || typeof s !== 'object') continue;
+    const count = Number(s.count);
+    const average = Number(s.average);
+    if (!(count > 0) || !(average > 0)) continue;
+    const day = String(date).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < since || day > today) continue;
+    byDay.set(day, { day, sales: Math.round(count), avg_cents: cents(average) });
+  }
+  return [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day));
+}
+
+export type SaleKind = 'auction' | 'bin' | 'offer';
+
+export type SaleRow = {
+  source: string;
+  listing_id: string;
+  sold_day: string;
+  sold_at: string | null;
+  price_cents: number;
+  kind: SaleKind | null;
+  title: string | null;
+  url: string | null;
+};
+
+const pick = (o: Record<string, unknown>, names: string[]): unknown => {
+  for (const n of names) if (o[n] != null && o[n] !== '') return o[n];
+  return undefined;
+};
+
+/** Dollars as a number or a string ("$1,020.00") → cents; null when it isn't a positive price. */
+function priceCents(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.replace(/[$,\s]/g, '')) : NaN;
+  return Number.isFinite(n) && n > 0 ? cents(n) : null;
+}
+
+function saleKind(v: unknown): SaleKind | null {
+  if (typeof v !== 'string') return null;
+  const t = v.toLowerCase();
+  if (t.includes('auction')) return 'auction';
+  if (t.includes('offer')) return 'offer';
+  if (t === 'bin' || t.includes('buy') || t.includes('fixed')) return 'bin';
+  return null;
+}
+
+/** A date-only string keeps only the day; a timestamp (ISO or epoch s/ms) keeps the time too. */
+function soldWhen(v: unknown): { day: string; at: string | null } | null {
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) return { day: v.trim(), at: null };
+  let d: Date;
+  if (typeof v === 'number' && Number.isFinite(v)) d = new Date(v > 1e12 ? v : v * 1000);
+  else if (typeof v === 'string' && v.trim()) d = new Date(v.trim());
+  else return null;
+  if (Number.isNaN(d.getTime())) return null;
+  const at = d.toISOString();
+  return { day: at.slice(0, 10), at };
+}
+
+const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
+
+/**
+ * PPT's soldListings for one grade → sales rows. PPT's field names aren't pinned down, so this
+ * reads the likely ones and drops a row with no id, price or date. Duplicate ids keep the first.
+ */
+export function parseSoldListings(raw: unknown): SaleRow[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SaleRow[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const o = item as Record<string, unknown>;
+    const id = pick(o, ['listingId', 'id', 'itemId']);
+    const listing_id = typeof id === 'number' ? String(id) : text(id);
+    const price_cents = priceCents(pick(o, ['price', 'soldPrice']));
+    const when = soldWhen(pick(o, ['soldAt', 'soldDate', 'date', 'endDate']));
+    if (!listing_id || price_cents == null || !when) continue;
+    const source = (text(o.source) ?? 'ebay').toLowerCase();
+    const k = `${source}:${listing_id}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({
+      source,
+      listing_id,
+      sold_day: when.day,
+      sold_at: when.at,
+      price_cents,
+      kind: saleKind(pick(o, ['listingType', 'saleType', 'type'])),
+      title: text(o.title),
+      url: text(pick(o, ['url', 'listingUrl', 'itemUrl'])),
+    });
+  }
+  return out;
+}
