@@ -19,7 +19,7 @@ type Props = {
   tint?: string;
   /** Date of the last value (YYYY-MM-DD). Values are one per day ending there. */
   asOf?: string;
-  /** Smaller type, no paid label; the scrub readout takes the date row: for the home value line. */
+  /** Smaller type, no paid label, no scrubbing: for the home value line. */
   compact?: boolean;
 };
 
@@ -73,8 +73,8 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
 
   const pan = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => !compact,
+      onMoveShouldSetPanResponder: () => !compact,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (e) => setScrub(indexAt(e.nativeEvent.locationX)),
       onPanResponderMove: (e) => setScrub(indexAt(e.nativeEvent.locationX)),
@@ -146,8 +146,8 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
         <Circle cx={rx(raw.length - 1)} cy={y(last)} r={compact ? 3.5 : 6} fill={tint} />
         {s != null ? (
           <>
-            <Line x1={rx(s)} x2={rx(s)} y1={compact ? 0 : READOUT_H} y2={plotH} stroke={color.secondary} strokeWidth={1} />
-            <Circle cx={rx(s)} cy={y(raw[s])} r={compact ? 4 : 5} fill={color.canvas} stroke={tint} strokeWidth={2} />
+            <Line x1={rx(s)} x2={rx(s)} y1={READOUT_H} y2={plotH} stroke={color.secondary} strokeWidth={1} />
+            <Circle cx={rx(s)} cy={y(raw[s])} r={5} fill={color.canvas} stroke={tint} strokeWidth={2} />
           </>
         ) : null}
       </Svg>
@@ -168,20 +168,14 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
       ) : null}
 
       {/* Scrub readout: price and date on one line above the plot, so they can't stack into each other. */}
-      {s != null && !compact ? (
+      {s != null ? (
         <View style={{ position: 'absolute', top: 0, height: READOUT_H, left: Math.max(0, Math.min(plotW - 160, rx(s) - 80)), width: 160, flexDirection: 'row', justifyContent: 'center', alignItems: 'baseline', gap: 6 }}>
           <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>{money(raw[s])}</Text>
           {asOf ? <Text numberOfLines={1} style={labelStyle}>{shortDate(dayBefore(asOf, raw.length - 1 - s))}</Text> : null}
         </View>
       ) : null}
 
-      {/* Home: the date row becomes the readout while you hold, so the small chart keeps its full height. */}
-      {s != null && compact ? (
-        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'baseline', gap: 6, width: plotW, height: DATES_H }}>
-          <Text numberOfLines={1} style={[labelStyle, { color: color.ink, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>{money(raw[s])}</Text>
-          {asOf ? <Text numberOfLines={1} style={labelStyle}>{shortDate(dayBefore(asOf, raw.length - 1 - s))}</Text> : null}
-        </View>
-      ) : asOf ? (
+      {asOf ? (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: plotW, height: DATES_H, alignItems: 'flex-end' }}>
           <Text style={labelStyle}>{shortDate(dayBefore(asOf, raw.length - 1))}</Text>
           <Text style={labelStyle}>{shortDate(asOf)}</Text>
