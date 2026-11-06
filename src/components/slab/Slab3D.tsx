@@ -15,6 +15,7 @@ import type { Card } from '../../types';
 import { BackFace, EdgeStrip, FrontFace } from './SlabFaces';
 import { slabLayout, type SlabLayout } from './geometry';
 import { faceMatrices } from './matrix';
+import { FoilSheen, foilOf } from './foil';
 
 type Props = {
   card: Card;
@@ -71,6 +72,7 @@ export const Slab3D = memo(function Slab3D({ card, width, yaw: yawIn, pitch: pit
   const L = slabLayout(width, card.grader);
   const P = perspective ?? Math.max(900, width * 5);
   const f = faceMatrices(L, yaw, pitch, P);
+  const foil = foilOf(card);
 
   const s = Math.sin((yaw * Math.PI) / 180);
   const c = Math.cos((yaw * Math.PI) / 180);
@@ -144,6 +146,7 @@ export const Slab3D = memo(function Slab3D({ card, width, yaw: yawIn, pitch: pit
         <View {...FLATTEN} collapsable={false} style={StyleSheet.absoluteFill}>
           <FrontFace card={card} L={L} sharp={sharp} />
         </View>
+        {foil ? <FoilSheen kind={foil} L={L} s={s} sa={sa} /> : null}
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: L.corner, overflow: 'hidden' }]}>
           {glare}
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: frontShade }]} />
