@@ -129,6 +129,11 @@ export default function Scan() {
   const shown = preview && art ? { ...preview, imageFrontUrl: art } : preview;
   const owned = preview?.certNumber ? existing.find((c) => c.certNumber === preview.certNumber && c.status === 'owned') : undefined;
   const already = !!owned;
+  // Copies of this card (same card, grader and grade) already in the vault, whatever their cert.
+  const copies = previewKey ? existing.filter((c) => c.status === 'owned' && cardKey(c) === previewKey).length : 0;
+  // The same cert twice is almost always a re-scan, so Add asks once before saving it again.
+  const [confirmAgain, setConfirmAgain] = useState(false);
+  useEffect(() => setConfirmAgain(false), [previewKey]);
 
   const paidDollars = parseInt(paid.replace(/[^0-9]/g, ''), 10);
   const paidCents = Number.isFinite(paidDollars) ? paidDollars * 100 : (owned?.paidCents ?? null);
@@ -159,6 +164,7 @@ export default function Scan() {
     lastKey.current = null;
     setSpotted(false);
     match.current = null;
+    setConfirmAgain(false);
     setLabelMiss(false);
     setResult(null);
     setPaid('');
@@ -462,6 +468,15 @@ export default function Scan() {
                   </Text>
                 </View>
               </View>
+              {already || copies ? (
+                <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>
+                  {already
+                    ? copies > 1
+                      ? `This slab is already in your vault. You have ${copies} of this card.`
+                      : 'This slab is already in your vault.'
+                    : `You already have ${copies} of this card. This would be your ${ordinal(copies + 1)}.`}
+                </Text>
+              ) : null}
               <Hairline />
               <View style={styles.field}>
                 <Text numberOfLines={1} style={[type.body, { color: color.ink, flexShrink: 0 }]}>What you paid</Text>
@@ -539,11 +554,22 @@ export default function Scan() {
                     </Text>
                   </Pressable>
                 </>
+              ) : confirmAgain ? (
+                <>
+                  <Text style={[type.body, { color: color.ink, paddingTop: space.l }]}>
+                    {result.cert ? `Cert ${result.cert} is already in your vault.` : 'This slab is already in your vault.'} Add it
+                    again?
+                  </Text>
+                  <PrimaryButton style={{ marginTop: space.l }} title="Add again" onPress={addToVault} />
+                  <Pressable accessibilityRole="button" onPress={() => setConfirmAgain(false)} style={styles.quiet}>
+                    <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
+                  </Pressable>
+                </>
               ) : (
                 <PrimaryButton
                   style={{ marginTop: space.l }}
-                  title={already ? 'Already in your vault' : 'Add to vault'}
-                  onPress={already ? () => router.back() : addToVault}
+                  title="Add to vault"
+                  onPress={already ? () => setConfirmAgain(true) : addToVault}
                 />
               )}
             </>
@@ -581,6 +607,13 @@ export default function Scan() {
       <KeyboardDone />
     </View>
   );
+}
+
+/** 2 → "2nd", 3 → "3rd", 11 → "11th". */
+function ordinal(n: number): string {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${suffix}`;
 }
 
 const C = 3; // corner stroke
