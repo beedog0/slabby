@@ -13,7 +13,11 @@ export type PptCard = {
   imageCdnUrl400?: string;
   prices?: { market?: number | null; low?: number | null };
   priceHistory?: { conditions?: Record<string, { history: { date: string; market: number | null }[] }> };
-  ebay?: { priceHistory?: Record<string, Record<string, { average: number; count: number }>> };
+  ebay?: {
+    priceHistory?: Record<string, Record<string, { average: number; count: number }>>;
+    /** Individual sold listings per grade; PPT Business plan only. Parsed defensively. */
+    soldListings?: Record<string, unknown>;
+  };
 };
 
 async function get(path: string, params: Record<string, string>): Promise<unknown> {

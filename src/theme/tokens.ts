@@ -80,6 +80,15 @@ export const size = {
   /** Select mode outline around a picked slab: line weight and its gap from the case. */
   selectLine: 2,
   selectGap: 4,
+  // Sales screen.
+  saleRow: 72,
+  dayRow: 56,
+  dotStrip: 32,
+  dot: 6,
+  medianTick: 16,
+  floorTick: 10,
+  rangeControl: 132,
+  skeletonBar: 14,
 } as const;
 
 /** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */

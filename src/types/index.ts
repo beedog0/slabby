@@ -68,3 +68,20 @@ export const DEFAULT_RULES: PricingRules = {
   gradedSource: 'ebay_sold',
   rawSource: 'tcgplayer_market',
 };
+
+/** One sold listing (sales table, 0008). Only on PokemonPriceTracker's Business plan. */
+export type Sale = {
+  source: string; // 'ebay' | 'fanatics'
+  listingId: string;
+  soldDay: string; // "YYYY-MM-DD"
+  soldAt: string | null;
+  priceCents: number;
+  kind: 'auction' | 'bin' | 'offer' | null;
+  url: string | null;
+};
+
+/** One day with sales (sales_daily, 0008): count and average sold price. */
+export type SalesDay = { day: string; sales: number; avgCents: number };
+
+/** Recent sales for a card: individual listings when we have them, else daily averages. */
+export type SalesResult = { kind: 'sales'; rows: Sale[] } | { kind: 'daily'; rows: SalesDay[] } | { kind: 'none' };
