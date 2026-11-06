@@ -6,7 +6,7 @@ const mockCalls: { table: string; op: string; args: unknown[] }[] = [];
 function mockChain(table: string) {
   const c: Record<string, unknown> = {};
   let signal: AbortSignal | undefined;
-  for (const op of ['select', 'eq', 'gte', 'order', 'limit', 'abortSignal'])
+  for (const op of ['select', 'eq', 'gte', 'order', 'limit', 'retry', 'abortSignal'])
     c[op] = (...args: unknown[]) => {
       mockCalls.push({ table, op, args });
       if (op === 'abortSignal') signal = args[0] as AbortSignal;
@@ -118,6 +118,7 @@ it('a hung request gives up after the timeout as offline', async () => {
     await jest.advanceTimersByTimeAsync(SALES_TIMEOUT_MS);
     await settled;
     expect(mockCalls.filter((c) => c.op === 'abortSignal')).toHaveLength(1);
+    expect(mockCalls).toContainEqual({ table: 'sales', op: 'retry', args: [false] });
   } finally {
     jest.useRealTimers();
   }

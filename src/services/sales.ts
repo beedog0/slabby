@@ -68,7 +68,10 @@ function check(res: PgResponse): 'ok' | 'missing' {
   throw new SalesOffline();
 }
 
-/** Each query gives up after this long, so no signal reads as offline in seconds, not after retries. */
+/**
+ * Each query tries once (no supabase-js backoff retries) and gives up after this long, so no
+ * signal reads as offline in seconds. A pull to refresh is the retry.
+ */
 export const SALES_TIMEOUT_MS = 5000;
 
 function timeout(ms: number): { signal: AbortSignal; clear: () => void } {
@@ -97,6 +100,7 @@ export async function loadSales(card: Card, days: SalesDays, now = Date.now()): 
       .order('sold_day', { ascending: false })
       .order('sold_at', { ascending: false, nullsFirst: false })
       .limit(300)
+      .retry(false)
       .abortSignal(t.signal);
     const salesRows = check(sales) === 'ok' && Array.isArray(sales.data) ? (sales.data as SaleRowDb[]) : [];
     if (salesRows.length) {
@@ -121,6 +125,7 @@ export async function loadSales(card: Card, days: SalesDays, now = Date.now()): 
         .gte('day', since)
         .order('day', { ascending: false })
         .limit(days + 1)
+        .retry(false)
         .abortSignal(t.signal);
       const dayRows = check(daily) === 'ok' && Array.isArray(daily.data) ? (daily.data as DayRowDb[]) : [];
       result = dayRows.length
