@@ -342,8 +342,10 @@ export default function Home() {
               <FilterTabs value={filter} onChange={setFilter} />
               <ViewSwitch value={mode} onChange={setMode} />
             </View>
-            {/* Every view gets search and sort; the swipe view sizes its slab to the room left below. */}
-            <View style={styles.search}>
+            {/* Every view gets search and sort; the swipe view sizes its slab to the room left below.
+                Measured here, in every view, so the first switch to swipe opens at its final size
+                instead of drawing a full-size slab for a frame and then shrinking it. */}
+            <View style={styles.search} onLayout={(e) => setDisplayY(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
               {selecting ? (
                 <View style={styles.selectRow}>
                   <Text style={[type.text, { color: color.secondary }]}>Tap slabs to select them.</Text>
@@ -384,7 +386,7 @@ export default function Home() {
                 <EmptyFilter mode={mode} width={contentW} title={empty.title} hint={empty.hint} />
               </View>
             ) : mode === 'scroll' && !selecting ? (
-              <View onLayout={(e) => setDisplayY(e.nativeEvent.layout.y)}>
+              <View>
                 <ScrollDisplay
                   key={filter}
                   rows={list.rows}
