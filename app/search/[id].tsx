@@ -1,7 +1,7 @@
 // A card opened from search: what it's worth raw and as a PSA 10, 9 or 8, one chart with a
 // toggle, and one button to add it to the vault. Prices load on open (card-prices, cached a day).
 
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -73,6 +73,8 @@ export default function SearchedCard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
+      {/* iOS 26 swipes back from anywhere; keep rightward drags on the price chart. */}
+      <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
       <ScrollView contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
         <View style={styles.nav}>
           <IconButton label="Back" onPress={() => router.back()}>
