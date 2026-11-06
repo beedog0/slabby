@@ -52,6 +52,7 @@ export const radius = {
   segmented: 9,
   thumb: 3,
   slab: 12,
+  chip: 15,
 } as const;
 
 export const size = {
@@ -98,6 +99,8 @@ export const size = {
   floorTick: 10,
   rangeControl: 132,
   skeletonBar: 14,
+  /** Applied-filter chips under search's control row. */
+  chip: 30,
 } as const;
 
 /** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */
