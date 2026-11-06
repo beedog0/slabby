@@ -46,6 +46,10 @@ Deno.serve(async (req) => {
     return { refreshedAt: data?.comps_refreshed_at ?? null, lastSaleDay: data?.last_sale_day ?? null };
   };
 
+  const { data: ref } = await admin.from('card_refs').select('*').eq('card_key', cardKey).maybeSingle();
+  // PokemonPriceTracker only carries Pokémon; other games refresh nightly from TCGCSV. No claim spent.
+  if (!ref?.tcgplayer_id || (ref.game ?? 'pokemon') !== 'pokemon') return json('no_match');
+
   // The lock's previous value, put back if PPT fails for a reason other than its rate limit, so
   // the next pull retries instead of waiting out the cooldown.
   const { data: before } = await admin.from('card_refs').select('comps_attempted_at').eq('card_key', cardKey).maybeSingle();
@@ -69,7 +73,6 @@ Deno.serve(async (req) => {
     return json('throttled', c.refreshedAt, c.lastSaleDay);
   }
 
-  const { data: ref } = await admin.from('card_refs').select('tcgplayer_id, language').eq('card_key', cardKey).maybeSingle();
   if (!ref?.tcgplayer_id) return json('no_match');
   // Other grades of the same card ride along on the same call.
   const { data: siblings } = await admin.from('card_refs').select('card_key').eq('tcgplayer_id', ref.tcgplayer_id);
