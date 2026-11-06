@@ -17,7 +17,7 @@ import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
 import { matchNewCard, priceFor, refreshPrices } from '../src/services/comps';
-import { parseLabel, steadyKey, type ParsedLabel } from '../src/services/label';
+import { parseLabel, stepAutoRead, type AutoRead, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
 import { LabelReader } from '../modules/label-reader';
 import { color, radius, size, space, type } from '../src/theme/tokens';
@@ -27,6 +27,8 @@ const SCAN_BG = '#2A2A2C'; // camera chrome only; never used on app UI
 const AUTO_START_MS = 700; // let exposure and focus settle first
 const AUTO_GAP_MS = 350; // between auto reads; each read itself takes ~0.5–1 s
 const NAV_H = 44;
+// The label band at the top of a PSA slab, as a share of its height.
+const LABEL_SHARE = 0.2;
 const LOCK_MS = 450; // the locked frame and its check stay up this long before the sheet rises
 const SHEET_IN_MS = 260;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -56,7 +58,8 @@ export default function Scan() {
   const sheetIn = useRef(new Animated.Value(0)).current;
   const inFlight = useRef(false);
   const manualAsk = useRef(false);
-  const lastKey = useRef<string | null>(null);
+  // What auto-read has gathered so far for the card in frame (fields merge across frames).
+  const auto = useRef<AutoRead>(null);
   const win = useWindowDimensions();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
@@ -93,7 +96,7 @@ export default function Scan() {
 
   const rescan = () => {
     lastCert.current = null;
-    lastKey.current = null;
+    auto.current = null;
     setSpotted(false);
     setLabelMiss(false);
     setResult(null);
@@ -103,7 +106,7 @@ export default function Scan() {
     const cert = result?.cert ?? lastCert.current ?? parsed.payload.PSACert.CertNumber;
     parsed.payload.PSACert.CertNumber = cert ?? '';
     lastCert.current = cert || null;
-    lastKey.current = null;
+    auto.current = null;
     setSpotted(false);
     setLabelMiss(false);
     setLocked(true);
@@ -135,27 +138,23 @@ export default function Scan() {
       const lines = uri ? await LabelReader.recognize(uri) : [];
       const parsed = parseLabel(lines);
       const asked = manualAsk.current;
+      const step = stepAutoRead(auto.current, parsed);
       if (asked) {
-        if (parsed?.payload.PSACert.Subject) return accept(parsed);
+        // A tap takes whatever is readable, topped up with what earlier frames saw of the same card.
+        const best = step.ready ?? step.state?.label ?? parsed;
+        if (best?.payload.PSACert.Subject) return accept(best);
         setSeen(lines.slice(0, 4).map((l) => l.text).join(' · '));
         setLabelMiss(true);
-        lastKey.current = null;
+        auto.current = null;
         setSpotted(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         return;
       }
-      const key = steadyKey(parsed);
-      if (!key || !parsed) {
-        lastKey.current = null;
-        setSpotted(false);
-      } else if (key === lastKey.current) {
-        accept(parsed);
-      } else {
-        if (!lastKey.current) Haptics.selectionAsync().catch(() => {});
-        lastKey.current = key;
-        setSpotted(true);
-        setLabelMiss(false);
-      }
+      if (step.ready) return accept(step.ready);
+      if (step.state && !auto.current) Haptics.selectionAsync().catch(() => {});
+      auto.current = step.state;
+      setSpotted(!!step.state);
+      if (step.state) setLabelMiss(false);
     } catch {
       if (manualAsk.current) setLabelMiss(true);
     } finally {
@@ -217,15 +216,19 @@ export default function Scan() {
     })();
     return () => {
       alive = false;
-      lastKey.current = null;
+      auto.current = null;
       setSpotted(false);
     };
   }, [autoOn]);
 
-  // Label-shaped window (PSA labels are about 3:1). The picture outside it is dimmed.
-  const frameW = labelMode ? Math.min(win.width - space.xxxl * 2 + space.l, 340) : 240;
-  const frameH = labelMode ? Math.round(frameW / 2.9) : frameW;
-  const frameTop = insets.top + space.s + NAV_H + space.xxxl;
+  // Slab-shaped window, the same proportions as a PSA slab (83.9 × 134.6 mm), sized so the whole
+  // slab fits between the nav and the button. The picture outside it is dimmed.
+  const slabRatio = size.heroH / size.heroW;
+  const frameRoom = win.height - (insets.top + space.s + NAV_H + space.xl) - (insets.bottom + space.l + size.button + space.xxxl * 2 + space.xl);
+  const frameW = labelMode ? Math.round(Math.min(win.width * 0.66, frameRoom / slabRatio)) : 240;
+  const frameH = labelMode ? Math.round(frameW * slabRatio) : frameW;
+  const labelH = Math.round(frameH * LABEL_SHARE);
+  const frameTop = insets.top + space.s + NAV_H + (labelMode ? space.xl : space.xxxl);
   const hint = locked
     ? 'Got it'
     : busy
@@ -239,7 +242,7 @@ export default function Scan() {
         : spotted
           ? 'Hold still'
           : labelMode
-            ? 'Fit the front label in the frame'
+            ? 'Fit the slab in the frame, label at the top'
             : 'Line up the QR or barcode on the back of the slab';
 
   return (
@@ -266,6 +269,7 @@ export default function Scan() {
         <View style={{ flexDirection: 'row', height: frameH }}>
           <View style={[styles.scrim, { flex: 1 }]} />
           <View style={{ width: frameW, height: frameH }}>
+            {labelMode ? <View style={[styles.labelLine, { top: labelH }]} /> : null}
             {spotted || locked ? <View style={[styles.frameLocked, locked && styles.frameDone]} /> : null}
             {locked ? (
               <View style={styles.check}>
@@ -486,6 +490,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.s,
   },
   corner: { position: 'absolute', width: 24, height: 24, borderColor: color.conFill, borderRadius: 4 },
+  labelLine: { position: 'absolute', left: space.s, right: space.s, height: size.hairline, backgroundColor: color.scanGuide },
   frameDone: { borderWidth: 3, backgroundColor: color.scanLocked },
   check: {
     position: 'absolute',

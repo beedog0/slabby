@@ -1,4 +1,4 @@
-import { parseLabel, steadyKey } from '../label';
+import { parseLabel, stepAutoRead } from '../label';
 import { cardFromCert } from '../psa';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -66,24 +66,50 @@ describe('parseLabel', () => {
   });
 });
 
-describe('steadyKey', () => {
-  const label = ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', 'FULL ART', '10', '138092551'];
+describe('stepAutoRead', () => {
+  const full = ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', 'FULL ART', '10', '138092551'];
 
-  it('matches two reads of the same label despite spacing noise', () => {
-    const a = steadyKey(parseLabel(label));
-    const b = steadyKey(parseLabel(label.map((l) => l.replace(/ /g, '  '))));
-    expect(a).not.toBeNull();
-    expect(a).toBe(b);
+  it('adds on one clean frame', () => {
+    const r = stepAutoRead(null, parseLabel(full));
+    expect(r.ready?.payload.PSACert).toMatchObject({ CardGrade: 'GEM MT 10', CertNumber: '138092551' });
   });
 
-  it('needs a name and a grade before reading on its own', () => {
-    expect(steadyKey(parseLabel(['2021 POKEMON CELEBRATIONS #009']))).toBeNull();
-    expect(steadyKey(parseLabel(['Surfing Pikachu VMAX', 'HP 310', 'Max Surfer']))).toBeNull();
-    expect(steadyKey(null)).toBeNull();
+  it('takes the grade from one frame and the cert from the next', () => {
+    const a = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+    expect(a.ready).toBeNull();
+    const b = stepAutoRead(a.state, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX GEM MT', 'FULL ART 10']));
+    expect(b.ready?.payload.PSACert).toMatchObject({ Subject: 'SURFING PIKACHU VMAX', CardGrade: 'GEM MT 10', CertNumber: '138092551' });
   });
 
-  it('tells a misread cert apart', () => {
-    expect(steadyKey(parseLabel(label))).not.toBe(steadyKey(parseLabel([...label.slice(0, 5), '138092557'])));
+  it('adds name and grade without a cert once two frames agree', () => {
+    const lines = ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', 'FULL ART', '10'];
+    const a = stepAutoRead(null, parseLabel(lines));
+    expect(a.ready).toBeNull();
+    expect(stepAutoRead(a.state, parseLabel(lines)).ready).not.toBeNull();
+  });
+
+  it('never adds without a grade number, however many frames', () => {
+    let s = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+    for (let i = 0; i < 4; i++) {
+      s = stepAutoRead(s.state, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+      expect(s.ready).toBeNull();
+    }
+  });
+
+  it('survives a couple of blurry frames, then forgets', () => {
+    let s = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+    s = stepAutoRead(s.state, null);
+    s = stepAutoRead(s.state, null);
+    expect(s.state).not.toBeNull();
+    s = stepAutoRead(s.state, null);
+    expect(s.state).toBeNull();
+  });
+
+  it('starts over when a different card comes into frame', () => {
+    const a = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+    const b = stepAutoRead(a.state, parseLabel(['2023 POKEMON SV #199', 'MEW EX GEM MT', 'SPECIAL ART RARE 10']));
+    expect(b.ready).toBeNull();
+    expect(b.state?.label.payload.PSACert.Subject).toBe('MEW EX');
   });
 });
 
@@ -103,13 +129,13 @@ describe('two-column labels joined by OCR', () => {
       CardNumber: '9',
     });
     expect(r?.complete).toBe(true);
-    expect(steadyKey(r)).not.toBeNull();
+    expect(stepAutoRead(null, r).ready).not.toBeNull();
   });
 
-  it('never auto-reads a half-framed label with no grade number or cert', () => {
+  it('never auto-reads a half-framed label with no grade number', () => {
     const r = parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT']);
     expect(r?.payload.PSACert.Subject).toBe('SURFING PIKACHU VMAX');
-    expect(steadyKey(r)).toBeNull();
+    expect(stepAutoRead(null, r).ready).toBeNull();
   });
 });
 
