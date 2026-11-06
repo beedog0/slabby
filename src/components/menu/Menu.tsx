@@ -11,7 +11,7 @@
 // is what made it open in visible steps on the phone.
 
 import * as Haptics from 'expo-haptics';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   Easing,
@@ -29,7 +29,7 @@ import Svg, { Path } from 'react-native-svg';
 import { gradeLabel, rowTitle } from '../../lib/format';
 import { color, motion, radius, size, space, type } from '../../theme/tokens';
 import type { Card } from '../../types';
-import { CardThumb } from '../CardThumb';
+import { SlabView } from '../SlabView';
 import { Hairline } from '../ui';
 
 export type MenuItem = {
@@ -48,9 +48,20 @@ export type MenuSpec = {
   subtitle?: string;
   /** Items in groups; groups are split by a wider gap instead of a heavier line. */
   items: MenuItem[] | MenuItem[][];
+  /**
+   * Content between the header and the rows: a confirm step's live numbers and its one button.
+   * It closes the sheet itself with closeMenu(then).
+   */
+  body?: ReactNode;
 };
 
 let request: ((spec: MenuSpec) => void) | null = null;
+let closer: ((then?: () => void) => void) | null = null;
+
+/** Close the open sheet, then run `then` (e.g. save, or open the next sheet). */
+export function closeMenu(then?: () => void) {
+  closer?.(then);
+}
 
 /** Open the … menu. Safe to call from anywhere once MenuHost is mounted. */
 export function openMenu(spec: MenuSpec) {
@@ -119,6 +130,7 @@ export function MenuHost() {
 
   const closeRef = useRef(() => {});
   closeRef.current = () => close();
+  closer = close;
 
   // Pull the sheet down to dismiss it, like any iOS sheet.
   const pan = useRef(
@@ -156,7 +168,8 @@ export function MenuHost() {
 
         {hasHeader ? (
           <View style={styles.header}>
-            {spec.card ? <CardThumb card={spec.card} /> : null}
+            {/* The real slab, label and all; the row thumbnail's grey label strip read as a blank top. */}
+            {spec.card ? <SlabView card={spec.card} width={size.menuSlabW} posed={false} /> : null}
             <View style={{ flex: 1, minWidth: 0 }}>
               {title ? (
                 <Text numberOfLines={1} style={[type.body, styles.title]}>
@@ -172,12 +185,19 @@ export function MenuHost() {
           </View>
         ) : null}
 
+        {spec.body ? (
+          <View>
+            {hasHeader ? <Hairline /> : null}
+            {spec.body}
+          </View>
+        ) : null}
+
         {groups.map((group, gi) => (
           // Every row is split by the same hairline, groups included, so the rhythm stays even.
           <View key={gi}>
             {group.map((item, i) => (
               <View key={item.label}>
-                {i > 0 || gi > 0 || hasHeader ? <Hairline /> : null}
+                {i > 0 || gi > 0 || hasHeader || spec.body ? <Hairline /> : null}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={item.selected ? { selected: true } : undefined}

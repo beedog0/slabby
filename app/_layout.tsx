@@ -4,7 +4,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DropdownHost } from '../src/components/menu/Dropdown';
 import { MenuHost } from '../src/components/menu/Menu';
 import { ShareCardHost } from '../src/components/share/ShareCard';
-import { UndoHost } from '../src/components/UndoBar';
 import { useSync } from '../src/services/useSync';
 import { color } from '../src/theme/tokens';
 
@@ -17,7 +16,6 @@ export default function RootLayout() {
       <ShareCardHost />
       <MenuHost />
       <DropdownHost />
-      <UndoHost />
     </SafeAreaProvider>
   );
 }

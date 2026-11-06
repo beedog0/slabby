@@ -11,7 +11,7 @@ import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { shareSlab } from '../../src/components/share/ShareCard';
 import { openSlabMenu } from '../../src/components/menu/Menu';
-import { removeWithUndo } from '../../src/components/collection/remove';
+import { statusItems } from '../../src/components/collection/statusSheets';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
@@ -40,18 +40,10 @@ export default function SlabDetail() {
   const detail = detailFor(row, days);
   const forSale = card.plan === 'sell';
 
+  // Share, then status (for sale, hold, sold) and remove, each with its own confirm sheet.
+  // Leaving the page happens before a removal: it has nothing to show once the slab is gone.
   const menu = () =>
-    openSlabMenu(card, [
-      [
-        {
-          label: forSale ? 'Move to holds' : 'Add to sell sheet',
-          onPress: () => update(card.id, { plan: forSale ? 'hold' : 'sell' }),
-        },
-        { label: 'Share card', onPress: () => shareSlab(card) },
-      ],
-      // Leave the page first: it has nothing to show once the slab is gone.
-      [{ label: 'Remove from vault', onPress: () => removeWithUndo([card], () => router.back()) }],
-    ]);
+    openSlabMenu(card, [[{ label: 'Share card', onPress: () => shareSlab(card) }], ...statusItems(card, { onRemoved: () => router.back() })]);
 
   const subtitle = [card.grader === 'raw' ? null : LANGUAGE[card.language] ?? card.language, gradeLabel(card.grader, card.grade, card.condition)]
     .filter(Boolean)

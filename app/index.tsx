@@ -22,7 +22,7 @@ import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
 import type { SlabActions } from '../src/components/collection/actions';
-import { removeWithUndo } from '../src/components/collection/remove';
+import { confirmRemoveMany, statusItems } from '../src/components/collection/statusSheets';
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { openSlabMenu } from '../src/components/menu/Menu';
 import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
@@ -207,17 +207,16 @@ export default function Home() {
       ],
     ]);
 
-  // Long-press any slab: pin it first, share it, open it, start a selection, or remove it.
+  // Long-press any slab: pin, share or select it; change its status; remove it. Tap opens it.
   const slabMenu = (row: CardRow) => {
     const pinned = pinnedId === row.card.id;
     openSlabMenu(row.card, [
       [
         { label: pinned ? 'Unpin' : 'Pin to front', onPress: () => setPinned(pinned ? null : row.card.id) },
         { label: 'Share card', onPress: () => shareSlab(row.card) },
-        { label: 'Open', onPress: () => router.push(`/card/${row.card.id}`) },
         { label: 'Select', onPress: () => startSelecting(row.card.id) },
       ],
-      [{ label: 'Remove from vault', onPress: () => removeWithUndo([row.card]) }],
+      ...statusItems(row.card),
     ]);
   };
 
@@ -227,7 +226,7 @@ export default function Home() {
     if (picks.length > MAX_SHARE) Alert.alert(`Sharing the first ${MAX_SHARE}`, `One image fits up to ${MAX_SHARE} slabs.`);
     shareSlabs(picks);
   };
-  const removeSelected = () => removeWithUndo(picks, doneSelecting);
+  const removeSelected = () => confirmRemoveMany(picks, doneSelecting);
 
   const actions: SlabActions = selecting
     ? { selected, onPress: (r) => toggle(r.card.id), onLongPress: (r) => toggle(r.card.id) }
