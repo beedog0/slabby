@@ -1,7 +1,8 @@
 // Price chart: the line stays clean, with light reference points. Two faint gridlines labeled on
 // the right, the high and low marked on the line, the paid price as a dashed line, the start and
 // end dates underneath, and a dot on today. Press and drag to read any day's price.
-// Reference: 03-slab-detail.png. Also used small on home (compact).
+// Reference: 03-slab-detail.png. Also used small on home (compact): there it is a calm, smooth,
+// full-width line over one hairline baseline, with no gridlines or price gutter.
 
 import { useMemo, useRef, useState } from 'react';
 import { PanResponder, Text, View } from 'react-native';
@@ -30,6 +31,8 @@ const PAD = 8;
 const LABEL_W = 52; // right gutter for gridline prices
 const READOUT_H = 20; // scrub price and date, one line above the plot
 const DATES_H = 18;
+/** Compact never zooms in past this share of the value, so a quiet month draws a quiet line. */
+const COMPACT_MIN_SPAN = 0.04;
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -52,19 +55,60 @@ export function gridPrices(lo: number, hi: number): number[] {
   return out.length > 2 ? [out[0], out[out.length - 1]] : out;
 }
 
+/** Monotone cubic path through the points: smooth, and never overshoots a high or low. */
+export function smoothPath(pts: [number, number][]): string {
+  const n = pts.length;
+  const f = (v: number) => v.toFixed(1);
+  if (n < 3) return pts.map(([px, py], i) => `${i ? 'L' : 'M'}${f(px)} ${f(py)}`).join(' ');
+  const dx = pts.slice(1).map(([px], i) => px - pts[i][0] || 1);
+  const sl = pts.slice(1).map(([, py], i) => (py - pts[i][1]) / dx[i]);
+  const m = pts.map((_, i) => {
+    if (i === 0) return sl[0];
+    if (i === n - 1) return sl[n - 2];
+    const a = sl[i - 1];
+    const b = sl[i];
+    return a * b <= 0 ? 0 : (3 * (dx[i - 1] + dx[i])) / ((2 * dx[i] + dx[i - 1]) / a + (dx[i] + 2 * dx[i - 1]) / b);
+  });
+  let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
+  for (let i = 0; i < n - 1; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    const h = dx[i] / 3;
+    d += ` C${f(x0 + h)} ${f(y0 + m[i] * h)} ${f(x1 - h)} ${f(y1 - m[i + 1] * h)} ${f(x1)} ${f(y1)}`;
+  }
+  return d;
+}
+
+/** Centered 5-day average; the last point stays the real latest value. */
+export function ease(vals: number[]): number[] {
+  const out = vals.map((_, i) => {
+    const w = vals.slice(Math.max(0, i - 2), i + 3);
+    return w.reduce((a, b) => a + b, 0) / w.length;
+  });
+  if (out.length) out[out.length - 1] = vals[vals.length - 1];
+  return out;
+}
+
 /** Space for a high/low price label between its point and the plot edge. */
 const POINT_ROOM = 20;
 
 export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false, onScrub }: Props) {
-  const values = downsample(raw, compact ? 24 : 32);
+  // Compact draws a gently eased line (5-day average, today exact) so daily noise doesn't zigzag.
+  const values = compact ? ease(raw) : downsample(raw, 32);
   const [scrub, setScrub] = useState<number | null>(null); // index into raw
-  const plotW = width - LABEL_W;
+  const plotW = compact ? width : width - LABEL_W;
   const plotH = height - (asOf ? DATES_H : 0);
 
   const geo = useMemo(() => {
     const all = paidCents != null && !compact ? [...raw, paidCents] : raw;
-    const lo = Math.min(...all);
-    const hi = Math.max(...all);
+    let lo = Math.min(...all);
+    let hi = Math.max(...all);
+    const minSpan = compact ? hi * COMPACT_MIN_SPAN : 0;
+    if (hi - lo < minSpan) {
+      const mid = (hi + lo) / 2;
+      lo = mid - minSpan / 2;
+      hi = mid + minSpan / 2;
+    }
     const span = hi - lo || 1;
     // Inset both ends so the line's round cap, the today dot and the scrub ring never clip.
     const x = (i: number, n: number) => PAD + (n <= 1 ? 0 : (i / (n - 1)) * (plotW - PAD * 2));
@@ -111,12 +155,14 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
 
   const { x, y } = geo;
   const n = values.length;
-  const d = values.map((v, i) => `${i ? 'L' : 'M'}${x(i, n).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  const d = compact
+    ? smoothPath(values.map((v, i) => [x(i, n), y(v)]))
+    : values.map((v, i) => `${i ? 'L' : 'M'}${x(i, n).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
   const last = raw[raw.length - 1];
   const hiI = raw.indexOf(Math.max(...raw));
   const loI = raw.indexOf(Math.min(...raw));
   const rx = (i: number) => x(i, raw.length);
-  const grid = gridPrices(Math.min(...raw), Math.max(...raw));
+  const grid = compact ? [] : gridPrices(Math.min(...raw), Math.max(...raw));
   const paidY = paidCents != null && !compact ? y(paidCents) : null;
   const labelStyle = [type.secondary, { color: color.secondary, fontSize: compact ? 11 : 12 }];
 
@@ -146,6 +192,7 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
   return (
     <View style={{ width, height }} {...pan.panHandlers} accessibilityLabel={`Price chart, now ${money(last)}`}>
       <Svg width={width} height={plotH}>
+        {compact ? <Line x1={0} x2={width} y1={plotH - 0.5} y2={plotH - 0.5} stroke={color.hairline} strokeWidth={1} /> : null}
         {grid.map((g) => (
           <Line key={g} x1={0} x2={plotW} y1={y(g)} y2={y(g)} stroke={color.hairline} strokeWidth={1} />
         ))}
@@ -159,7 +206,7 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
         {s != null ? (
           <>
             <Line x1={rx(s)} x2={rx(s)} y1={onScrub ? 0 : READOUT_H} y2={plotH} stroke={color.secondary} strokeWidth={1} />
-            <Circle cx={rx(s)} cy={y(raw[s])} r={compact ? 4 : 5} fill={color.canvas} stroke={tint} strokeWidth={2} />
+            <Circle cx={rx(s)} cy={y(compact ? values[s] : raw[s])} r={compact ? 4 : 5} fill={color.canvas} stroke={tint} strokeWidth={2} />
           </>
         ) : null}
       </Svg>
