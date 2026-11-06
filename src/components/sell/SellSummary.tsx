@@ -67,7 +67,7 @@ export function SellSummary({ askCents, onAsk, marketCents, lowCents, gradeName,
 
       {ticks.length > 1 && marketCents ? (
         <View style={{ paddingTop: space.xl }}>
-          <PriceLine ticks={ticks} dot={{ value: askCents, color: color.ink }} reserveAbove />
+          <PriceLine ticks={ticks} dot={{ value: askCents, color: color.ink }} />
         </View>
       ) : null}
 
