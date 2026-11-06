@@ -1,8 +1,8 @@
 // Arrange shelf: press and hold a slab until it lifts, drag it to a new spot, let go. The other
 // slabs slide aside as it passes, across shelves too. The ledges stay put; only slabs move.
 // Built on PanResponder + Animated (no gesture library), the same tools as the menu sheet.
-// While arranging the slabs are zoomed out to five across so most vaults fit on one screen;
-// holding a slab near the top or bottom edge scrolls the page for the rest.
+// Same size and spacing as the normal shelf (Bryan didn't want a zoomed-out arrange view);
+// holding a slab near the top or bottom edge scrolls the page to reach far shelves.
 
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -11,12 +11,8 @@ import { dropOrder, moveTo, slotAt } from '../../pricing/arrange';
 import type { CardRow } from '../../pricing/portfolio';
 import { motion, size, space } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
-import { Ledge } from './ShelfView';
+import { Ledge, SHELF_GAP, shelfLayout } from './ShelfView';
 
-const PER_ROW = 5;
-const INSET = space.m;
-const GAP = space.m;
-const SHELF_GAP = space.xl;
 const native = Platform.OS !== 'web';
 /** How close to the screen edge (pt) a lifted slab starts the page scrolling, and how fast. */
 const EDGE = 90;
@@ -43,10 +39,12 @@ type Props = {
   /** True while a slab is lifted, so the page stops scrolling under the finger. */
   onDragChange?: (dragging: boolean) => void;
   scroll?: PageScroll;
+  /** Slabs per shelf, 1 to 5. */
+  perRow: number;
 };
 
-export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChange, scroll }: Props) {
-  const slabW = Math.floor((width - INSET * 2 - GAP * (PER_ROW - 1)) / PER_ROW);
+export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChange, scroll, perRow: PER_ROW }: Props) {
+  const { slabW, gap: GAP, left: INSET } = shelfLayout(width, PER_ROW);
   const slabH = (slabW * size.heroH) / size.heroW;
   // One shelf: slabs rest 2 pt into the ledge, then the ledge, then the gap to the next shelf.
   const pitch = slabH - 2 + size.shelfTop + size.shelfFront + SHELF_GAP;
@@ -80,7 +78,7 @@ export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChan
       Animated.spring(valueFor(id, i).pos, { toValue: slot(i), useNativeDriver: native, bounciness: 0, speed: 18 }).start();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids, lifted, slabW]);
+  }, [ids, lifted, slabW, PER_ROW]);
 
   const start = useRef({ x: 0, y: 0 });
   // Page scroll since the lift, so the slab stays under the finger while the page moves.

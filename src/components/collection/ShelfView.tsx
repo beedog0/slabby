@@ -1,4 +1,5 @@
-// Display shelves: slabs three across, standing on a flat wood ledge. Tap a slab for its detail.
+// Display shelves: slabs standing on a flat wood ledge, 1 to 5 per shelf (3 by default; set in
+// Arrange shelf). Tap a slab for its detail.
 
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -9,20 +10,39 @@ import { SelectOutline } from './SelectOutline';
 import { color, shadow, size, space } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
 
-const PER_ROW = 3;
 const INSET = space.m; // slabs sit this far in from the ledge ends
 const GAP = space.l;
+export const SHELF_GAP = space.xxl;
+/** Fewer slabs per shelf make them bigger, up to this; then the row centres on the ledge. */
+const MAX_SLAB_W = 200;
 
-export function ShelfView({ rows, width, actions }: { rows: CardRow[]; width: number; actions?: SlabActions }) {
-  const slabW = Math.floor((width - INSET * 2 - GAP * (PER_ROW - 1)) / PER_ROW);
+/** Slab size and where the first slab starts, for `perRow` slabs on a shelf `width` wide. */
+export function shelfLayout(width: number, perRow: number) {
+  const slabW = Math.min(MAX_SLAB_W, Math.floor((width - INSET * 2 - GAP * (perRow - 1)) / perRow));
+  const rowW = perRow * slabW + (perRow - 1) * GAP;
+  return { slabW, gap: GAP, left: Math.max(INSET, Math.floor((width - rowW) / 2)) };
+}
+
+export function ShelfView({
+  rows,
+  width,
+  actions,
+  perRow: PER_ROW = 3,
+}: {
+  rows: CardRow[];
+  width: number;
+  actions?: SlabActions;
+  perRow?: number;
+}) {
+  const { slabW, left } = shelfLayout(width, PER_ROW);
   const shelves: CardRow[][] = [];
   for (let i = 0; i < rows.length; i += PER_ROW) shelves.push(rows.slice(i, i + PER_ROW));
 
   return (
-    <View style={{ gap: space.xxl }}>
+    <View style={{ gap: SHELF_GAP }}>
       {shelves.map((shelf, i) => (
         <View key={i}>
-          <View style={[styles.slabs, { minHeight: (slabW * size.heroH) / size.heroW }]}>
+          <View style={[styles.slabs, { minHeight: (slabW * size.heroH) / size.heroW, paddingHorizontal: left }]}>
             {shelf.map((r) => (
               <Pressable
                 key={r.card.id}
@@ -61,7 +81,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: GAP,
-    paddingHorizontal: INSET,
     marginBottom: -2, // slabs rest on the ledge, not above it
     zIndex: 1,
   },

@@ -30,6 +30,7 @@ import { arrange } from '../src/pricing/arrange';
 import { shareSellSheet } from '../src/services/sellSheet';
 import { DEFAULT_CON_NAME } from '../src/store/con';
 import { ShelfView } from '../src/components/collection/ShelfView';
+import { Segmented } from '../src/components/Segmented';
 import { ViewSwitch } from '../src/components/collection/ViewSwitch';
 import { IconButton, PrimaryButton, ScanIcon, SearchIcon } from '../src/components/ui';
 import { changeText, money, rowTitle } from '../src/lib/format';
@@ -87,7 +88,8 @@ export default function Home() {
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
   const prices = usePrices((s) => s.byKey);
-  const { mode, filter, sort, order, pinnedId, setMode, setFilter: saveFilter, setSort, setOrder, setPinned } = useDisplay();
+  const { mode, filter, sort, order, pinnedId, perShelf, setMode, setFilter: saveFilter, setSort, setOrder, setPinned, setPerShelf } =
+    useDisplay();
   // Select mode: tap slabs to pick several, then share or remove them together.
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -393,18 +395,19 @@ export default function Home() {
                   </Pressable>
                 </View>
               ) : arranging ? (
-                <Text
-                  style={[
-                    type.text,
-                    {
-                      color: color.secondary,
-                      height: size.touch,
-                      lineHeight: size.touch,
-                    },
-                  ]}
-                >
-                  Hold a slab, then drag it to its spot.
-                </Text>
+                <View>
+                  {/* How many slabs stand on each shelf; the normal shelf view keeps it. */}
+                  <View style={styles.selectRow}>
+                    <Text style={[type.text, { color: color.ink }]}>Slabs per shelf</Text>
+                    <Segmented<string>
+                      style={{ width: size.perShelfW }}
+                      value={String(perShelf)}
+                      onChange={(v) => setPerShelf(Number(v))}
+                      options={['1', '2', '3', '4', '5'].map((n) => ({ value: n, label: n }))}
+                    />
+                  </View>
+                  <Text style={[type.secondary, { color: color.secondary }]}>Hold a slab, then drag it to its spot.</Text>
+                </View>
               ) : (
                 <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
               )}
@@ -443,9 +446,10 @@ export default function Home() {
                     onOrder={setOrder}
                     onDragChange={setDragging}
                     scroll={pageScroll}
+                    perRow={perShelf}
                   />
                 ) : mode === 'shelf' ? (
-                  <ShelfView rows={list.rows} width={contentW} actions={actions} />
+                  <ShelfView rows={list.rows} width={contentW} actions={actions} perRow={perShelf} />
                 ) : (
                   <GridView rows={list.rows} width={contentW} actions={actions} />
                 )}
