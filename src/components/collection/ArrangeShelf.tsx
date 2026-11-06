@@ -71,11 +71,15 @@ export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChan
     return { pos: xy.get(id)!, scale: scale.get(id)! };
   };
 
-  // Every slab but the lifted one glides to its slot whenever the order or size changes.
+  // Every slab but the lifted one glides to its slot, at normal size, whenever the order, size or
+  // lifted slab changes. Settling the scale here too means a dropped slab can never stay enlarged,
+  // even if its drop animation was cut short.
   useEffect(() => {
     ids.forEach((id, i) => {
       if (id === lifted) return;
-      Animated.spring(valueFor(id, i).pos, { toValue: slot(i), useNativeDriver: native, bounciness: 0, speed: 18 }).start();
+      const v = valueFor(id, i);
+      Animated.spring(v.pos, { toValue: slot(i), useNativeDriver: native, bounciness: 0, speed: 18 }).start();
+      Animated.timing(v.scale, { toValue: 1, duration: motion.dropOut, useNativeDriver: native }).start();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ids, lifted, slabW, PER_ROW]);
@@ -145,12 +149,9 @@ export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChan
     stopEdge();
     const id = liftedRef.current;
     if (!id) return;
-    const i = idsRef.current.indexOf(id);
     liftedRef.current = null;
-    Animated.parallel([
-      Animated.spring(xy.get(id)!, { toValue: slot(i), useNativeDriver: native, bounciness: 0, speed: 18 }),
-      Animated.timing(scale.get(id)!, { toValue: 1, duration: motion.dropOut, useNativeDriver: native }),
-    ]).start(() => setLifted(null));
+    // Clearing the lifted slab right away hands it to the settle effect above (slot + size).
+    setLifted(null);
     onDragChange?.(false);
     onOrder(dropOrder(order, idsRef.current));
   };
