@@ -72,9 +72,9 @@ export default function Offer() {
   }
 
   const ticks: Tick[] = [];
-  if (card.paidCents) ticks.push({ value: card.paidCents, label: `Paid ${money(card.paidCents)}`, color: color.secondary });
-  if (floor != null) ticks.push({ value: floor, label: `Floor ${money(floor)}`, color: color.ink, labelColor: color.ink, height: 14 });
-  if (price) ticks.push({ value: price.marketCents, label: `Comp ${money(price.marketCents)}`, color: color.secondary });
+  if (card.paidCents) ticks.push({ value: card.paidCents, label: 'Paid', color: color.secondary });
+  if (floor != null) ticks.push({ value: floor, label: 'Floor', color: color.ink, labelColor: color.ink, height: 14 });
+  if (price) ticks.push({ value: price.marketCents, label: 'Market', color: color.secondary });
 
   const keeps = card.paidCents != null && hasOffer ? offer - card.paidCents : null;
 

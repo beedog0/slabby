@@ -82,17 +82,17 @@ export default function BeforeTheTable() {
 
   const ticks: Tick[] = selling
     ? [
-        ...(card.paidCents ? [{ value: card.paidCents, label: `Paid ${money(card.paidCents)}`, color: color.ink }] : []),
+        ...(card.paidCents ? [{ value: card.paidCents, label: 'Paid', color: color.ink }] : []),
         { value: row.floor, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 },
         { value: price.marketCents, label: 'Market', color: color.secondary },
         { value: row.ask, label: 'Ask', color: 'transparent', labelColor: color.ink },
-        { value: price.highCents, label: `High ${money(price.highCents)}`, color: color.hairline },
+        { value: price.highCents, label: 'High', color: color.hairline },
       ]
     : [
         { value: row.buyTarget, label: 'Target', color: 'transparent', labelColor: color.ink },
         { value: row.buyMax, label: 'Max', color: color.loss, labelColor: color.loss, height: 14 },
-        { value: price.marketCents, label: `Market ${money(price.marketCents)}`, color: color.secondary },
-        { value: price.highCents, label: `High ${money(price.highCents)}`, color: color.hairline },
+        { value: price.marketCents, label: 'Market', color: color.secondary },
+        { value: price.highCents, label: 'High', color: color.hairline },
       ];
 
   const fillFrom = selling ? (card.paidCents ?? row.floor) : row.buyTarget;
