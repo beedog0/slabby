@@ -1,6 +1,8 @@
 // Arrange shelf: press and hold a slab until it lifts, drag it to a new spot, let go. The other
 // slabs slide aside as it passes, across shelves too. The ledges stay put; only slabs move.
 // Built on PanResponder + Animated (no gesture library), the same tools as the menu sheet.
+// While arranging the slabs are zoomed out to five across so most vaults fit on one screen;
+// holding a slab near the top or bottom edge scrolls the page for the rest.
 
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -11,11 +13,24 @@ import { motion, size, space } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
 import { Ledge } from './ShelfView';
 
-const PER_ROW = 3;
+const PER_ROW = 5;
 const INSET = space.m;
-const GAP = space.l;
-const SHELF_GAP = space.xxl;
+const GAP = space.m;
+const SHELF_GAP = space.xl;
 const native = Platform.OS !== 'web';
+/** How close to the screen edge (pt) a lifted slab starts the page scrolling, and how fast. */
+const EDGE = 90;
+const EDGE_SPEED = 9;
+
+/** The page around the shelf, so a lifted slab can scroll it. */
+export type PageScroll = {
+  /** Current scroll offset. */
+  y: () => number;
+  /** Scroll by this much (clamped by the page); returns how far it actually moved. */
+  by: (dy: number) => number;
+  /** Visible band of the screen in page coordinates (pageY). */
+  band: () => { top: number; bottom: number };
+};
 
 type Props = {
   rows: CardRow[];
@@ -27,9 +42,10 @@ type Props = {
   onOrder: (order: string[]) => void;
   /** True while a slab is lifted, so the page stops scrolling under the finger. */
   onDragChange?: (dragging: boolean) => void;
+  scroll?: PageScroll;
 };
 
-export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChange }: Props) {
+export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChange, scroll }: Props) {
   const slabW = Math.floor((width - INSET * 2 - GAP * (PER_ROW - 1)) / PER_ROW);
   const slabH = (slabW * size.heroH) / size.heroW;
   // One shelf: slabs rest 2 pt into the ledge, then the ledge, then the gap to the next shelf.
@@ -67,10 +83,22 @@ export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChan
   }, [ids, lifted, slabW]);
 
   const start = useRef({ x: 0, y: 0 });
+  // Page scroll since the lift, so the slab stays under the finger while the page moves.
+  const scrolled = useRef(0);
+  const last = useRef({ dx: 0, dy: 0, pageY: 0 });
+  const edgeLoop = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopEdge = () => {
+    if (edgeLoop.current) clearInterval(edgeLoop.current);
+    edgeLoop.current = null;
+  };
+  useEffect(() => stopEdge, []);
+
   const lift = (id: string) => {
     if (id === pinnedId) return;
     const i = idsRef.current.indexOf(id);
     start.current = slot(i);
+    scrolled.current = 0;
+    last.current = { dx: 0, dy: 0, pageY: 0 };
     liftedRef.current = id;
     setLifted(id);
     onDragChange?.(true);
@@ -78,10 +106,11 @@ export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChan
     Animated.timing(valueFor(id, i).scale, { toValue: 1.06, duration: motion.dropIn, useNativeDriver: native }).start();
   };
 
-  const move = (dx: number, dy: number) => {
+  const move = (dx: number, dy: number, pageY?: number) => {
     const id = liftedRef.current;
     if (!id) return;
-    const p = { x: start.current.x + dx, y: start.current.y + dy };
+    last.current = { dx, dy, pageY: pageY ?? last.current.pageY };
+    const p = { x: start.current.x + dx, y: start.current.y + dy + scrolled.current };
     xy.get(id)?.setValue(p);
     const list = idsRef.current;
     const lowest = pinnedId && list[0] === pinnedId ? 1 : 0;
@@ -92,9 +121,30 @@ export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChan
       setIds(next);
       if (native) Haptics.selectionAsync().catch(() => {});
     }
+    edge();
+  };
+
+  // Near the top or bottom edge: keep scrolling the page while the slab is held there.
+  const edge = () => {
+    if (!scroll || !liftedRef.current) return stopEdge();
+    const { top, bottom } = scroll.band();
+    const y = last.current.pageY;
+    const dir = y && y < top + EDGE ? -1 : y && y > bottom - EDGE ? 1 : 0;
+    if (!dir) return stopEdge();
+    if (edgeLoop.current) return;
+    edgeLoop.current = setInterval(() => {
+      const { top: t, bottom: b } = scroll.band();
+      const py = last.current.pageY;
+      const d = py < t + EDGE ? -1 : py > b - EDGE ? 1 : 0;
+      const moved = d ? scroll.by(d * EDGE_SPEED) : 0;
+      if (!moved || !liftedRef.current) return stopEdge();
+      scrolled.current += moved;
+      handlers.current.move(last.current.dx, last.current.dy);
+    }, 16);
   };
 
   const drop = () => {
+    stopEdge();
     const id = liftedRef.current;
     if (!id) return;
     const i = idsRef.current.indexOf(id);
@@ -118,7 +168,7 @@ export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChan
       onPanResponderGrant: () => {
         panning.current = true;
       },
-      onPanResponderMove: (_, g) => handlers.current.move(g.dx, g.dy),
+      onPanResponderMove: (e, g) => handlers.current.move(g.dx, g.dy, e.nativeEvent.pageY),
       onPanResponderRelease: () => {
         panning.current = false;
         handlers.current.drop();
