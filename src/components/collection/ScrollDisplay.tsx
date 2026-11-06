@@ -23,7 +23,7 @@ const REFLECTION = { opacity: 0.18, height: 0.12 } as const;
 const ITEM_TOP = space.m;
 // Name, value, one line, then "1 of 9": a fixed block so the slab can be sized to what's left.
 const CAPTION_H = 110;
-const MIN_SLAB_W = 150;
+const MIN_SLAB_W = 130;
 
 type ItemProps = {
   row: CardRow;

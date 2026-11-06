@@ -101,11 +101,11 @@ export default function Home() {
     () =>
       arrange(base.rows, {
         sort: arranging ? 'mine' : sort,
-        query: mode === 'scroll' ? '' : query,
+        query,
         order,
         pinnedId,
       }),
-    [base, sort, query, order, pinnedId, arranging, mode],
+    [base, sort, query, order, pinnedId, arranging],
   );
   const list = useMemo(() => ({ rows: shown, totalCents: base.totalCents }), [shown, base]);
   const asOf = useMemo(
@@ -279,27 +279,25 @@ export default function Home() {
               <FilterTabs value={filter} onChange={setFilter} />
               <ViewSwitch value={mode} onChange={setMode} />
             </View>
-            {/* The swipe view keeps the whole slab on screen, so search and sort live in shelf and grid. */}
-            {mode !== 'scroll' ? (
-              <View style={styles.search}>
-                {arranging ? (
-                  <Text
-                    style={[
-                      type.text,
-                      {
-                        color: color.secondary,
-                        height: size.touch,
-                        lineHeight: size.touch,
-                      },
-                    ]}
-                  >
-                    {picked ? 'Now tap where it should go.' : 'Tap a slab, then tap another to swap them.'}
-                  </Text>
-                ) : (
-                  <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
-                )}
-              </View>
-            ) : null}
+            {/* Every view gets search and sort; the swipe view sizes its slab to the room left below. */}
+            <View style={styles.search}>
+              {arranging ? (
+                <Text
+                  style={[
+                    type.text,
+                    {
+                      color: color.secondary,
+                      height: size.touch,
+                      lineHeight: size.touch,
+                    },
+                  ]}
+                >
+                  {picked ? 'Now tap where it should go.' : 'Tap a slab, then tap another to swap them.'}
+                </Text>
+              ) : (
+                <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
+              )}
+            </View>
 
             {count === 0 && query ? (
               <View style={styles.gutter}>
