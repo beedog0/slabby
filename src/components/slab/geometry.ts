@@ -55,7 +55,7 @@ export function slabLayout(width: number, grader: Grader = 'psa'): SlabLayout {
 
 /**
  * Label colours per grader, so a slab reads as PSA, BGS or CGC by colour alone (no logos).
- * PSA: white paper, red frame, red 10. BGS: black label with a gold edge at 9.5 and up,
+ * PSA: white paper, red frame, black grade (a 10 too, as PSA prints it). BGS: black label with a gold edge at 9.5 and up,
  * silver below. CGC: blue-to-white label, blue frame and numeral.
  */
 export type LabelInk = {
@@ -74,7 +74,7 @@ export function labelInk(grader: Grader, grade: number | null): LabelInk {
     return { paper: '#141416', paper2: null, ink: '#F5F5F7', grade: gold ? '#D9B45A' : '#C9CDD3', sub: 'rgba(245,245,247,0.6)', frame: gold ? '#C9A24A' : '#A9AEB6' };
   }
   if (grader === 'cgc') return { paper: '#DCE8F8', paper2: '#FBFDFF', ink: '#0B2A55', grade: '#1A56B8', sub: 'rgba(11,42,85,0.55)', frame: '#1A56B8' };
-  return { paper: '#FCFCFA', paper2: null, ink: '#0A0A0A', grade: grade === 10 ? '#D01C2A' : '#0A0A0A', sub: 'rgba(10,10,10,0.55)', frame: '#D01C2A' };
+  return { paper: '#FCFCFA', paper2: null, ink: '#0A0A0A', grade: '#0A0A0A', sub: 'rgba(10,10,10,0.55)', frame: '#D01C2A' };
 }
 
 /** The grade words each grader prints above the number. */

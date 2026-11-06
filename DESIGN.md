@@ -14,7 +14,7 @@ Taste references: Apple, Nothing, Daisy. Minimal but intentional. The slab is th
 | gain | #1D9A5B | Positive numbers only |
 | loss | #D9372B | Negative numbers, walk-away price |
 | con | #B8650A text, #FFB020 dot/fill | Con mode indicator and the offer price line only |
-| psaRed | #D01C2A | The grade "10" on a PSA label, nowhere else |
+| psaRed | #D01C2A | The red frame printed on a PSA label, nowhere else (the grade itself is black, 10 included) |
 
 Rules: one accent (black). No gradients on UI. Green and red appear on numbers, never on buttons or backgrounds. Dark mode is deferred; when it comes, con mode may go true black.
 
