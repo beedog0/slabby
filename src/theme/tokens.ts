@@ -21,6 +21,8 @@ export const color = {
   shelfFront: '#8C6239',
   /** Empty-state slab outline. */
   ghost: '#D8D8DE',
+  /** Dims the page behind a sheet. Flat, no blur, no gradient. */
+  scrim: 'rgba(10,10,10,0.28)',
 } as const;
 
 export const space = {
@@ -64,6 +66,16 @@ export const size = {
   viewIcon: 40,
   /** Home value chart; its slot keeps this height on every filter so the tabs never move. */
   homeChart: 84,
+  /** Menu sheet rows: taller than a vault row's text line, shorter than a con row. */
+  menuRow: 56,
+  grabberW: 36,
+  grabberH: 5,
+} as const;
+
+/** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */
+export const motion = {
+  sheetIn: 240,
+  sheetOut: 180,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };
