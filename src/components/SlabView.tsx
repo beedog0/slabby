@@ -19,6 +19,8 @@ type Props = {
   width?: number;
   /** Apply the hero pose (rotateY −7°, rotateX +3°). Off for flat uses. */
   posed?: boolean;
+  /** Floor shadow under the slab. Defaults to on when posed; the share card keeps it while flat. */
+  shadow?: boolean;
   /** Drag to tilt, tap to open the 360° viewer (card screen). */
   interactive?: boolean;
   /** Tells the screen a tilt drag is under way, so it can hold its scroll still. */
@@ -30,7 +32,7 @@ const REST_PITCH = parseFloat(slabPose.rotateX);
 const TILT_YAW = 28;
 const TILT_PITCH = 22;
 
-export function SlabView({ card, width = size.heroW, posed = true, interactive = false, onDragChange }: Props) {
+export function SlabView({ card, width = size.heroW, posed = true, shadow: floorShadow, interactive = false, onDragChange }: Props) {
   const label = `${card.name}, ${card.grader === 'raw' ? 'raw' : `${card.grader.toUpperCase()} ${card.grade}`}`;
   const height = (width * size.heroH) / size.heroW;
 
@@ -58,7 +60,7 @@ export function SlabView({ card, width = size.heroW, posed = true, interactive =
   if (!interactive) {
     return (
       <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel={label}>
-        <Slab3D card={card} width={width} yaw={posed ? REST_YAW : 0} pitch={posed ? REST_PITCH : 0} shadow={posed} />
+        <Slab3D card={card} width={width} yaw={posed ? REST_YAW : 0} pitch={posed ? REST_PITCH : 0} shadow={floorShadow ?? posed} />
       </View>
     );
   }
