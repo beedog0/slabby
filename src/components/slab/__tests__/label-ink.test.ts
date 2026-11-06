@@ -16,3 +16,7 @@ describe('grader label colours', () => {
     expect(gradeDescriptor('psa', null)).toBeUndefined();
   });
 });
+
+it('prints a PSA 10 in black like every other PSA grade', () => {
+  expect(labelInk('psa', 10).grade).toBe(labelInk('psa', 9).grade);
+});
