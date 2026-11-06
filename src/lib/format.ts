@@ -53,3 +53,8 @@ export function elapsed(sinceIso: string, now = Date.now()): string {
   const h = Math.floor(mins / 60);
   return h ? `${h}h ${mins % 60}m` : `${mins}m`;
 }
+
+/** "2026-11-05" → "Nov 5". */
+export function shortDay(day: string): string {
+  return new Date(`${day.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
