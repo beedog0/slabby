@@ -22,7 +22,7 @@ import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
 import type { SlabActions } from '../src/components/collection/actions';
-import { confirmRemoveMany, statusItems } from '../src/components/collection/statusSheets';
+import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/collection/statusSheets';
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { openSlabMenu } from '../src/components/menu/Menu';
 import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
@@ -227,6 +227,7 @@ export default function Home() {
     shareSlabs(picks);
   };
   const removeSelected = () => confirmRemoveMany(picks, doneSelecting);
+  const moveSelected = () => openMoveMany(picks, doneSelecting);
 
   const actions: SlabActions = selecting
     ? { selected, onPress: (r) => toggle(r.card.id), onLongPress: (r) => toggle(r.card.id) }
@@ -427,9 +428,15 @@ export default function Home() {
       ) : selecting && picks.length ? (
         <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
           <PrimaryButton title={`Share ${plural(picks.length, 'slab')}`} onPress={shareSelected} />
-          <Pressable accessibilityRole="button" onPress={removeSelected} style={styles.quiet}>
-            <Text style={[type.text, { color: color.secondary }]}>Remove {plural(picks.length, 'slab')}</Text>
-          </Pressable>
+          {/* Quiet actions under the one black button: move them (status) or remove them. */}
+          <View style={styles.quietRow}>
+            <Pressable accessibilityRole="button" onPress={moveSelected} style={styles.quietHalf}>
+              <Text style={[type.text, { color: color.ink }]}>Move…</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={removeSelected} style={styles.quietHalf}>
+              <Text style={[type.text, { color: color.secondary }]}>Remove</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
     </View>
@@ -493,6 +500,8 @@ const styles = StyleSheet.create({
   selectRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: size.touch },
   selectAll: { height: size.touch, justifyContent: 'center', paddingLeft: space.m },
   done: { height: size.touch, paddingHorizontal: 10, justifyContent: 'center' },
+  quietRow: { flexDirection: 'row', marginTop: space.xs },
+  quietHalf: { flex: 1, height: size.touch, alignItems: 'center', justifyContent: 'center' },
   quiet: {
     height: size.touch,
     alignItems: 'center',
