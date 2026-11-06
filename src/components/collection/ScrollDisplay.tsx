@@ -14,6 +14,7 @@ import { color, size, space, type } from '../../theme/tokens';
 import { prefetchArt } from '../ArtImage';
 import { gradeLabel, money, rowTitle } from '../../lib/format';
 import { SlabView } from '../SlabView';
+import { PinMark } from './PinMark';
 
 // Room between cases: the slab now has a real case edge and shadow, so neighbours need air.
 const GAP = space.xxxl;
@@ -23,7 +24,7 @@ const REFLECTION = { opacity: 0.18, height: 0.12 } as const;
 const ITEM_TOP = space.m;
 // Name, value, one line, then "1 of 9": a fixed block so the slab can be sized to what's left.
 const CAPTION_H = 110;
-const MIN_SLAB_W = 150;
+const MIN_SLAB_W = 130;
 
 type ItemProps = {
   row: CardRow;
@@ -34,9 +35,10 @@ type ItemProps = {
   slabH: number;
   onPress: (n: number) => void;
   onLongPress?: (row: CardRow) => void;
+  pinned?: boolean;
 };
 
-const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress, onLongPress }: ItemProps) {
+const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress, onLongPress, pinned }: ItemProps) {
   const range = [(n - 1) * step, n * step, (n + 1) * step];
   const opacity = x.interpolate({ inputRange: range, outputRange: [0.5, 1, 0.5], extrapolate: 'clamp' });
   // Whole-degree lean and whole-point drop only, so the slab lands on exact pixels at rest.
@@ -53,7 +55,10 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress, onLong
     >
       <Animated.View style={{ transform: [{ translateY }, { rotate }], opacity, alignItems: 'center' }}>
         {/* Flat, not posed: the reflection meets a straight bottom edge, as in Cover Flow. */}
-        <SlabView card={row.card} width={slabW} posed={false} />
+        <View>
+          <SlabView card={row.card} width={slabW} posed={false} />
+          {pinned ? <PinMark slabW={slabW} /> : null}
+        </View>
         <View pointerEvents="none" style={{ width: slabW, height: reflH, overflow: 'hidden', marginTop: 3 }}>
           {/* Flipped about its centre, the slab's bottom edge lands at the top of this strip. */}
           <View style={{ height: slabH, opacity: REFLECTION.opacity, transform: [{ scaleY: -1 }] }}>
@@ -79,11 +84,13 @@ export function ScrollDisplay({
   screenW,
   fitHeight,
   onLongPress,
+  pinnedId,
 }: {
   rows: CardRow[];
   screenW: number;
   fitHeight?: number;
   onLongPress?: (row: CardRow) => void;
+  pinnedId?: string | null;
 }) {
   const maxW = Math.min(size.carouselSlabW, screenW - space.gutter * 2 - 80);
   const fitSlabH = fitHeight ? (fitHeight - ITEM_TOP - 3 - CAPTION_H) / (1 + REFLECTION.height) : Infinity;
@@ -156,7 +163,17 @@ export function ScrollDisplay({
         scrollEventThrottle={16}
         getItemLayout={(_, n) => ({ length: step, offset: step * n, index: n })}
         renderItem={({ item, index: n }) => (
-          <Item row={item} n={n} x={x} step={step} slabW={slabW} slabH={slabH} onPress={onPress} onLongPress={onLongPress} />
+          <Item
+            row={item}
+            n={n}
+            x={x}
+            step={step}
+            slabW={slabW}
+            slabH={slabH}
+            onPress={onPress}
+            onLongPress={onLongPress}
+            pinned={item.card.id === pinnedId}
+          />
         )}
       />
       {current ? (
@@ -226,7 +243,9 @@ function SwipeCaption({ row }: { row: CardRow }) {
       <Text numberOfLines={1} style={[type.body, ink]}>
         {rowTitle(card)}
         {/* Graded slabs show their grade on the label; raw cards say so here. */}
-        {card.grader === 'raw' ? <Text style={muted}>{` · ${gradeLabel(card.grader, card.grade, card.condition)}`}</Text> : null}
+        {card.grader === 'raw' ? (
+          <Text style={muted}>{` · ${gradeLabel(card.grader, card.grade, card.condition)}`}</Text>
+        ) : null}
       </Text>
       <Text style={[type.rowPrice, ink, { paddingTop: space.xs }]}>{value != null ? money(value) : '—'}</Text>
       <Text numberOfLines={1} style={[type.secondary, muted, { paddingTop: 2 }]}>

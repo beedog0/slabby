@@ -30,7 +30,7 @@ import { DEFAULT_CON_NAME } from '../src/store/con';
 import { ShelfView } from '../src/components/collection/ShelfView';
 import { ViewSwitch } from '../src/components/collection/ViewSwitch';
 import { IconButton, PrimaryButton, ScanIcon } from '../src/components/ui';
-import { money, monthLine, rowTitle } from '../src/lib/format';
+import { changeText, money, rowTitle } from '../src/lib/format';
 import {
   collection,
   collectionSeries,
@@ -103,11 +103,11 @@ export default function Home() {
     () =>
       arrange(base.rows, {
         sort: arranging ? 'mine' : sort,
-        query: mode === 'scroll' ? '' : query,
+        query,
         order,
         pinnedId,
       }),
-    [base, sort, query, order, pinnedId, arranging, mode],
+    [base, sort, query, order, pinnedId, arranging],
   );
   const list = useMemo(() => ({ rows: shown, totalCents: base.totalCents }), [shown, base]);
   const asOf = useMemo(
@@ -189,38 +189,49 @@ export default function Home() {
           setPicked(null);
         },
       }
-    : { onLongPress: slabMenu };
+    : { onLongPress: slabMenu, pinnedId };
 
   const count = list.rows.length;
   // The header counts the whole filter; a search only narrows the slabs below it.
   const total = base.rows.length;
   const empty = EMPTY[filter];
-  const month = Math.abs(stats.monthDeltaCents) >= 100 ? monthLine(stats.monthDeltaCents) : null;
+  // "−$10 (−2.1%) this month", the numbers in gain or loss color, words in secondary.
+  const change = changeText(stats.monthDeltaCents, stats.totalCents);
+  const month = change ? (
+    <>
+      <Text style={{ color: stats.monthDeltaCents > 0 ? color.gain : color.loss }}>{change}</Text>
+      {' this month'}
+    </>
+  ) : null;
+  // Line above the number: what it is, and how many slabs it counts.
+  const label = `${VALUE_LABEL[filter]} · ${plural(total, 'slab')}`;
+  // Line under the number: how that value moved (or, for sale and sold, the number that matters there).
   const subline: ReactNode =
-    filter === 'all' ? (
-      [plural(total, 'slab'), month].filter(Boolean).join(' · ')
-    ) : filter === 'hold' ? (
+    filter === 'sell' ? (
       total ? (
-        [plural(total, 'hold'), month].filter(Boolean).join(' · ')
-      ) : (
-        'No holds'
-      )
-    ) : filter === 'sell' ? (
-      total ? (
-        `${total} for sale · floor ${money(stats.floorTotalCents)}`
+        `Floor ${money(stats.floorTotalCents)}`
       ) : (
         'Nothing for sale'
       )
-    ) : total ? (
-      <>
-        {`${total} sold · `}
-        <Text style={{ color: stats.profitCents >= 0 ? color.gain : color.loss }}>
-          {money(Math.abs(stats.profitCents))}
-        </Text>
-        {stats.profitCents >= 0 ? ' over paid' : ' under paid'}
-      </>
+    ) : filter === 'sold' ? (
+      total ? (
+        <>
+          <Text style={{ color: stats.profitCents >= 0 ? color.gain : color.loss }}>
+            {`${stats.profitCents >= 0 ? '+' : '−'}${money(Math.abs(stats.profitCents))}`}
+          </Text>
+          {stats.profitCents >= 0 ? ' over what you paid' : ' under what you paid'}
+        </>
+      ) : (
+        'Nothing sold yet'
+      )
+    ) : !total ? (
+      filter === 'hold' ? (
+        'No holds yet'
+      ) : (
+        'Nothing here yet'
+      )
     ) : (
-      'Nothing sold'
+      (month ?? 'Flat this month')
     );
 
   return (
@@ -261,7 +272,7 @@ export default function Home() {
           <>
             <View style={styles.value}>
               <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                {VALUE_LABEL[filter]}
+                {label}
               </Text>
               <Text numberOfLines={1} style={[type.displayS, { color: total ? color.ink : color.secondary }]}>
                 {money(scrubbed ? scrubbed.cents : stats.totalCents)}
@@ -288,27 +299,25 @@ export default function Home() {
               <FilterTabs value={filter} onChange={setFilter} />
               <ViewSwitch value={mode} onChange={setMode} />
             </View>
-            {/* The swipe view keeps the whole slab on screen, so search and sort live in shelf and grid. */}
-            {mode !== 'scroll' ? (
-              <View style={styles.search}>
-                {arranging ? (
-                  <Text
-                    style={[
-                      type.text,
-                      {
-                        color: color.secondary,
-                        height: size.touch,
-                        lineHeight: size.touch,
-                      },
-                    ]}
-                  >
-                    {picked ? 'Now tap where it should go.' : 'Tap a slab, then tap another to swap them.'}
-                  </Text>
-                ) : (
-                  <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
-                )}
-              </View>
-            ) : null}
+            {/* Every view gets search and sort; the swipe view sizes its slab to the room left below. */}
+            <View style={styles.search}>
+              {arranging ? (
+                <Text
+                  style={[
+                    type.text,
+                    {
+                      color: color.secondary,
+                      height: size.touch,
+                      lineHeight: size.touch,
+                    },
+                  ]}
+                >
+                  {picked ? 'Now tap where it should go.' : 'Tap a slab, then tap another to swap them.'}
+                </Text>
+              ) : (
+                <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
+              )}
+            </View>
 
             {count === 0 && query ? (
               <View style={styles.gutter}>
@@ -327,6 +336,7 @@ export default function Home() {
                   rows={list.rows}
                   screenW={screenW}
                   onLongPress={slabMenu}
+                  pinnedId={pinnedId}
                   fitHeight={displayY ? screenH - displayY - insets.bottom - space.s : undefined}
                 />
               </View>

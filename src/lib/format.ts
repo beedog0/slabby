@@ -53,3 +53,17 @@ export function elapsed(sinceIso: string, now = Date.now()): string {
   const h = Math.floor(mins / 60);
   return h ? `${h}h ${mins % 60}m` : `${mins}m`;
 }
+
+/**
+ * Change over a window as dollars and percent: "+$86 (+1.8%)" / "−$10 (−2.1%)".
+ * `nowCents` is the value today; the percent is against the value at the start of the window.
+ * Null when the change is under a dollar (nothing worth saying).
+ */
+export function changeText(deltaCents: number, nowCents: number): string | null {
+  if (Math.abs(deltaCents) < 100) return null;
+  const sign = deltaCents > 0 ? '+' : MINUS;
+  const start = nowCents - deltaCents;
+  const pctText =
+    start > 0 ? ` (${sign}${(Math.round((Math.abs(deltaCents) / start) * 1000) / 10).toFixed(1)}%)` : '';
+  return `${sign}${money(Math.abs(deltaCents))}${pctText}`;
+}
