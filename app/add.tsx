@@ -2,7 +2,7 @@
 // only). The card is matched to its price source after it's added, same as a scanned one.
 // Card search opens it prefilled (name, set, number, grade, photo) with the product already known.
 
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,6 +37,7 @@ export default function AddByHand() {
   const fromSearch = !!p.productId;
   const insets = useSafeAreaInsets();
   const add = useVault((s) => s.add);
+  const [tilting, setTilting] = useState(false);
   const [cert, setCert] = useState(certParam ?? '');
   const [grader, setGrader] = useState<Grader>(p.grader ?? 'psa');
   const [grade, setGrade] = useState(Number(p.grade) || 10);
@@ -131,7 +132,9 @@ export default function AddByHand() {
       style={{ flex: 1, backgroundColor: color.canvas }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
+      {/* A tilt drag on the preview must not start iOS 26's swipe-back. */}
+      <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
+      <ScrollView scrollEnabled={!tilting} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
         <View style={styles.nav}>
           <IconButton label="Back" onPress={() => router.back()}>
             <BackIcon />
@@ -147,7 +150,7 @@ export default function AddByHand() {
 
           {preview ? (
             <View style={styles.preview}>
-              <SlabView card={preview} width={size.heroW * 0.75} />
+              <SlabView card={preview} width={size.heroW * 0.75} interactive onDragChange={setTilting} />
             </View>
           ) : null}
           <Field label="Card name">

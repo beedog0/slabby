@@ -128,7 +128,27 @@ export type Summary = {
   sales30d: number;
   asOf: string;
   series90: number[];
+  /** Real data points behind series90 (days with a sale or a TCGplayer price; the rest are
+   *  carried forward). Missing on answers cached before 2026-11-06. */
+  points?: number;
+  /** First and last real data point in the window. */
+  since?: string;
+  lastReal?: string;
 };
+
+/** Days in the last `days` that have real data, oldest first. */
+export function realDays(dates: string[], today: string, days = 90): string[] {
+  const start = new Date(`${today}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  const from = start.toISOString().slice(0, 10);
+  return [...new Set(dates.map((d) => d.slice(0, 10)))].filter((d) => d >= from && d <= today).sort();
+}
+
+/** Adds points/since/lastReal to a summary. */
+export function withPoints(s: Summary | null, days: string[]): Summary | null {
+  if (!s) return s;
+  return { ...s, points: days.length, since: days[0], lastReal: days[days.length - 1] };
+}
 
 export function summarize(rows: Daily[]): Summary | null {
   if (!rows.length) return null;
@@ -144,8 +164,17 @@ export function summarize(rows: Daily[]): Summary | null {
   };
 }
 
-/** Grades shown on a searched card, in toggle order. Keys match PPT's ebay.priceHistory. */
-export const SEARCH_GRADES = ['psa10', 'psa9', 'psa8'] as const;
+/**
+ * Grades kept for a searched card, high to low. Keys match PPT's ebay.priceHistory. All ten come
+ * from the same 3-credit call, so the low grades cost nothing extra; the app shows 10/9/8 up front
+ * and 7 to 1 behind "Lower".
+ */
+export const SEARCH_GRADES = ['psa10', 'psa9', 'psa8', 'psa7', 'psa6', 'psa5', 'psa4', 'psa3', 'psa2', 'psa1'] as const;
+
+/** A cached answer from before low grades were kept has no psa7 key at all; fetch it again once. */
+export function hasAllGrades(payload: { grades?: Record<string, unknown> } | null | undefined): boolean {
+  return !!payload?.grades && SEARCH_GRADES.every((g) => g in payload.grades!);
+}
 
 /** How long an opened card's prices are reused before PPT is asked again. */
 export const CACHE_HOURS = 24;
