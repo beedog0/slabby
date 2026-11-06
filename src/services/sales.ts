@@ -1,4 +1,4 @@
-// Recent sales for the sales screen (0008_recent_sales.sql). Individual listings (`sales`) when
+// Recent sales for the sales screen (0009_recent_sales.sql). Individual listings (`sales`) when
 // the server has them, else daily averages (`sales_daily`). Without Supabase, mocks. A table
 // that isn't there yet reads as no sales; any other failure throws SalesOffline and leaves the
 // cache alone so the screen keeps showing the last answer.

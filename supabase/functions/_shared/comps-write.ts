@@ -1,6 +1,6 @@
 // One PokemonPriceTracker call for a product, written for every card_key that shares it:
 // price_daily rows plus the freshness columns on card_refs (0007_comps_freshness.sql), and for
-// graded keys the recent sales behind the sales screen (0008_recent_sales.sql).
+// graded keys the recent sales behind the sales screen (0009_recent_sales.sql).
 // Used by comps-nightly, card-match (first comps) and comps-refresh.
 
 import type { createClient } from 'npm:@supabase/supabase-js@2';

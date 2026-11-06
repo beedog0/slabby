@@ -131,7 +131,7 @@ export function lastRawDay(points: RawPoint[]): LastSale | null {
   return best;
 }
 
-// Recent sales (0008_recent_sales.sql) -------------------------------------------------------
+// Recent sales (0009_recent_sales.sql) -------------------------------------------------------
 
 export type SalesDailyRow = { day: string; sales: number; avg_cents: number };
 
