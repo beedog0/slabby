@@ -7,7 +7,8 @@ import * as Haptics from 'expo-haptics';
 import { useState, type ReactNode } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
-import { useCardRow } from '../../pricing/useCardRow';
+import { splitTotal } from '../../pricing/split';
+import { useCardRow, useCardRows } from '../../pricing/useCardRow';
 import { useCon } from '../../store/con';
 import { useVault } from '../../store/vault';
 import { color, space, type } from '../../theme/tokens';
@@ -47,6 +48,31 @@ export function confirmRemoveMany(cards: Card[], after?: () => void) {
   if (cards.length === 1) return openStatusSheet(cards[0], 'remove', after);
   openMenu({ title: `Remove ${cards.length} slabs?`, items: [], body: <RemoveManyBody cards={cards} after={after} /> });
 }
+
+/**
+ * Select mode's Move: one menu with the same three destinations, then one confirm sheet for all
+ * of them with the combined live numbers. `after` runs once they've moved (leave select mode).
+ */
+export function openMoveMany(cards: Card[], after?: () => void) {
+  if (!cards.length) return;
+  const n = cards.length;
+  const open = (kind: 'sell' | 'hold' | 'sold') =>
+    openMenu({ title: MANY_TITLE[kind](n), items: [], body: <MoveManyBody ids={cards.map((c) => c.id)} kind={kind} after={after} /> });
+  openMenu({
+    title: `Move ${n} ${n === 1 ? 'slab' : 'slabs'}`,
+    items: [
+      { label: 'Put up for sale', onPress: () => open('sell') },
+      { label: 'Move to holds', onPress: () => open('hold') },
+      { label: 'Mark sold', onPress: () => open('sold') },
+    ],
+  });
+}
+
+const MANY_TITLE = {
+  sell: (n: number) => `Put ${n} up for sale?`,
+  hold: (n: number) => `Move ${n} to holds?`,
+  sold: (n: number) => `Mark ${n} sold`,
+};
 
 const native = Platform.OS !== 'web';
 const done = () => {
@@ -212,6 +238,132 @@ function RemoveManyBody({ cards, after }: { cards: Card[]; after?: () => void })
       </View>
       <Text style={[type.secondary, styles.note]}>What you paid and their history go with them. This can’t be undone.</Text>
       <PrimaryButton title={`Remove ${cards.length} slabs`} onPress={() => closeMenu(() => removeSlabs(ids, after))} />
+    </View>
+  );
+}
+
+/** Combined numbers for several slabs: market (and its 30-day move), paid and the gain on it. */
+function LiveMany({ ids, children }: { ids: string[]; children?: ReactNode }) {
+  const rows = useCardRows(ids);
+  let market = 0, before = 0, paid = 0, paidOfPriced = 0, priced = 0;
+  for (const r of rows) {
+    if (r.card.paidCents != null) paid += r.card.paidCents;
+    if (!r.price) continue;
+    priced++;
+    market += r.price.marketCents;
+    before += r.price.marketCents / (1 + r.trend30);
+    if (r.card.paidCents != null) paidOfPriced += r.card.paidCents;
+  }
+  const move = before > 0 ? market / before - 1 : 0;
+  const gain = priced ? market - paidOfPriced : null;
+  return (
+    <View style={styles.live}>
+      <Line label={priced < rows.length ? `Market, ${priced} of ${rows.length} priced` : 'Market together'}>
+        {priced ? (
+          <>
+            <Text style={ink}>{money(market)}</Text>
+            {Math.round(move * 100) ? <Text style={{ color: move >= 0 ? color.gain : color.loss }}>{`  ${pct(move)}`}</Text> : null}
+          </>
+        ) : (
+          <Text style={muted}>No sales yet</Text>
+        )}
+      </Line>
+      {paid ? (
+        <Line label="Paid">
+          <Text style={ink}>{money(paid)}</Text>
+          {gain != null && paidOfPriced ? (
+            <Text style={{ color: gain >= 0 ? color.gain : color.loss }}>{`  ${gain >= 0 ? '+' : ''}${money(gain)}`}</Text>
+          ) : null}
+        </Line>
+      ) : null}
+      {children}
+    </View>
+  );
+}
+
+function MoveManyBody({ ids, kind, after }: { ids: string[]; kind: 'sell' | 'hold' | 'sold'; after?: () => void }) {
+  const rows = useCardRows(ids);
+  const update = useVault((s) => s.update);
+  const con = useCon((s) => s.session);
+  const [digits, setDigits] = useState('');
+  const n = rows.length;
+  const finish = () => {
+    after?.();
+    done();
+  };
+
+  if (kind !== 'sold') {
+    const sell = kind === 'sell';
+    const ask = rows.reduce((a, r) => a + (r.ask ?? 0), 0);
+    const floor = rows.reduce((a, r) => a + (r.floor ?? 0), 0);
+    return (
+      <View>
+        <LiveMany ids={ids}>
+          {sell && ask ? (
+            <Line label="Asks · floors">
+              <Text style={ink}>{money(ask)}</Text>
+              <Text style={muted}>{'  ·  '}</Text>
+              <Text style={ink}>{money(floor)}</Text>
+            </Line>
+          ) : null}
+        </LiveMany>
+        <Text style={[type.secondary, styles.note]}>
+          {sell
+            ? 'Each gets its ask and floor from your pricing rules.'
+            : 'Holds stay out of con mode and the sell sheet. Sold ones go back in your vault.'}
+        </Text>
+        <PrimaryButton
+          title={sell ? `Put ${n} up for sale` : `Move ${n} to holds`}
+          onPress={() =>
+            closeMenu(() => {
+              for (const r of rows) {
+                if (sell) {
+                  if (r.card.status === 'owned') update(r.card.id, { plan: 'sell' });
+                } else {
+                  update(r.card.id, r.card.status === 'sold' ? { plan: 'hold', status: 'owned', soldCents: null, soldAt: null, soldWhere: null } : { plan: 'hold' });
+                }
+              }
+              finish();
+            })
+          }
+        />
+      </View>
+    );
+  }
+
+  // Sold together: one total, split across the slabs by market price so each keeps a fair share.
+  const total = digits ? parseInt(digits, 10) * 100 : null;
+  const paid = rows.reduce((a, r) => a + (r.card.paidCents ?? 0), 0);
+  const vsPaid = total != null && paid ? total - paid : null;
+  const save = () =>
+    closeMenu(() => {
+      const shares = total != null ? splitTotal(total, rows.map((r) => r.price?.marketCents ?? null)) : null;
+      const at = new Date().toISOString();
+      rows.forEach((r, i) =>
+        update(r.card.id, { status: 'sold', soldCents: shares ? shares[i] : null, soldAt: at, soldWhere: con?.name ?? null }),
+      );
+      finish();
+    });
+  return (
+    <View>
+      <LiveMany ids={ids} />
+      <View style={styles.amount}>
+        <Text style={[type.text, muted]}>Sold together for</Text>
+        <Text style={[type.displayS, { color: total != null ? color.ink : color.secondary }]}>{total != null ? money(total) : '$0'}</Text>
+        <Text style={[type.secondary, { color: vsPaid == null ? color.secondary : vsPaid >= 0 ? color.gain : color.loss }]}>
+          {vsPaid != null ? `${vsPaid >= 0 ? '+' : ''}${money(vsPaid)} vs paid` : total == null ? 'Type the total, or leave it blank' : ' '}
+        </Text>
+      </View>
+      <View style={styles.pad}>
+        <Keypad
+          onDigit={(d) => setDigits((v) => (v.length >= 7 || (!v && d === '0') ? v : v + d))}
+          onBackspace={() => setDigits((v) => v.slice(0, -1))}
+        />
+      </View>
+      <Text style={[type.secondary, styles.note, { paddingTop: 0, paddingBottom: space.m }]}>
+        The total is split across them by market price.
+      </Text>
+      <PrimaryButton title={total != null ? `Mark ${n} sold for ${money(total)}` : `Mark ${n} sold, price not set`} onPress={save} />
     </View>
   );
 }
