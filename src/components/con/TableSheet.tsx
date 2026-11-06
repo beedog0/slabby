@@ -4,8 +4,9 @@
 // sheet to a price step with the keypad. "Scan a new slab" is the only way out to another screen.
 //
 // The dropdown is drawn inside this sheet (not through a second Modal, which iOS can refuse to
-// present over a Modal). Pull-to-dismiss only starts from the grabber and header, so it never
-// fights the list's own scrolling.
+// present over a Modal). Pull down anywhere to dismiss, like any iOS sheet: the sheet takes the
+// gesture in the capture phase when it's a downward drag and the list is already at its top, so
+// scrolling the list still works.
 
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
@@ -68,6 +69,7 @@ export function TableSheet({ open, onClose, onScan }: Props) {
     priceOnly.current = open.step === 'price';
     drag.setValue(0);
     progress.setValue(0);
+    atTop.current = true;
     setStep(open);
     Animated.timing(progress, { toValue: 1, duration: motion.sheetIn, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
   }, [open, progress, drag]);
@@ -83,9 +85,15 @@ export function TableSheet({ open, onClose, onScan }: Props) {
   const closeRef = useRef(close);
   closeRef.current = close;
 
+  /** The list's scroll offset is at the top, so a downward drag means "dismiss", not "scroll". */
+  const atTop = useRef(true);
+  const pullingDown = (g: { dy: number; dx: number }) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5;
+
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onMoveShouldSetPanResponder: (_, g) => pullingDown(g),
+      onMoveShouldSetPanResponderCapture: (_, g) => atTop.current && pullingDown(g),
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
       onPanResponderRelease: (_, g) => {
         if (g.dy > 80 || g.vy > 0.8) closeRef.current();
@@ -109,13 +117,15 @@ export function TableSheet({ open, onClose, onScan }: Props) {
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: color.scrim, opacity: progress }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={close} />
       </Animated.View>
-      <Animated.View accessibilityViewIsModal style={[styles.sheet, { height: sheetH, transform: [{ translateY }] }]}>
-        <View {...pan.panHandlers}>
-          <View style={styles.grabber} />
-        </View>
+      <Animated.View
+        accessibilityViewIsModal
+        style={[styles.sheet, { height: sheetH, transform: [{ translateY }] }]}
+        {...pan.panHandlers}
+      >
+        <View style={styles.grabber} />
         {step.step === 'list' ? (
           <ListStep
-            panHandlers={pan.panHandlers}
+            onScrollTop={(top) => (atTop.current = top)}
             bottomInset={insets.bottom}
             onDone={close}
             onScan={() => {
@@ -129,14 +139,20 @@ export function TableSheet({ open, onClose, onScan }: Props) {
             onSet={(card, s) => {
               record(card.id, s);
             }}
-            onSold={(card) => setStep({ step: 'price', id: card.id })}
+            onSold={(card) => {
+              atTop.current = true;
+              setStep({ step: 'price', id: card.id });
+            }}
           />
         ) : (
           <PriceStep
             id={step.id}
-            panHandlers={pan.panHandlers}
             bottomInset={insets.bottom}
-            onBack={() => (priceOnly.current ? close() : setStep({ step: 'list' }))}
+            onBack={() => {
+              if (priceOnly.current) return close();
+              atTop.current = true;
+              setStep({ step: 'list' });
+            }}
             onSold={(id) => {
               record(id, 'sold');
               close();
@@ -148,17 +164,15 @@ export function TableSheet({ open, onClose, onScan }: Props) {
   );
 }
 
-type PanHandlers = ReturnType<typeof PanResponder.create>['panHandlers'];
-
 function ListStep({
-  panHandlers,
+  onScrollTop,
   bottomInset,
   onDone,
   onScan,
   onSet,
   onSold,
 }: {
-  panHandlers: PanHandlers;
+  onScrollTop: (top: boolean) => void;
   bottomInset: number;
   onDone: () => void;
   onScan: () => void;
@@ -210,7 +224,7 @@ function ListStep({
 
   return (
     <View style={{ flex: 1 }}>
-      <View {...panHandlers} style={styles.header}>
+      <View style={styles.header}>
         <Text style={[type.section, { color: color.ink, flex: 1 }]}>Put on the table</Text>
         <Pressable accessibilityRole="button" onPress={onDone} hitSlop={8} style={styles.headerBtn}>
           <Text style={[type.body, { color: color.ink }]}>Done</Text>
@@ -242,6 +256,8 @@ function ListStep({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           onScrollBeginDrag={() => setMenu(null)}
+          onScroll={(e) => onScrollTop(e.nativeEvent.contentOffset.y <= 0)}
+          scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: bottomInset + space.xxl }}
         >
           {rows.map((r) => {
@@ -316,13 +332,11 @@ const DROP_H = size.touch * 4 + space.xs * 2;
 
 function PriceStep({
   id,
-  panHandlers,
   bottomInset,
   onBack,
   onSold,
 }: {
   id: string;
-  panHandlers: PanHandlers;
   bottomInset: number;
   onBack: () => void;
   onSold: (id: string) => void;
@@ -380,7 +394,7 @@ function PriceStep({
 
   return (
     <View style={{ flex: 1 }}>
-      <View {...panHandlers} style={styles.priceHeader}>
+      <View style={styles.priceHeader}>
         <IconButton label="Back" onPress={onBack}>
           <BackIcon />
         </IconButton>

@@ -7,8 +7,18 @@ import { useVault } from '../store/vault';
 import type { Card } from '../types';
 import { openSlabMenu } from './menu/Menu';
 
+// Set when a scan started from the table sheet ends by adding a slab. Con mode reads it on focus:
+// added → land on the slab's tab; not added (back, swipe, close) → reopen the table sheet.
+let scanAdded = false;
+export function takeScanAdded(): boolean {
+  const v = scanAdded;
+  scanAdded = false;
+  return v;
+}
+
 /** Back to the con screen, on the tab the slab now lives on, with that row flashed. */
 export function backToCon(s: ConStatus, id?: string) {
+  scanAdded = true;
   router.dismissTo({ pathname: '/con', params: { tab: conTabFor(s), flash: id ?? '', at: String(Date.now()) } });
 }
 

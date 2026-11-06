@@ -5,14 +5,14 @@
 // under the tabs, like on home.
 
 import * as Haptics from 'expo-haptics';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { SearchSort } from '../../src/components/collection/SearchSort';
 import { Segmented } from '../../src/components/Segmented';
-import { openConStatusMenu } from '../../src/components/conStatusMenu';
+import { openConStatusMenu, takeScanAdded } from '../../src/components/conStatusMenu';
 import { TableSheet, type TableSheetOpen } from '../../src/components/con/TableSheet';
 import { Hairline, PlusIcon, PrimaryButton, SearchIcon } from '../../src/components/ui';
 import { conTabFor, type ConStatus } from '../../src/lib/conStatus';
@@ -48,6 +48,16 @@ export default function ConMode() {
     setTab(conTabFor(last.status));
     setFlash({ ids: changed.map((c) => c.id), at: Date.now() });
   };
+  // Scan opened from the table sheet: coming back without adding (back button, swipe, close)
+  // reopens the sheet where you were, instead of dropping you on the con list.
+  const scanFromSheet = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!scanFromSheet.current) return;
+      scanFromSheet.current = false;
+      if (!takeScanAdded()) setSheet({ step: 'list' });
+    }, []),
+  );
   // Back from the scanner: `at` makes a repeat of the same tab count.
   const params = useLocalSearchParams<{ tab?: Tab; flash?: string; at?: string }>();
   useEffect(() => {
@@ -222,7 +232,11 @@ export default function ConMode() {
           setSheet(null);
           landOn(changed);
         }}
-        onScan={() => router.push({ pathname: '/scan', params: { con: '1' } })}
+        onScan={() => {
+          takeScanAdded();
+          scanFromSheet.current = true;
+          router.push({ pathname: '/scan', params: { con: '1' } });
+        }}
       />
     </View>
   );
