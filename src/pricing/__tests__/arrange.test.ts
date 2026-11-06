@@ -1,6 +1,6 @@
 import cards from '../../mocks/cards.json';
 import { DEFAULT_RULES, type Card } from '../../types';
-import { arrange, dropOrder, matches, moveTo, slotAt, swapOrder } from '../arrange';
+import { arrange, dropOrder, matches, moveTo, slotAt, stackCopies, swapOrder } from '../arrange';
 import { rowFor } from '../portfolio';
 
 const rows = (cards as Card[]).filter((c) => c.status === 'owned').map((c) => rowFor(c, DEFAULT_RULES));
@@ -66,5 +66,22 @@ describe('drag to arrange', () => {
     expect(slotAt(400, 10, g)).toBe(2);
     expect(slotAt(20, 230, g)).toBe(3);
     expect(slotAt(400, 900, g)).toBe(6); // past the end lands on the last slot
+  });
+});
+
+describe('stackCopies', () => {
+  const raw = rows.find((r) => r.card.grader === 'raw')!;
+  const graded = rows.find((r) => r.card.grader !== 'raw')!;
+  const copy = (r: typeof raw, id: string, patch = {}) => ({ ...r, card: { ...r.card, id, ...patch } });
+
+  it('shows identical raw singles once, with a count, in the first one\'s place', () => {
+    const out = stackCopies([raw, graded, copy(raw, 'b'), copy(raw, 'c')]);
+    expect(ids(out)).toEqual([raw.card.id, graded.card.id]);
+    expect(out[0].copies).toBe(3);
+  });
+  it('keeps different conditions or plans apart, and never stacks graded slabs', () => {
+    const out = stackCopies([raw, copy(raw, 'b', { condition: 'LP' }), copy(raw, 'c', { plan: 'hold' }), graded, copy(graded, 'g2')]);
+    expect(out).toHaveLength(5);
+    expect(out.every((r) => (r.copies ?? 1) === 1)).toBe(true);
   });
 });

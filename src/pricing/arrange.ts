@@ -2,6 +2,7 @@
 // shelf order, and one pinned favorite that always comes first. Pure; screens call these.
 
 import { gradeLabel, rowTitle } from '../lib/format';
+import { cardKey } from './cardKey';
 import type { CardRow } from './portfolio';
 
 export type SortKey = 'value' | 'gain' | 'newest' | 'name' | 'mine';
@@ -111,4 +112,30 @@ export function slotAt(
   const col = Math.max(0, Math.min(g.cols - 1, Math.floor((x - g.inset) / g.step)));
   const row = Math.max(0, Math.floor(y / g.pitch));
   return Math.max(0, Math.min(g.count - 1, row * g.cols + col));
+}
+
+/**
+ * Identical raw singles (same card, condition, status and plan) collapse into one row that carries
+ * `copies`, shown as a "2x" badge. The first copy keeps its place in the order. Graded slabs never
+ * stack: each has its own cert.
+ */
+export function stackCopies(rows: CardRow[]): CardRow[] {
+  const firstOf = new Map<string, number>();
+  const out: CardRow[] = [];
+  for (const r of rows) {
+    const c = r.card;
+    if (c.grader !== 'raw') {
+      out.push(r);
+      continue;
+    }
+    const key = [cardKey(c), c.name, c.condition ?? '', c.status, c.plan].join('|');
+    const at = firstOf.get(key);
+    if (at == null) {
+      firstOf.set(key, out.length);
+      out.push({ ...r, copies: 1 });
+    } else {
+      out[at] = { ...out[at], copies: (out[at].copies ?? 1) + 1 };
+    }
+  }
+  return out;
 }

@@ -26,7 +26,7 @@ import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { openSlabMenu } from '../src/components/menu/Menu';
 import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
-import { arrange } from '../src/pricing/arrange';
+import { arrange, stackCopies } from '../src/pricing/arrange';
 import { shareSellSheet } from '../src/services/sellSheet';
 import { DEFAULT_CON_NAME } from '../src/store/con';
 import { ShelfView } from '../src/components/collection/ShelfView';
@@ -139,7 +139,12 @@ export default function Home() {
       }),
     [base, sort, query, order, pinnedId, arranging],
   );
-  const list = useMemo(() => ({ rows: shown, totalCents: base.totalCents }), [shown, base]);
+  // Identical raw singles show as one card with a "2x" badge, except while picking or arranging
+  // slabs one by one.
+  const list = useMemo(
+    () => ({ rows: selecting || arranging ? shown : stackCopies(shown), totalCents: base.totalCents }),
+    [shown, base, selecting, arranging],
+  );
   const asOf = useMemo(
     () =>
       base.rows

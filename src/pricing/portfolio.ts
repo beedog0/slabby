@@ -27,6 +27,8 @@ export type CardRow = {
   floorBasis: FloorBasis | null;
   buyTarget: number | null;
   buyMax: number | null;
+  /** Home views: how many identical raw singles this one row stands for (see stackCopies). */
+  copies?: number;
 };
 
 export function rowFor(card: Card, rules: PricingRules, price = priceFor(card)): CardRow {

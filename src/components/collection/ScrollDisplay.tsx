@@ -14,7 +14,7 @@ import { color, size, space, type } from '../../theme/tokens';
 import { prefetchArt } from '../ArtImage';
 import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
 import { SlabView } from '../SlabView';
-import { PinMark } from './PinMark';
+import { CopiesMark, PinMark } from './PinMark';
 
 // Room between cases: the slab now has a real case edge and shadow, so neighbours need air.
 const GAP = space.xxxl;
@@ -57,7 +57,8 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress, onLong
         {/* Flat, not posed: the reflection meets a straight bottom edge, as in Cover Flow. */}
         <View>
           <SlabView card={row.card} width={slabW} posed={false} />
-          {pinned ? <PinMark slabW={slabW} /> : null}
+          {pinned ? <PinMark slabW={slabW} card={row.card} /> : null}
+          <CopiesMark slabW={slabW} card={row.card} copies={row.copies ?? 1} />
         </View>
         <View pointerEvents="none" style={{ width: slabW, height: reflH, overflow: 'hidden', marginTop: 3 }}>
           {/* Flipped about its centre, the slab's bottom edge lands at the top of this strip. */}

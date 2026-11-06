@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
-import { PinMark } from './PinMark';
+import { CopiesMark, PinMark } from './PinMark';
 import { SelectOutline } from './SelectOutline';
 import { color, shadow, size, space } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
@@ -54,7 +54,8 @@ export function ShelfView({
               >
                 <View>
                   <SlabView card={r.card} width={slabW} posed={false} />
-                  {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} /> : null}
+                  {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} card={r.card} /> : null}
+                  <CopiesMark slabW={slabW} card={r.card} copies={r.copies ?? 1} />
                   <SelectOutline on={!!actions?.selected?.has(r.card.id)} slabW={slabW} />
                 </View>
               </Pressable>

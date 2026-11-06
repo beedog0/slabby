@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
 import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
-import { PinMark } from './PinMark';
+import { CopiesMark, PinMark } from './PinMark';
 import { SelectOutline } from './SelectOutline';
 import { color, space, type } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
@@ -33,7 +33,8 @@ export function GridView({ rows, width, actions }: { rows: CardRow[]; width: num
           <View style={styles.slab}>
             <View>
               <SlabView card={r.card} width={slabW} posed={false} />
-              {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} /> : null}
+              {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} card={r.card} /> : null}
+              <CopiesMark slabW={slabW} card={r.card} copies={r.copies ?? 1} />
               <SelectOutline on={!!actions?.selected?.has(r.card.id)} slabW={slabW} />
             </View>
           </View>
