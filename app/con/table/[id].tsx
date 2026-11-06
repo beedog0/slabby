@@ -1,5 +1,6 @@
-// Before the table. Selling: ask + walk-away. Buying: target + max. Price line, per-card floor
-// override. Reference: 07-before-the-table.png.
+// Before the table. Selling: ask + walk-away. Buying: target + max. Price line with a price on
+// every marker, per-card floor override (never under paid while "never sell at a loss" is on).
+// A sold card shows the sale with undo instead. Reference: 07-before-the-table.png.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -8,8 +9,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardThumb } from '../../../src/components/CardThumb';
 import { PriceLine, type Tick } from '../../../src/components/PriceLine';
 import { Segmented } from '../../../src/components/Segmented';
+import { SoldState } from '../../../src/components/SoldState';
 import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, Stepper } from '../../../src/components/ui';
 import { gradeLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
+import { minFloorOverride } from '../../../src/pricing/rules';
 import { useCardRow } from '../../../src/pricing/useCardRow';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
@@ -64,6 +67,20 @@ export default function BeforeTheTable() {
     </View>
   );
 
+  if (card.status === 'sold') {
+    return (
+      <View style={[styles.page, { paddingTop: insets.top }]}>
+        <View style={styles.nav}>
+          <IconButton label="Back" onPress={() => router.back()}>
+            <BackIcon />
+          </IconButton>
+        </View>
+        {identity}
+        <SoldState row={row} bottomInset={insets.bottom} />
+      </View>
+    );
+  }
+
   if (!price || row.ask == null || row.floor == null || row.buyTarget == null || row.buyMax == null) {
     return (
       <View style={[styles.page, { paddingTop: insets.top }]}>
@@ -80,24 +97,40 @@ export default function BeforeTheTable() {
   const big = selling ? row.ask : row.buyTarget;
   const limit = selling ? row.floor : row.buyMax;
 
+  // High comp lives on Slab detail; here the line is only the numbers you act on.
   const ticks: Tick[] = selling
     ? [
-        ...(card.paidCents ? [{ value: card.paidCents, label: `Paid ${money(card.paidCents)}`, color: color.ink }] : []),
+        ...(card.paidCents ? [{ value: card.paidCents, label: 'Paid', color: color.ink }] : []),
         { value: row.floor, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 },
         { value: price.marketCents, label: 'Market', color: color.secondary },
-        { value: row.ask, label: 'Ask', color: 'transparent', labelColor: color.ink },
-        { value: price.highCents, label: `High ${money(price.highCents)}`, color: color.hairline },
+        { value: row.ask, label: 'Ask', color: 'transparent', labelColor: color.ink, pin: true },
       ]
     : [
-        { value: row.buyTarget, label: 'Target', color: 'transparent', labelColor: color.ink },
+        { value: row.buyTarget, label: 'Target', color: 'transparent', labelColor: color.ink, pin: true },
         { value: row.buyMax, label: 'Max', color: color.loss, labelColor: color.loss, height: 14 },
-        { value: price.marketCents, label: `Market ${money(price.marketCents)}`, color: color.secondary },
-        { value: price.highCents, label: `High ${money(price.highCents)}`, color: color.hairline },
+        { value: price.marketCents, label: 'Market', color: color.secondary },
       ];
 
   const fillFrom = selling ? (card.paidCents ?? row.floor) : row.buyTarget;
+  const fillTo = selling ? big : row.buyMax;
   const overridden = card.floorOverrideCents != null;
-  const setFloor = (v: number) => update(card.id, { floorOverrideCents: Math.max(0, Math.min(v, row.ask!)) });
+  const minFloor = minFloorOverride({ paidCents: card.paidCents, rules });
+  const atMin = row.floor <= minFloor;
+  const setFloor = (v: number) => update(card.id, { floorOverrideCents: Math.max(minFloor, Math.min(v, row.ask!)) });
+  const raw = card.grader === 'raw';
+  const em = (s: string) => <Text style={{ color: color.ink, fontWeight: '600' }}>{s}</Text>;
+  const floorWhy =
+    row.floorBasis === 'override' ? (
+      <>floor set for this card</>
+    ) : row.floorBasis === 'paid' ? (
+      <>floor = what you paid</>
+    ) : row.floorBasis === 'ask' ? (
+      <>floor = ask</>
+    ) : (
+      <>
+        floor = {raw ? 'low' : '30d low'} {em(rulePct(rules.floorPct))}
+      </>
+    );
 
   return (
     <View style={[styles.page, { paddingTop: insets.top }]}>
@@ -120,8 +153,9 @@ export default function BeforeTheTable() {
           <View style={{ paddingTop: space.xxl, paddingBottom: space.xl }}>
             <PriceLine
               ticks={ticks}
-              fill={{ from: fillFrom, to: big, color: color.ink }}
+              fill={{ from: fillFrom, to: fillTo, color: color.ink }}
               dot={{ value: big, color: color.ink }}
+              reserveAbove
             />
           </View>
           <Hairline />
@@ -129,13 +163,12 @@ export default function BeforeTheTable() {
             <Text style={[type.text, { color: color.secondary, flex: 1 }]}>
               {selling ? (
                 <>
-                  Ask = market <Text style={{ color: color.ink, fontWeight: '600' }}>{rulePct(rules.askPct)}</Text> · floor = 30d low{' '}
-                  <Text style={{ color: color.ink, fontWeight: '600' }}>{rulePct(rules.floorPct)}</Text>
+                  Ask = {raw ? 'TCGplayer' : 'market'} {em(rulePct(rules.askPct))} · {floorWhy}
                 </>
               ) : (
                 <>
-                  Target = market <Text style={{ color: color.ink, fontWeight: '600' }}>{rulePct(rules.buyTargetPct)}</Text> · max = market{' '}
-                  <Text style={{ color: color.ink, fontWeight: '600' }}>{rulePct(rules.buyMaxPct)}</Text>
+                  Target = {raw ? 'TCGplayer' : 'market'} {em(rulePct(rules.buyTargetPct))} · max = {raw ? 'TCGplayer' : 'market'}{' '}
+                  {em(rulePct(rules.buyMaxPct))}
                 </>
               )}
             </Text>
@@ -147,6 +180,9 @@ export default function BeforeTheTable() {
               <View style={styles.override}>
                 <View style={{ flex: 1 }}>
                   <Text numberOfLines={1} style={[type.text, { color: color.ink }]}>Override for this card</Text>
+                  {atMin && minFloor > 0 ? (
+                    <Text style={[type.secondary, { color: color.secondary }]}>Can't go under what you paid</Text>
+                  ) : null}
                   {overridden ? (
                     <Pressable accessibilityRole="button" onPress={() => update(card.id, { floorOverrideCents: null })}>
                       <Text style={[type.secondary, { color: color.secondary }]}>Use the rule again</Text>
@@ -158,6 +194,7 @@ export default function BeforeTheTable() {
                   value={money(row.floor)}
                   onMinus={() => setFloor(row.floor! - step)}
                   onPlus={() => setFloor(row.floor! + step)}
+                  minusDisabled={atMin}
                 />
               </View>
               <Hairline />
