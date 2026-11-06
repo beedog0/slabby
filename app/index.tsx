@@ -268,7 +268,7 @@ export default function Home() {
               </Text>
               <View style={styles.chart}>
                 {valueLine.length > 1 ? (
-                  <ValueChart values={valueLine} width={contentW} asOf={filter === 'sold' ? undefined : asOf} />
+                  <ValueChart values={valueLine} width={contentW} asOf={filter === 'sold' ? new Date().toISOString().slice(0, 10) : asOf} />
                 ) : (
                   <ChartPlaceholder text={total ? 'Prices are loading.' : empty.chart} />
                 )}
