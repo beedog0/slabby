@@ -18,6 +18,8 @@ export type LabelLine = { text: string; x: number; y: number };
 
 // Case-sensitive on purpose: labels print grades in capitals, card names use "ex"/"EX" too.
 const GRADE_WORDS = /(?:^|\s)(GEM MT|GEM MINT|MINT|NM-MT\+?|NM\+?|EX-MT\+?|EX\+?|VG-EX\+?|VG\+?|GOOD\+?|FAIR|PR|AUTHENTIC|AUTH)(?=\s|$|\d)/;
+// Grade words OCR may join onto the end of the name line. Not EX/NM/VG alone: "MEW EX" is a name.
+const JOINED_GRADE = /\s(GEM MT|GEM MINT|NM-MT\+?|EX-MT\+?|VG-EX\+?|MINT)$/;
 const GRADE_NUM = /^\s*(10|[1-9](?:\.5)?)(?!\d)/;
 const YEAR_BRAND = /\b((?:19|20)\d{2})\s+(P(?:OK[EÉ]M[O0]N|\.?M\.?)\b.*)$/i;
 // Some labels (and some photos) split the year and the brand onto separate lines.
@@ -74,9 +76,11 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
     const gw = t.match(GRADE_WORDS);
     if (gw && !grade) {
       const g = t.slice((gw.index ?? 0) + gw[0].length).match(GRADE_NUM);
-      const alone = t.trim() === gw[1];
+      // Only the grade words, or grade words OCR joined onto the end of the name line.
+      const joined = t.match(JOINED_GRADE)?.[1];
+      const alone = t.trim() === gw[1] || !!joined;
       if (g || alone) {
-        gradeWord = gw[1];
+        gradeWord = g ? gw[1] : (joined ?? gw[1]);
         if (g) grade = g[1];
       }
     }
@@ -101,23 +105,37 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
     const lone = lines.find((l) => /^(10|[1-9](?:\.5)?)$/.test(l.text));
     if (lone) grade = lone.text;
   }
+  // Two-column labels where OCR joins the left column to the grade number: "FULL ART 10".
+  if (gradeWord && !grade) {
+    const gi = lines.findIndex((l) => GRADE_WORDS.test(l.text));
+    const tail = lines
+      .slice(gi + 1, gi + 3)
+      .map((l) => l.text.match(/\s(10|[1-9](?:\.5)?)$/)?.[1])
+      .find(Boolean);
+    if (tail) grade = tail;
+  }
   if (gradeWord === 'AUTHENTIC' || gradeWord === 'AUTH') grade = undefined;
 
   // Pass 2: the name is the first free-text line after the year/brand line that isn't a grade,
   // number, cert or variety. Labels put it directly under the brand line.
   if (!name && brandIndex >= 0) {
     for (const l of lines.slice(brandIndex + 1)) {
-      const t = l.text.replace(/#\s*[A-Z0-9-]+/i, '').trim();
+      // OCR can join the right column on: "SURFING PIKACHU VMAX GEM MT", "FULL ART 10".
+      const t = l.text
+        .replace(/#\s*[A-Z0-9-]+/i, '')
+        .replace(JOINED_GRADE, '')
+        .replace(/\s(10|[1-9](?:\.5)?)$/, '')
+        .trim();
       if (!t || YEAR_ONLY.test(t) || t === gradeWord || (gradeWord && t.startsWith(gradeWord + ' ')) || CERT.test(t) || /^(10|[1-9](?:\.5)?)$/.test(t)) continue;
       if (VARIETY.test(t)) {
-        variety ??= t;
+        variety ??= t.replace(/\s(10|[1-9](?:\.5)?)$/, '');
         continue;
       }
       name = t;
       break;
     }
   }
-  if (!variety) variety = lines.map((l) => l.text).find((t) => VARIETY.test(t) && t !== name);
+  if (!variety) variety = lines.map((l) => l.text).find((t) => VARIETY.test(t) && t !== name)?.replace(/\s(10|[1-9](?:\.5)?)$/, '');
 
   if (!brand && !name) return null;
 
@@ -133,18 +151,19 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
         CardGrade: gradeWord && grade ? `${gradeWord} ${grade}` : gradeWord,
       },
     },
-    complete: !!(name && grade && cert),
+    complete: !!(name && cert && (grade || gradeWord === 'AUTHENTIC' || gradeWord === 'AUTH')),
   };
 }
 
 /**
- * Auto-read on the scan screen: a key for a read that's good enough to act on without a tap (name
- * and grade found), or null. Two reads in a row with the same key mean the label is in frame and
+ * Auto-read on the scan screen: a key for a read that's good enough to act on without a tap (name,
+ * grade number and cert all found), or null. A half-framed read often has the name and "GEM MT"
+ * but not the 10 or the cert, and two of those agreeing added a gradeless card. Two reads in a row with the same key mean the label is in frame and
  * held steady, so a blurry or half-framed read never adds the wrong card.
  */
 export function steadyKey(p: ParsedLabel | null): string | null {
   const c = p?.payload.PSACert;
-  if (!c?.Subject || !c.CardGrade) return null;
+  if (!p?.complete || !c?.Subject || !c.CardGrade) return null;
   const norm = (s?: string) => (s ?? '').toUpperCase().replace(/[^A-Z0-9.]/g, '');
   return [c.Subject, c.CardNumber, c.CardGrade, c.CertNumber].map(norm).join('|');
 }

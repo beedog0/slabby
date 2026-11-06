@@ -86,3 +86,34 @@ describe('steadyKey', () => {
     expect(steadyKey(parseLabel(label))).not.toBe(steadyKey(parseLabel([...label.slice(0, 5), '138092557'])));
   });
 });
+
+describe('two-column labels joined by OCR', () => {
+  it('reads the grade when it lands on the variety line', () => {
+    const r = parseLabel([
+      '2021 POKEMON CELEBRATIONS #009',
+      'SURFING PIKACHU VMAX GEM MT',
+      'FULL ART 10',
+      '138092551',
+    ]);
+    expect(r?.payload.PSACert).toMatchObject({
+      Subject: 'SURFING PIKACHU VMAX',
+      CardGrade: 'GEM MT 10',
+      Variety: 'FULL ART',
+      CertNumber: '138092551',
+      CardNumber: '9',
+    });
+    expect(r?.complete).toBe(true);
+    expect(steadyKey(r)).not.toBeNull();
+  });
+
+  it('never auto-reads a half-framed label with no grade number or cert', () => {
+    const r = parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT']);
+    expect(r?.payload.PSACert.Subject).toBe('SURFING PIKACHU VMAX');
+    expect(steadyKey(r)).toBeNull();
+  });
+});
+
+it('keeps EX in a name when OCR joins the grade onto it', () => {
+  const r = parseLabel(['2023 POKEMON SV #199', 'MEW EX GEM MT', 'SPECIAL ART RARE 10', '81234560']);
+  expect(r?.payload.PSACert).toMatchObject({ Subject: 'MEW EX', CardGrade: 'GEM MT 10', CertNumber: '81234560' });
+});

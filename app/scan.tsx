@@ -8,7 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, AppState, Easing, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { SlabView } from '../src/components/SlabView';
@@ -27,6 +27,8 @@ const SCAN_BG = '#2A2A2C'; // camera chrome only; never used on app UI
 const AUTO_START_MS = 700; // let exposure and focus settle first
 const AUTO_GAP_MS = 350; // between auto reads; each read itself takes ~0.5–1 s
 const NAV_H = 44;
+const LOCK_MS = 450; // the locked frame and its check stay up this long before the sheet rises
+const SHEET_IN_MS = 260;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function Scan() {
@@ -49,6 +51,9 @@ export default function Scan() {
   const [active, setActive] = useState(AppState.currentState === 'active');
   // A label was read once and we're waiting for a second matching read.
   const [spotted, setSpotted] = useState(false);
+  // The read succeeded: the frame closes solid with a check for a beat, then the sheet rises.
+  const [locked, setLocked] = useState(false);
+  const sheetIn = useRef(new Animated.Value(0)).current;
   const inFlight = useRef(false);
   const manualAsk = useRef(false);
   const lastKey = useRef<string | null>(null);
@@ -69,7 +74,10 @@ export default function Scan() {
   };
 
   const preview = result?.status === 'found' ? cardFromCert(result.payload, { paidCents: null, plan }) : null;
-  const price = preview ? priceFor(preview) : null;
+  // A label read without its grade number can't be priced: a gradeless PSA card fell back to the
+  // raw price ($5 for a PSA 10 Surfing Pikachu). Show no price and say what's missing instead.
+  const gradeMissing = !!preview && preview.grader !== 'raw' && preview.grade == null;
+  const price = preview && !gradeMissing ? priceFor(preview) : null;
   const already = preview?.certNumber ? existing.some((c) => c.certNumber === preview.certNumber && c.status === 'owned') : false;
 
   const addToVault = () => {
@@ -98,8 +106,14 @@ export default function Scan() {
     lastKey.current = null;
     setSpotted(false);
     setLabelMiss(false);
-    setResult({ status: 'found', cert: cert ?? '', payload: parsed.payload, source: 'label' });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setLocked(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+      .then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))
+      .catch(() => {});
+    setTimeout(() => {
+      setLocked(false);
+      setResult({ status: 'found', cert: cert ?? '', payload: parsed.payload, source: 'label' });
+    }, LOCK_MS);
   };
 
   // Photograph the front label and read it on device. A cert from the back's code wins over OCR.
@@ -178,7 +192,19 @@ export default function Scan() {
   }, []);
 
   // Auto read: while the camera is up and no sheet is open, read a frame, pause, repeat.
-  const autoOn = labelMode && !!canUseCamera && cameraReady && active && !result;
+  const autoOn = labelMode && !!canUseCamera && cameraReady && active && !result && !locked;
+
+  // The sheet slides up whenever a result arrives.
+  useEffect(() => {
+    if (!result) return;
+    sheetIn.setValue(0);
+    Animated.timing(sheetIn, {
+      toValue: 1,
+      duration: SHEET_IN_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: Platform.OS !== 'web',
+    }).start();
+  }, [result]);
   useEffect(() => {
     if (!autoOn) return;
     let alive = true;
@@ -200,7 +226,9 @@ export default function Scan() {
   const frameW = labelMode ? Math.min(win.width - space.xxxl * 2 + space.l, 340) : 240;
   const frameH = labelMode ? Math.round(frameW / 2.9) : frameW;
   const frameTop = insets.top + space.s + NAV_H + space.xxxl;
-  const hint = busy
+  const hint = locked
+    ? 'Got it'
+    : busy
     ? 'Checking with PSA'
     : reading
       ? 'Reading the label'
@@ -238,7 +266,14 @@ export default function Scan() {
         <View style={{ flexDirection: 'row', height: frameH }}>
           <View style={[styles.scrim, { flex: 1 }]} />
           <View style={{ width: frameW, height: frameH }}>
-            {spotted ? <View style={styles.frameLocked} /> : null}
+            {spotted || locked ? <View style={[styles.frameLocked, locked && styles.frameDone]} /> : null}
+            {locked ? (
+              <View style={styles.check}>
+                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M5 12.5l4.5 4.5L19 7.5" />
+                </Svg>
+              </View>
+            ) : null}
             {['tl', 'tr', 'bl', 'br'].map((c) => (
               <View key={c} style={[styles.corner, corner(c)]} />
             ))}
@@ -305,10 +340,24 @@ export default function Scan() {
       ) : null}
 
       {result ? (
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + space.l }]}>
+        <Animated.View
+          style={[
+            styles.sheet,
+            { paddingBottom: insets.bottom + space.l },
+            { transform: [{ translateY: sheetIn.interpolate({ inputRange: [0, 1], outputRange: [win.height * 0.6, 0] }) }] },
+          ]}
+        >
           <View style={styles.grabber} />
           {result.status === 'found' && preview ? (
             <>
+              {gradeMissing ? (
+                <View style={styles.unsure}>
+                  <Text style={[type.text, { color: color.secondary, flex: 1 }]}>Couldn’t read the grade. Check it before adding.</Text>
+                  <Pressable accessibilityRole="button" onPress={rescan} hitSlop={space.m}>
+                    <Text style={[type.text, { color: color.ink, fontWeight: '500' }]}>Scan again</Text>
+                  </Pressable>
+                </View>
+              ) : (
               <Text style={[type.text, { color: color.gain, fontWeight: '500' }]}>
                 {result.source === 'mock'
                   ? `Cert ${result.cert} · sample data`
@@ -318,6 +367,7 @@ export default function Scan() {
                       : 'Read from the label'
                     : `✓ Cert ${result.cert} verified with PSA`}
               </Text>
+              )}
               <View style={styles.cardRow}>
                 {/* The real slab, label and all (the 36×50 row thumb's grey strip read as a cut-off top). */}
                 <SlabView card={preview} width={size.sheetSlabW} posed={false} />
@@ -396,7 +446,7 @@ export default function Scan() {
               </Pressable>
             </>
           )}
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -436,6 +486,20 @@ const styles = StyleSheet.create({
     paddingVertical: space.s,
   },
   corner: { position: 'absolute', width: 24, height: 24, borderColor: color.conFill, borderRadius: 4 },
+  frameDone: { borderWidth: 3, backgroundColor: color.scanLocked },
+  check: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '50%',
+    marginTop: -20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: color.conFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unsure: { flexDirection: 'row', alignItems: 'center', gap: space.m },
   frameLocked: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderWidth: 2, borderColor: color.conFill, borderRadius: 6 },
   manual: { width: '100%', paddingTop: space.xxl, gap: space.m },
   manualInput: {
