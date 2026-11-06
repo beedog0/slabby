@@ -7,12 +7,16 @@
 // (web, Expo Go). Reference: 02-scan.png. As soon as a scan resolves, card-match runs for the card
 // (photo + first comps), so a quick scan at a table shows art and market without adding anything.
 // Adding (vault or con mode) then saves what the sheet already fetched; card-match isn't asked twice.
+//
+// Raw cards scan on the same screen, from the same reads: a frame with a grader label is a slab;
+// a frame with a collector number ("199/165") and no label is a loose card, found in our TCGplayer
+// catalog by number, set code and name (src/services/cardScan.ts) and priced at TCGplayer market.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { AppState, Keyboard, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { backToCon } from '../src/components/conStatusMenu';
@@ -24,7 +28,9 @@ import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../sr
 import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
-import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
+import { cardFromCert, cardFromDetails, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
+import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, parseCardText, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { cardNumber, displayName, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
@@ -32,6 +38,7 @@ import { usePrices } from '../src/store/prices';
 import { parseLabel, steadyKey, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
 import { LabelReader } from '../modules/label-reader';
+import type { Card } from '../src/types';
 import { color, radius, size, space, type } from '../src/theme/tokens';
 
 const SCAN_BG = '#2A2A2C'; // camera chrome only; never used on app UI
@@ -75,6 +82,8 @@ export default function Scan() {
   const inFlight = useRef(false);
   const manualAsk = useRef(false);
   const lastKey = useRef<string | null>(null);
+  // A loose card read from the frame: matches is null while the catalog lookup runs.
+  const [raw, setRaw] = useState<RawRead | null>(null);
   const win = useWindowDimensions();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
@@ -170,6 +179,18 @@ export default function Scan() {
     setPaid('');
     setSoldFor('');
     setLossConfirm(false);
+    setRaw(null);
+  };
+
+  const acceptCard = (read: ParsedCard) => {
+    lastKey.current = null;
+    setSpotted(false);
+    setLabelMiss(false);
+    setRaw({ read, matches: null, pick: 0, choosing: false });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    findScannedCard(read)
+      .catch(() => [] as CardMatch[])
+      .then((matches) => setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !isConfident(matches) } : r)));
   };
 
   /** Con mode: add (or re-mark) the slab with the chosen status. `again` keeps the camera up. */
@@ -242,9 +263,14 @@ export default function Scan() {
       uri = photo?.uri;
       const lines = uri ? await LabelReader.recognize(uri) : [];
       const parsed = parseLabel(lines);
+      // A grader label means slab. Otherwise a collector number means a loose card. Raw cards print
+      // "©2023 Pokémon", which can pass for a label's year and brand, so the number decides.
+      const slabbed = looksLikeSlab(lines);
+      const loose = slabbed ? null : parseCardText(lines);
       const asked = manualAsk.current;
       if (asked) {
-        if (parsed?.payload.PSACert.Subject) return accept(parsed);
+        if (parsed?.payload.PSACert.Subject && (slabbed || !loose)) return accept(parsed);
+        if (loose) return acceptCard(loose);
         setSeen(lines.slice(0, 4).map((l) => l.text).join(' · '));
         setLabelMiss(true);
         lastKey.current = null;
@@ -252,12 +278,15 @@ export default function Scan() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         return;
       }
-      const key = steadyKey(parsed);
-      if (!key || !parsed) {
+      const slabKey = steadyKey(parsed);
+      const cardKeyRead = cardSteadyKey(loose);
+      const key = slabKey && (slabbed || !cardKeyRead) ? `slab:${slabKey}` : cardKeyRead ? `card:${cardKeyRead}` : null;
+      if (!key) {
         lastKey.current = null;
         setSpotted(false);
       } else if (key === lastKey.current) {
-        accept(parsed);
+        if (key.startsWith('slab:') && parsed) accept(parsed);
+        else if (loose) acceptCard(loose);
       } else {
         if (!lastKey.current) Haptics.selectionAsync().catch(() => {});
         lastKey.current = key;
@@ -300,7 +329,7 @@ export default function Scan() {
   }, []);
 
   // Auto read: while the camera is up and no sheet is open, read a frame, pause, repeat.
-  const autoOn = labelMode && !!canUseCamera && cameraReady && active && !result;
+  const autoOn = labelMode && !!canUseCamera && cameraReady && active && !result && !raw;
   useEffect(() => {
     if (!autoOn) return;
     let alive = true;
@@ -318,24 +347,24 @@ export default function Scan() {
     };
   }, [autoOn]);
 
-  // Label-shaped window (PSA labels are about 3:1). The picture outside it is dimmed.
-  const frameW = labelMode ? Math.min(win.width - space.xxxl * 2 + space.l, 340) : 240;
-  const frameH = labelMode ? Math.round(frameW / 2.9) : frameW;
+  // Portrait window that fits a whole slab or a loose card. The picture outside it is dimmed.
+  const frameW = labelMode ? Math.min(win.width - space.xxxl * 2 - space.xl, size.scanFrameW) : 240;
+  const frameH = labelMode ? Math.round(frameW / size.scanFrameRatio) : frameW;
   const frameTop = insets.top + space.s + NAV_H + space.xxxl;
   const hint = busy
     ? 'Checking with PSA'
     : reading
-      ? 'Reading the label'
+      ? 'Reading'
       : labelMiss
         ? seen
-          ? `Couldn’t find a PSA label in “${seen.slice(0, 80)}”. Fit the label in the frame and hold steady.`
-          : 'Couldn’t read any text. Move closer so the label fills the frame.'
+          ? `Couldn’t find a slab label or card number in “${seen.slice(0, 80)}”. Fit the slab or card in the frame and hold steady.`
+          : 'Couldn’t read any text. Move closer so the slab or card fills the frame.'
         : spotted
           ? 'Hold still'
           : addedNote
             ? `${addedNote}. Scan the next slab`
             : labelMode
-              ? 'Fit the front label in the frame'
+              ? 'Fit the slab or card in the frame'
               : 'Line up the QR or barcode on the back of the slab';
 
   return (
@@ -378,7 +407,7 @@ export default function Scan() {
             <Path d="M5 5l14 14M19 5L5 19" />
           </Svg>
         </Pressable>
-        <Text style={[type.body, { color: color.onInk }]}>Scan slab</Text>
+        <Text style={[type.body, { color: color.onInk }]}>Scan</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Flashlight" onPress={() => setTorch((t) => !t)} style={styles.navBtn}>
           <Svg width={22} height={22} viewBox="0 0 24 24" fill={torch ? color.onInk : 'none'} stroke={color.onInk} strokeWidth={1.75} strokeLinejoin="round">
             <Path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
@@ -416,7 +445,7 @@ export default function Scan() {
         ) : null}
       </View>
 
-      {canUseCamera && LabelReader && !result ? (
+      {canUseCamera && LabelReader && !result && !raw ? (
         <View style={[styles.capture, { paddingBottom: insets.bottom + space.l }]}>
           <Pressable
             accessibilityRole="button"
@@ -424,7 +453,7 @@ export default function Scan() {
             disabled={reading}
             style={({ pressed }) => [styles.lightButton, (pressed || reading) && { opacity: 0.7 }]}
           >
-            <Text style={[type.button, { color: color.ink }]}>{reading ? 'Reading…' : 'Read label'}</Text>
+            <Text style={[type.button, { color: color.ink }]}>{reading ? 'Reading…' : 'Scan now'}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -433,6 +462,7 @@ export default function Scan() {
         // Tap above the sheet to close the number pad.
         <Pressable accessibilityLabel="Close keyboard" style={StyleSheet.absoluteFill} onPress={() => Keyboard.dismiss()} />
       ) : null}
+      {raw ? <RawSheet raw={raw} setRaw={setRaw} rescan={rescan} bottom={insets.bottom} /> : null}
 
       {result ? (
         <View style={[styles.sheet, keyboardH > 0 ? { bottom: keyboardH, paddingBottom: space.l } : { paddingBottom: insets.bottom + space.l }]}>
@@ -609,6 +639,241 @@ export default function Scan() {
   );
 }
 
+type RawRead = { read: ParsedCard; matches: CardMatch[] | null; pick: number; choosing: boolean };
+
+/**
+ * A loose card as it would be saved: raw, priced at TCGplayer market. A print the scan can't see
+ * (reverse holo, 1st Edition…) goes in the name the way TCGplayer names its pattern cards.
+ */
+function rawCard(c: CatalogCard, paidCents: number | null, plan: 'hold' | 'sell', print: string | null = null): Card {
+  const card = cardFromDetails({
+    cert: null,
+    grader: 'raw',
+    grade: 0,
+    name: print ? `${displayName(c.name)} (${print})` : displayName(c.name),
+    setName: c.setName,
+    setCode: c.setCode,
+    number: cardNumber(c.number),
+    language: c.language === 'ja' ? 'ja' : 'en',
+    paidCents,
+    plan,
+    imageFrontUrl: c.imageUrl,
+    game: c.game,
+  });
+  return { ...card, grade: null };
+}
+
+/** Result sheet for a loose card: the best catalog match, or a short pick list when it's unclear. */
+function RawSheet({
+  raw,
+  setRaw,
+  rescan,
+  bottom,
+}: {
+  raw: RawRead;
+  setRaw: (f: (r: RawRead | null) => RawRead | null) => void;
+  rescan: () => void;
+  bottom: number;
+}) {
+  const [paid, setPaid] = useState('');
+  const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
+  const add = useVault((s) => s.add);
+  const owned = useVault((s) => s.cards);
+  const n = raw.read.numbers[0];
+  const printed = n.total ? `${n.num}/${n.total}` : n.num;
+  const best = raw.matches?.[raw.pick]?.card ?? null;
+  // Print: null is the catalog's own (base) printing. Holo vs reverse holo can't be told from a photo.
+  const [print, setPrint] = useState<number | null>(null);
+  const [choosingPrint, setChoosingPrint] = useState(false);
+  useEffect(() => {
+    setPrint(null);
+    setChoosingPrint(false);
+  }, [best?.productId]);
+  const prints = best ? printOptions(best) : [];
+  const known = !!best?.printings?.length;
+  const chosen = print != null ? prints[print] : null;
+  // The base printing needs no suffix; an unpriced fallback choice always gets one.
+  const printSuffix = chosen && (!known || print! > 0) ? chosen.name : null;
+  const printLabel = chosen?.name ?? (known ? prints[0].name : 'As listed');
+  const priceCents = chosen?.marketCents ?? best?.marketCents ?? null;
+  const preview = best ? rawCard(best, null, plan, printSuffix) : null;
+  const copies = preview ? owned.filter((c) => c.status === 'owned' && cardKey(c) === cardKey(preview)).length : 0;
+
+  const save = () => {
+    if (!best) return;
+    const dollars = parseInt(paid, 10);
+    const card = rawCard(best, Number.isFinite(dollars) ? dollars * 100 : null, plan, printSuffix);
+    add(card);
+    // The product is known, so card-match skips matching and spends no search credit.
+    matchNewCard(card, String(best.productId))
+      .then(() => refreshPrices([card]))
+      .catch(() => {});
+    router.replace(`/card/${card.id}`);
+  };
+
+  const choose = (i: number) => setRaw((r) => (r ? { ...r, pick: i, choosing: false } : r));
+  const again = (
+    <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
+      <Text style={[type.text, { color: color.secondary }]}>Scan again</Text>
+    </Pressable>
+  );
+
+  return (
+    <View style={[styles.sheet, { paddingBottom: bottom + space.l }]}>
+      <View style={styles.grabber} />
+      {raw.matches === null ? (
+        <>
+          <Text style={[type.text, { color: color.secondary }]}>Read from the card · {printed}</Text>
+          <Text style={[type.body, { color: color.ink, paddingVertical: space.l }]}>Finding the card</Text>
+        </>
+      ) : !best || !preview ? (
+        <>
+          <Text style={[type.section, { color: color.ink }]}>Couldn’t find card {printed}</Text>
+          <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
+            It may be misread or not in the catalog yet. Search for it by name instead.
+          </Text>
+          <PrimaryButton title="Search cards" onPress={() => router.replace('/search')} />
+          {again}
+        </>
+      ) : choosingPrint ? (
+        <>
+          <Text style={[type.section, { color: color.ink }]}>Which print is it?</Text>
+          <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
+            A photo can’t tell holo from reverse holo. Pick the one in your hand.
+          </Text>
+          <ScrollView style={{ maxHeight: size.rowVault * 5 }}>
+            {prints.map((x, i) => (
+              <View key={x.name}>
+                {i ? <Hairline /> : null}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setPrint(i);
+                    setChoosingPrint(false);
+                  }}
+                  style={({ pressed }) => [styles.field, pressed && { opacity: 0.6 }]}
+                >
+                  <Text style={[type.body, { color: color.ink, fontWeight: printLabel === x.name ? '600' : '400' }]}>{x.name}</Text>
+                  <Text style={[type.rowPrice, { color: color.ink }]}>{x.marketCents ? money(x.marketCents) : ''}</Text>
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+          <Pressable accessibilityRole="button" onPress={() => setChoosingPrint(false)} style={styles.quiet}>
+            <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
+          </Pressable>
+        </>
+      ) : raw.choosing ? (
+        <>
+          <Text style={[type.section, { color: color.ink }]}>Which card is it?</Text>
+          <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
+            {raw.matches.length} cards are numbered {printed}.
+          </Text>
+          <ScrollView style={{ maxHeight: size.rowVault * 5 }}>
+            {raw.matches.map((m, i) => (
+              <View key={m.card.productId}>
+                {i ? <Hairline /> : null}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => choose(i)}
+                  style={({ pressed }) => [styles.pickRow, pressed && { opacity: 0.6 }]}
+                >
+                  <SlabView card={rawCard(m.card, null, 'hold')} width={size.thumbW} posed={false} />
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
+                      {displayName(m.card.name)}
+                    </Text>
+                    <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+                      {m.card.setName}
+                      {m.card.language === 'ja' ? ' · Japanese' : ''}
+                    </Text>
+                  </View>
+                  <Text style={[type.rowPrice, { color: color.ink }]}>{m.card.marketCents ? money(m.card.marketCents) : '—'}</Text>
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+          {again}
+        </>
+      ) : (
+        <>
+          <Text style={[type.text, { color: color.secondary }]}>Read from the card · {printed}</Text>
+          <View style={styles.cardRow}>
+            <SlabView card={preview} width={size.sheetSlabW} posed={false} />
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={[type.title, { color: color.ink }]}>
+                {preview.name}
+              </Text>
+              <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
+                {best.setName} · {LANGUAGE_NAME[preview.language] ?? preview.language} · Raw
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{priceCents ? money(priceCents) : '—'}</Text>
+              <Text style={[type.secondary, { color: color.secondary }]}>{priceCents ? 'TCGplayer market' : 'no price yet'}</Text>
+            </View>
+          </View>
+          {copies ? (
+            <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>
+              You already have {copies} of this card raw. This would be your {ordinal(copies + 1)}.
+            </Text>
+          ) : null}
+          {raw.matches.length > 1 ? (
+            <Pressable accessibilityRole="button" onPress={() => setRaw((r) => (r ? { ...r, choosing: true } : r))} style={styles.notThis}>
+              <Text style={[type.text, { color: color.secondary }]}>
+                Not this card? {raw.matches.length - 1} other{raw.matches.length > 2 ? 's' : ''} ›
+              </Text>
+            </Pressable>
+          ) : null}
+          {prints.length > 1 ? (
+            <>
+              <Hairline />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Print, ${printLabel}`}
+                onPress={() => setChoosingPrint(true)}
+                style={({ pressed }) => [styles.field, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={[type.body, { color: color.ink }]}>Print</Text>
+                <Text style={[type.body, { color: color.secondary }]}>{printLabel} ›</Text>
+              </Pressable>
+            </>
+          ) : null}
+          <Hairline />
+          <View style={styles.field}>
+            <Text numberOfLines={1} style={[type.body, { color: color.ink, flexShrink: 0 }]}>What you paid</Text>
+            <TextInput
+              value={paid ? `$${paid}` : ''}
+              onChangeText={(t) => setPaid(t.replace(/[^0-9]/g, '').slice(0, 6))}
+              placeholder="$0"
+              placeholderTextColor={color.secondary}
+              keyboardType="number-pad"
+              style={[type.rowPrice, styles.paidInput]}
+              accessibilityLabel="What you paid"
+            />
+          </View>
+          <Hairline />
+          <View style={styles.field}>
+            <Text style={[type.body, { color: color.ink }]}>Plan</Text>
+            <Segmented
+              style={{ width: 150 }}
+              value={plan}
+              onChange={setPlan}
+              options={[
+                { value: 'hold', label: 'Hold' },
+                { value: 'sell', label: 'Sell' },
+              ]}
+            />
+          </View>
+          <Hairline />
+          <PrimaryButton style={{ marginTop: space.l }} title="Add to vault" onPress={save} />
+          {again}
+        </>
+      )}
+    </View>
+  );
+}
+
 /** 2 → "2nd", 3 → "3rd", 11 → "11th". */
 function ordinal(n: number): string {
   const teen = n % 100 >= 11 && n % 100 <= 13;
@@ -677,6 +942,8 @@ const styles = StyleSheet.create({
     paddingTop: space.m,
   },
   grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: color.hairline, marginBottom: space.l },
+  pickRow: { minHeight: size.rowVault, flexDirection: 'row', alignItems: 'center', gap: space.m },
+  notThis: { minHeight: size.touch, justifyContent: 'center' },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: space.l, paddingVertical: space.l },
   field: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   paidInput: { color: color.ink, textAlign: 'right', width: 120 },

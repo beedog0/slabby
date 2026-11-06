@@ -43,7 +43,11 @@ export type CatalogRow = {
   image_url: string;
   market_cents: number | null;
   low_cents: number | null;
+  /** Every priced printing (Normal, Holofoil, Reverse Holofoil, 1st Edition…), the base one first. */
+  printings: Printing[];
 };
+
+export type Printing = { name: string; market_cents: number | null; low_cents: number | null };
 
 const ext = (p: TcgProduct, key: string) => p.extendedData?.find((e) => e.name === key)?.value?.trim() || null;
 const cents = (d: number | null | undefined) => (d != null && d > 0 ? Math.round(d * 100) : null);
@@ -60,6 +64,22 @@ export function primaryPrice(prices: TcgPrice[]): { market_cents: number | null;
   if (!pool.length) return { market_cents: null, low_cents: null };
   const best = [...pool].sort((a, b) => (b.marketPrice ?? 0) - (a.marketPrice ?? 0))[0];
   return { market_cents: cents(best.marketPrice), low_cents: cents(best.lowPrice) };
+}
+
+/**
+ * A product's printings with their prices, the one primaryPrice picked first, the rest by market.
+ * Raw card scans can't tell a reverse holo from a holo, so the scan sheet lets you pick from these.
+ */
+export function printings(prices: TcgPrice[]): Printing[] {
+  const priced = prices
+    .filter((p) => p.subTypeName && (cents(p.marketPrice) != null || cents(p.lowPrice) != null))
+    .map((p) => ({ name: p.subTypeName!.trim(), market_cents: cents(p.marketPrice), low_cents: cents(p.lowPrice) }));
+  const base = primaryPrice(prices);
+  return priced.sort((a, b) => {
+    const ab = a.market_cents === base.market_cents ? 1 : 0;
+    const bb = b.market_cents === base.market_cents ? 1 : 0;
+    return bb - ab || (b.market_cents ?? 0) - (a.market_cents ?? 0);
+  });
 }
 
 /**
@@ -91,6 +111,7 @@ export function catalogRows(
       set_code: group.abbreviation?.trim() || null,
       image_url: `https://tcgplayer-cdn.tcgplayer.com/product/${p.productId}_400w.jpg`,
       ...primaryPrice(byProduct.get(p.productId) ?? []),
+      printings: printings(byProduct.get(p.productId) ?? []),
     });
   }
   return rows;

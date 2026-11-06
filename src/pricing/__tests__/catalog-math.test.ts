@@ -1,4 +1,4 @@
-import { catalogRows, isFresh, primaryPrice, summarize } from '../../../supabase/functions/_shared/catalog-math';
+import { catalogRows, isFresh, primaryPrice, printings, summarize } from '../../../supabase/functions/_shared/catalog-math';
 
 describe('primaryPrice', () => {
   it('prefers the base printing over a pricier reverse holo', () => {
@@ -14,6 +14,21 @@ describe('primaryPrice', () => {
   });
   it('is empty with no prices', () => {
     expect(primaryPrice([{ productId: 1, subTypeName: 'Normal', marketPrice: null }])).toEqual({ market_cents: null, low_cents: null });
+  });
+});
+
+describe('printings', () => {
+  it('lists every priced printing, the base one first', () => {
+    expect(
+      printings([
+        { productId: 1, subTypeName: 'Reverse Holofoil', marketPrice: 9.5, lowPrice: 8 },
+        { productId: 1, subTypeName: 'Holofoil', marketPrice: 4.25, lowPrice: 3 },
+        { productId: 1, subTypeName: '1st Edition Holofoil', marketPrice: null, lowPrice: null },
+      ]),
+    ).toEqual([
+      { name: 'Holofoil', market_cents: 425, low_cents: 300 },
+      { name: 'Reverse Holofoil', market_cents: 950, low_cents: 800 },
+    ]);
   });
 });
 
@@ -39,6 +54,7 @@ describe('catalogRows', () => {
       set_code: 'EVS',
       market_cents: 142050,
       image_url: 'https://tcgplayer-cdn.tcgplayer.com/product/10_400w.jpg',
+      printings: [{ name: 'Holofoil', market_cents: 142050, low_cents: 130000 }],
     });
   });
 });

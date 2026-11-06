@@ -24,7 +24,12 @@ export type CatalogCard = {
   imageUrl: string | null;
   marketCents: number | null;
   lowCents: number | null;
+  /** Priced printings, the base one first (0011_catalog_printings.sql). Empty until imported. */
+  printings?: Printing[];
 };
+
+/** One printing of a card and its TCGplayer market: "Holofoil", "Reverse Holofoil", "1st Edition". */
+export type Printing = { name: string; marketCents: number | null; lowCents: number | null };
 
 export const SEARCH_GRADES = ['psa10', 'psa9', 'psa8', 'psa7', 'psa6', 'psa5', 'psa4', 'psa3', 'psa2', 'psa1'] as const;
 export type SearchGrade = (typeof SEARCH_GRADES)[number];
@@ -43,7 +48,7 @@ export type SearchPrices = {
 type MockCard = CatalogCard & { mock: Record<'psa10' | 'psa9' | 'psa8', number> | null };
 const mockCatalog = catalogJson as MockCard[];
 
-type Row = {
+export type Row = {
   product_id: number;
   game: Game;
   language: string;
@@ -55,9 +60,10 @@ type Row = {
   image_url: string | null;
   market_cents: number | null;
   low_cents: number | null;
+  printings?: { name: string; market_cents: number | null; low_cents: number | null }[] | null;
 };
 
-const fromRow = (r: Row): CatalogCard => ({
+export const fromRow = (r: Row): CatalogCard => ({
   productId: r.product_id,
   game: r.game,
   language: r.language,
@@ -69,6 +75,7 @@ const fromRow = (r: Row): CatalogCard => ({
   imageUrl: r.image_url,
   marketCents: r.market_cents,
   lowCents: r.low_cents,
+  printings: (r.printings ?? []).map((x) => ({ name: x.name, marketCents: x.market_cents, lowCents: x.low_cents })),
 });
 
 /** Words a search is split into; "#205" and "205/165" both search the number. */
