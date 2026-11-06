@@ -1,5 +1,5 @@
 import { DEFAULT_RULES, type PricingRules } from '../../types';
-import { ask, buyMax, buyTarget, ebayNet, floor, roundTo, verdict, type Inputs } from '../rules';
+import { ask, buyMax, buyTarget, ebayNet, floor, floorWithBasis, looksLikeTypo, minFloorOverride, roundTo, verdict, vsEbay, type Inputs } from '../rules';
 
 const $ = (d: number) => d * 100;
 const base = (o: Partial<Inputs> = {}, r: Partial<PricingRules> = {}): Inputs => ({
@@ -47,8 +47,22 @@ describe('floor', () => {
   it('treats missing paid as 0', () => {
     expect(floor(base({ paidCents: null }))).toBe($(130));
   });
-  it('uses the override even if under paid', () => {
-    expect(floor(base({ overrides: { floor: $(90) } }))).toBe($(90));
+  it('uses the override', () => {
+    expect(floor(base({ overrides: { floor: $(110) } }))).toBe($(110));
+  });
+  it('raises an override under paid to paid when never-sell-at-a-loss is on', () => {
+    expect(floor(base({ overrides: { floor: $(90) } }))).toBe($(95));
+    expect(floor(base({ overrides: { floor: $(90) } }, { neverBelowPaid: false }))).toBe($(90));
+  });
+  it('says why the floor is what it is', () => {
+    expect(floorWithBasis(base()).basis).toBe('rule');
+    expect(floorWithBasis(base({ paidCents: $(140) })).basis).toBe('paid');
+    expect(floorWithBasis(base({ overrides: { floor: $(110) } })).basis).toBe('override');
+    expect(floorWithBasis(base({ overrides: { floor: $(500) } })).basis).toBe('ask');
+  });
+  it('limits the override stepper to paid only when the rule is on', () => {
+    expect(minFloorOverride({ paidCents: $(95), rules: DEFAULT_RULES })).toBe($(95));
+    expect(minFloorOverride({ paidCents: $(95), rules: { ...DEFAULT_RULES, neverBelowPaid: false } })).toBe(0);
   });
   it('never exceeds ask', () => {
     expect(floor(base({ paidCents: $(200) }))).toBe($(165));
@@ -88,5 +102,17 @@ describe('ebayNet', () => {
   });
   it('subtracts shipping when given', () => {
     expect(ebayNet($(100), 500)).toBe(8_145);
+  });
+});
+
+describe('offer helpers', () => {
+  it('flags offers over 3× market as likely typos', () => {
+    expect(looksLikeTypo($(451), $(150))).toBe(true);
+    expect(looksLikeTypo($(450), $(150))).toBe(false);
+  });
+  it('compares an offer with what eBay would net at market', () => {
+    // eBay nets $259.95 on $300 market.
+    expect(vsEbay($(250), $(300))).toBe(-995);
+    expect(vsEbay($(270), $(300))).toBe(1005);
   });
 });

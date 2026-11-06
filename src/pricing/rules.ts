@@ -27,21 +27,36 @@ export function ask(i: Inputs): number {
   return roundTo(applyPct(i.marketCents, i.rules.askPct), i.rules.roundToCents);
 }
 
+/** Why the floor is what it is, so screens can explain it. */
+export type FloorBasis = 'rule' | 'paid' | 'override' | 'ask';
+
 /**
- * The lowest you'll take: the override, else 30-day low × (1 + floor%), raised to what you
- * paid when "never sell at a loss" is on. Floor never exceeds ask; if it would, floor = ask.
+ * The lowest you'll take, and why: the override, else 30-day low × (1 + floor%). When
+ * "never sell at a loss" is on, either one is raised to what you paid. Floor never exceeds
+ * ask; if it would, floor = ask.
  */
-export function floor(i: Inputs): number {
+export function floorWithBasis(i: Inputs): { cents: number; basis: FloorBasis } {
   const a = ask(i);
-  let f: number;
-  if (i.overrides?.floor != null) {
-    f = i.overrides.floor;
-  } else {
-    const fromRule = roundTo(applyPct(i.low30Cents, i.rules.floorPct), i.rules.roundToCents);
-    const paid = i.rules.neverBelowPaid ? (i.paidCents ?? 0) : 0;
-    f = Math.max(fromRule, paid);
+  const overridden = i.overrides?.floor != null;
+  let f = overridden ? i.overrides!.floor! : roundTo(applyPct(i.low30Cents, i.rules.floorPct), i.rules.roundToCents);
+  let basis: FloorBasis = overridden ? 'override' : 'rule';
+  const paid = i.rules.neverBelowPaid ? (i.paidCents ?? 0) : 0;
+  if (paid > f) {
+    f = paid;
+    basis = 'paid';
   }
-  return Math.min(f, a);
+  if (f > a) return { cents: a, basis: 'ask' };
+  return { cents: f, basis };
+}
+
+/** The lowest you'll take. See floorWithBasis. */
+export function floor(i: Inputs): number {
+  return floorWithBasis(i).cents;
+}
+
+/** The lowest a per-card floor override can go: what you paid when "never sell at a loss" is on. */
+export function minFloorOverride(i: Pick<Inputs, 'paidCents' | 'rules'>): number {
+  return i.rules.neverBelowPaid ? (i.paidCents ?? 0) : 0;
 }
 
 /** Buying: what to open at. */
@@ -97,5 +112,19 @@ export function ebayNet(priceCents: number, shippingCents = EBAY_SHIP_ESTIMATE_C
 
 /** All four numbers for a card at once. */
 export function quote(i: Inputs) {
-  return { ask: ask(i), floor: floor(i), buyTarget: buyTarget(i), buyMax: buyMax(i) };
+  const f = floorWithBasis(i);
+  return { ask: ask(i), floor: f.cents, floorBasis: f.basis, buyTarget: buyTarget(i), buyMax: buyMax(i) };
+}
+
+/** An offer more than this many times market is probably a typo. */
+export const SANITY_MULTIPLE = 3;
+
+/** True when an offer is so far over market it is probably a typo. */
+export function looksLikeTypo(offerCents: number, marketCents: number): boolean {
+  return marketCents > 0 && offerCents > marketCents * SANITY_MULTIPLE;
+}
+
+/** Offer minus what eBay would net at market. Positive: the table beats eBay. */
+export function vsEbay(offerCents: number, marketCents: number): number {
+  return offerCents - ebayNet(marketCents);
 }

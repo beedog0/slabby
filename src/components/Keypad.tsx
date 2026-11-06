@@ -2,22 +2,29 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { color, space, type } from '../theme/tokens';
 
-type Props = { onDigit: (d: string) => void; onBackspace: () => void; bottomInset?: number };
+type Props = { onDigit: (d: string) => void; onBackspace: () => void; onClear?: () => void; bottomInset?: number };
 
 const ROWS = [
   ['1', '2', '3'],
   ['4', '5', '6'],
   ['7', '8', '9'],
-  ['', '0', 'del'],
+  ['clear', '0', 'del'],
 ];
 
-export function Keypad({ onDigit, onBackspace, bottomInset = 0 }: Props) {
+export function Keypad({ onDigit, onBackspace, onClear, bottomInset = 0 }: Props) {
   return (
     <View style={[styles.pad, { paddingBottom: space.s + bottomInset }]}>
       {ROWS.map((row, r) => (
         <View key={r} style={styles.row}>
           {row.map((k, i) => {
-            if (!k) return <View key={i} style={styles.blank} />;
+            if (k === 'clear') {
+              if (!onClear) return <View key={i} style={styles.blank} />;
+              return (
+                <Pressable key={i} accessibilityRole="button" accessibilityLabel="Clear" onPress={onClear} style={styles.blank}>
+                  <Text style={[type.body, { color: color.ink }]}>Clear</Text>
+                </Pressable>
+              );
+            }
             if (k === 'del') {
               return (
                 <Pressable key={i} accessibilityRole="button" accessibilityLabel="Delete" onPress={onBackspace} style={styles.blank}>
