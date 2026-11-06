@@ -4,7 +4,7 @@
 // Route: app/card/[id]/sales.tsx sits beside app/card/[id].tsx; Expo Router serves both.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardThumb } from '../../../src/components/CardThumb';
@@ -13,7 +13,7 @@ import { Segmented } from '../../../src/components/Segmented';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../../src/components/ui';
 import { ebaySoldUrl } from '../../../src/lib/ebay';
 import { gradeLabel, money, rowTitle, saleDay, saleLine, salesWord, shortDay } from '../../../src/lib/format';
-import { outlier, salesCount, salesPoints, salesValues, summarize } from '../../../src/pricing/sales';
+import { outlier, salesPoints, salesValues, summarize } from '../../../src/pricing/sales';
 import { useCardRow } from '../../../src/pricing/useCardRow';
 import { refreshCard } from '../../../src/services/comps';
 import type { SalesDays } from '../../../src/services/sales';
@@ -34,6 +34,7 @@ export default function SalesScreen() {
   const days: SalesDays = win === '90' ? 90 : 30;
   const sales = useSales(row?.card, days);
   const [pulling, setPulling] = useState(false);
+  const pullInFlight = useRef(false);
 
   if (!row) return null;
   const { card, price } = row;
@@ -41,27 +42,34 @@ export default function SalesScreen() {
   const values = result ? salesValues(result) : [];
   const points = result ? salesPoints(result) : [];
   const summary = summarize(values);
-  const count = result ? salesCount(result) : 0;
   const failed = sales.state === 'failed';
+  const stale = failed && sales.fetchedAt ? `Couldn't update · showing sales from ${shortDay(sales.fetchedAt)}` : null;
 
+  // One pull at a time; the spinner always clears, even when the refresh throws.
   const pull = async () => {
+    if (pullInFlight.current) return;
+    pullInFlight.current = true;
     setPulling(true);
-    await refreshCard(card, { force: true });
-    await sales.reload();
-    setPulling(false);
+    try {
+      await refreshCard(card, { force: true }).catch(() => {});
+      await sales.reload();
+    } finally {
+      pullInFlight.current = false;
+      setPulling(false);
+    }
   };
 
-  // Header: the sales' median; while loading with nothing cached, the cached price.
+  // Header: the sales' median. With no rows (loading, none, or offline with nothing cached) the
+  // cached price stands in, worded like Slab detail, so the header never disappears or jumps.
   let big: string | null = null;
   let line: string | null = null;
   if (summary) {
     big = money(summary.medianCents);
-    line = `median of ${salesWord(count)} · ${range(summary.lowCents, summary.highCents)}`;
-  } else if (!result && sales.state === 'loading' && price) {
+    line = stale ?? `median of ${salesWord(summary.count)} · ${range(summary.lowCents, summary.highCents)}`;
+  } else if (price) {
     big = money(price.marketCents);
-    line = days === 30 && price.sales30d > 0 ? `median of ${salesWord(price.sales30d)} · ${range(price.lowCents, price.highCents)}` : null;
+    line = card.grader === 'raw' || price.sales30d === 0 ? 'market' : `market · ${range(price.lowCents, price.highCents)}`;
   }
-  if (failed && result && sales.fetchedAt) line = `Couldn't update · showing sales from ${shortDay(sales.fetchedAt)}`;
 
   const listW = width - space.gutter * 2;
 
@@ -92,9 +100,8 @@ export default function SalesScreen() {
             <View style={{ paddingBottom: space.l }}>
               <DotStrip
                 points={points}
+                values={values}
                 medianCents={summary.medianCents}
-                lowCents={summary.lowCents}
-                highCents={summary.highCents}
                 floorCents={row.floor}
                 width={listW}
               />
@@ -134,6 +141,7 @@ export default function SalesScreen() {
               <Text style={[type.text, { color: color.secondary }]}>
                 {days === 30 ? 'No sales in 30 days.' : 'No sales in 90 days. Prices fill in when sales come in.'}
               </Text>
+              {stale ? <Text style={[type.secondary, { color: color.secondary, paddingTop: space.xs }]}>{stale}</Text> : null}
               {days === 30 ? (
                 <Pressable accessibilityRole="button" onPress={() => setWin('90')} hitSlop={12} style={{ paddingTop: space.m }}>
                   <Text style={[type.text, { color: color.ink }]}>Show 90 days</Text>

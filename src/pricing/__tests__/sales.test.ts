@@ -1,5 +1,5 @@
 import type { SalesResult } from '../../types';
-import { outlier, salesCount, salesPoints, salesValues, summarize } from '../sales';
+import { outlier, salesCount, salesPoints, salesValues, stripScale, summarize } from '../sales';
 
 describe('summarize', () => {
   it('median and 10th/90th percentile, like price_daily', () => {
@@ -79,5 +79,21 @@ describe('values from a result', () => {
   it('none is empty', () => {
     expect(salesValues({ kind: 'none' })).toEqual([]);
     expect(salesCount({ kind: 'none' })).toBe(0);
+  });
+});
+
+describe('stripScale', () => {
+  it('scales to the non-outliers with padding and flags the outliers', () => {
+    const v = [1000, 1010, 1020, 1030, 1040, 1050, 400, 5000];
+    const s = stripScale(v, v);
+    expect(s.flags).toEqual([null, null, null, null, null, null, 'below', 'above']);
+    expect(s.lo).toBeCloseTo(1000 - 50 * 0.04);
+    expect(s.hi).toBeCloseTo(1050 + 50 * 0.04);
+  });
+  it('all equal: pads around the price', () => {
+    expect(stripScale([1000, 1000, 1000], [1000, 1000, 1000])).toEqual({ lo: 960, hi: 1040, flags: [null, null, null] });
+  });
+  it('empty is a harmless unit scale', () => {
+    expect(stripScale([], [])).toEqual({ lo: 0, hi: 1, flags: [] });
   });
 });

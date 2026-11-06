@@ -72,3 +72,21 @@ export function salesCount(r: SalesResult): number {
   if (r.kind === 'daily') return r.rows.reduce((n, d) => n + Math.min(daySales(d.sales), DAY_CAP), 0);
   return 0;
 }
+
+export type StripScale = { lo: number; hi: number; flags: ('above' | 'below' | null)[] };
+
+/**
+ * The dot strip's price scale: the range of the points that aren't outliers (judged against
+ * `values`), padded by `pad` of that range (or of the price when they're all equal). Outliers
+ * are flagged so the strip pins them at its edges instead of squashing everything else.
+ */
+export function stripScale(points: number[], values: number[], pad = 0.04): StripScale {
+  const flags = points.map((p) => outlier(p, values));
+  const inside = points.filter((p, i) => !flags[i] && Number.isFinite(p));
+  const base = inside.length ? inside : points.filter(Number.isFinite);
+  if (!base.length) return { lo: 0, hi: 1, flags };
+  const lo = Math.min(...base);
+  const hi = Math.max(...base);
+  const p = hi > lo ? (hi - lo) * pad : Math.max(1, lo * pad);
+  return { lo: lo - p, hi: hi + p, flags };
+}
