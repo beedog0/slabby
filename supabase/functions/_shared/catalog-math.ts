@@ -123,8 +123,17 @@ export function summarize(rows: Daily[]): Summary | null {
   };
 }
 
-/** Grades shown on a searched card, in toggle order. Keys match PPT's ebay.priceHistory. */
-export const SEARCH_GRADES = ['psa10', 'psa9', 'psa8'] as const;
+/**
+ * Grades kept for a searched card, high to low. Keys match PPT's ebay.priceHistory. All ten come
+ * from the same 3-credit call, so the low grades cost nothing extra; the app shows 10/9/8 up front
+ * and 7 to 1 behind "Lower".
+ */
+export const SEARCH_GRADES = ['psa10', 'psa9', 'psa8', 'psa7', 'psa6', 'psa5', 'psa4', 'psa3', 'psa2', 'psa1'] as const;
+
+/** A cached answer from before low grades were kept has no psa7 key at all; fetch it again once. */
+export function hasAllGrades(payload: { grades?: Record<string, unknown> } | null | undefined): boolean {
+  return !!payload?.grades && SEARCH_GRADES.every((g) => g in payload.grades!);
+}
 
 /** How long an opened card's prices are reused before PPT is asked again. */
 export const CACHE_HOURS = 24;

@@ -24,7 +24,7 @@ export const ACRYLIC = {
   recessLight: 'rgba(255,255,255,0.9)',
 };
 
-const DESCRIPTOR: Record<number, string> = { 10: 'GEM MT', 9: 'MINT', 8: 'NM-MT', 7: 'NM', 6: 'EX-MT', 5: 'EX' };
+const DESCRIPTOR: Record<number, string> = { 10: 'GEM MT', 9: 'MINT', 8: 'NM-MT', 7: 'NM', 6: 'EX-MT', 5: 'EX', 4: 'VG-EX', 3: 'VG', 2: 'GOOD', 1: 'PR' };
 
 /** The case body shared by both faces: acrylic, bevelled outer edge, the frame step. */
 function CaseBody({ L, children }: { L: SlabLayout; children: ReactNode }) {
