@@ -175,15 +175,55 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   };
 }
 
+// ── Auto-read on the scan screen ────────────────────────────────────────────────────────────────
+// Each frame is read on its own, but a slab held at a slight angle rarely gives every field in one
+// frame. So reads of the same card are merged: the grade can come from one frame and the cert from
+// the next. The grade is never guessed: no card is added without a grade number read off the label.
+
+export type AutoRead = { label: ParsedLabel; hits: number; misses: number } | null;
+
+const norm = (s?: string) => (s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const graded = (g?: string) => !!g && (/\d$/.test(g) || /^AUTH/.test(g));
+
+function sameCard(a: ParsedLabel, b: ParsedLabel): boolean {
+  const x = a.payload.PSACert;
+  const y = b.payload.PSACert;
+  if (x.CertNumber && y.CertNumber) return x.CertNumber === y.CertNumber;
+  return !!x.Subject && norm(x.Subject) === norm(y.Subject);
+}
+
+function merge(a: ParsedLabel, b: ParsedLabel): ParsedLabel {
+  const x = a.payload.PSACert;
+  const y = b.payload.PSACert;
+  const PSACert = {
+    ...x,
+    CertNumber: x.CertNumber || y.CertNumber,
+    Year: x.Year ?? y.Year,
+    Brand: x.Brand ?? y.Brand,
+    CardNumber: x.CardNumber ?? y.CardNumber,
+    Subject: x.Subject ?? y.Subject,
+    Variety: x.Variety ?? y.Variety,
+    CardGrade: graded(x.CardGrade) ? x.CardGrade : graded(y.CardGrade) ? y.CardGrade : (x.CardGrade ?? y.CardGrade),
+  };
+  return { payload: { PSACert }, complete: !!(PSACert.Subject && PSACert.CertNumber && graded(PSACert.CardGrade)) };
+}
+
+/** Frames without a label we tolerate (a glare, a wobble) before forgetting what we've read. */
+const MISS_LIMIT = 3;
+
 /**
- * Auto-read on the scan screen: a key for a read that's good enough to act on without a tap (name,
- * grade number and cert all found), or null. A half-framed read often has the name and "GEM MT"
- * but not the 10 or the cert, and two of those agreeing added a gradeless card. Two reads in a row with the same key mean the label is in frame and
- * held steady, so a blurry or half-framed read never adds the wrong card.
+ * Feed one frame's parse. Returns the new state, and the label to add when it's ready: name and
+ * grade number plus the cert, or name and grade number seen in two frames when the cert won't read.
  */
-export function steadyKey(p: ParsedLabel | null): string | null {
-  const c = p?.payload.PSACert;
-  if (!p?.complete || !c?.Subject || !c.CardGrade) return null;
-  const norm = (s?: string) => (s ?? '').toUpperCase().replace(/[^A-Z0-9.]/g, '');
-  return [c.Subject, c.CardNumber, c.CardGrade, c.CertNumber].map(norm).join('|');
+export function stepAutoRead(state: AutoRead, next: ParsedLabel | null): { state: AutoRead; ready: ParsedLabel | null } {
+  if (!next?.payload.PSACert.Subject) {
+    if (!state) return { state: null, ready: null };
+    const misses = state.misses + 1;
+    return { state: misses >= MISS_LIMIT ? null : { ...state, misses }, ready: null };
+  }
+  const label = state && sameCard(state.label, next) ? merge(state.label, next) : merge(next, next);
+  const hits = state && sameCard(state.label, next) ? state.hits + 1 : 1;
+  const c = label.payload.PSACert;
+  const ready = graded(c.CardGrade) && (!!c.CertNumber || hits >= 2) ? label : null;
+  return { state: ready ? null : { label, hits, misses: 0 }, ready };
 }

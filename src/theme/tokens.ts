@@ -28,6 +28,8 @@ export const color = {
   // Camera screen only: dims the picture outside the label window, and backs the hint.
   scanScrim: 'rgba(0,0,0,0.55)',
   scanHint: 'rgba(0,0,0,0.6)',
+  /** Hairline marking where the label ends inside the slab frame. */
+  scanGuide: 'rgba(255,255,255,0.45)',
   /** The label window's wash when a read locks. */
   scanLocked: 'rgba(255,176,32,0.18)',
 } as const;
