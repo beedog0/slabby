@@ -74,6 +74,8 @@ export const size = {
   grabberH: 5,
   /** Home … dropdown width. */
   dropdownW: 224,
+  /** Select mode ring/check on a slab's corner. */
+  selectMark: 24,
 } as const;
 
 /** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */

@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
+import { SelectMark } from './SelectMark';
 import { color, shadow, size, space } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
 
@@ -25,11 +26,13 @@ export function ShelfView({ rows, width, actions }: { rows: CardRow[]; width: nu
               <Pressable
                 key={r.card.id}
                 accessibilityRole="button"
+                accessibilityState={actions?.selected ? { selected: actions.selected.has(r.card.id) } : undefined}
                 onPress={() => (actions?.onPress ? actions.onPress(r) : router.push(`/card/${r.card.id}`))}
                 onLongPress={actions?.onLongPress ? () => actions.onLongPress!(r) : undefined}
                 style={({ pressed }) => [pressed && { opacity: 0.85 }, dimmed(actions, r) && { opacity: 0.35 }]}
               >
                 <SlabView card={r.card} width={slabW} posed={false} />
+                {actions?.selected ? <SelectMark on={actions.selected.has(r.card.id)} /> : null}
               </Pressable>
             ))}
           </View>

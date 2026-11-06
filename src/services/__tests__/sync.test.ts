@@ -36,4 +36,10 @@ describe('mergeVault', () => {
     expect(toPush).toEqual([localOnly]);
     expect(merged.map((c) => c.id)).toEqual([localOnly.id, mew.id]);
   });
+  it('keeps slabs removed on this phone out, even while the server still has them', () => {
+    const other = { ...mew, id: uuid() };
+    const { merged, toPush } = mergeVault([], [mew, other], [mew.id]);
+    expect(merged.map((c) => c.id)).toEqual([other.id]);
+    expect(toPush).toEqual([]);
+  });
 });

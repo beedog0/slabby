@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
 import type { CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
+import { SelectMark } from './SelectMark';
 import { color, space, type } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
 import { slabLayout } from '../slab/geometry';
@@ -23,12 +24,16 @@ export function GridView({ rows, width, actions }: { rows: CardRow[]; width: num
         <Pressable
           key={r.card.id}
           accessibilityRole="button"
+          accessibilityState={actions?.selected ? { selected: actions.selected.has(r.card.id) } : undefined}
           onPress={() => (actions?.onPress ? actions.onPress(r) : router.push(`/card/${r.card.id}`))}
           onLongPress={actions?.onLongPress ? () => actions.onLongPress!(r) : undefined}
           style={({ pressed }) => [{ width: cellW }, pressed && { opacity: 0.85 }, dimmed(actions, r) && { opacity: 0.35 }]}
         >
           <View style={styles.slab}>
-            <SlabView card={r.card} width={slabW} posed={false} />
+            <View>
+              <SlabView card={r.card} width={slabW} posed={false} />
+              {actions?.selected ? <SelectMark on={actions.selected.has(r.card.id)} /> : null}
+            </View>
           </View>
           {/* Same width as the label, so the text lines up with its left edge. */}
           <View style={{ width: textW, alignSelf: 'center' }}>
