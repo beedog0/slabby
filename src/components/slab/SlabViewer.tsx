@@ -123,13 +123,18 @@ export function SlabViewer({ card, visible, onClose }: { card: Card; visible: bo
     }),
   ).current;
 
-  const scale = Animated.multiply(zoom, enter.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] }));
+  // The slab is laid out at full-zoom size and scaled down, so iOS draws its text, edges and
+  // art at the zoomed resolution. Scaling a small render up is what made it pixelate.
+  const scale = Animated.multiply(
+    Animated.multiply(zoom, 1 / ZOOM_MAX),
+    enter.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] }),
+  );
 
   return (
     <Modal visible={visible} animationType="fade" presentationStyle="overFullScreen" transparent statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.page} {...pan.panHandlers}>
         <Animated.View style={{ transform: [{ scale }], opacity: enter }}>
-          <Slab3D card={card} width={slabW} yaw={yaw} pitch={pitch} sharp />
+          <Slab3D card={card} width={slabW * ZOOM_MAX} yaw={yaw} pitch={pitch} sharp />
         </Animated.View>
         <Animated.Text style={[type.secondary, styles.hint, { bottom: insets.bottom + space.xxl, opacity: hint }]}>
           Drag to turn · pinch to zoom
