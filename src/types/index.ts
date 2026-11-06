@@ -22,6 +22,8 @@ export type Card = {
   language: string;
   year: number | null;
   imageFrontUrl: string | null;
+  /** Where the card is foil, when known (print picker). Otherwise worked out in foilOf(). */
+  finish?: 'holo' | 'reverse' | 'fullart' | null;
   /** Placeholder art color until card photos are wired up. */
   artColor?: string;
   /** Bought in con mode's Buying: which con session, and the market for that grade when you paid. */
