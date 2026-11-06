@@ -1,13 +1,16 @@
 // Card search: any card in TCGplayer's catalog (Pokémon EN/JP, One Piece, Riftbound), not just
 // the vault. Results show tonight's raw market; open a card for PSA prices with charts.
 // Typing, filtering and sorting only query our own catalog table, never a paid API.
-// Quiet controls under the field: "Filter" (language, rarity, set) and the sort dropdown.
+// Quiet controls under the field: "Filter" (language, rarity, set), the sort dropdown, and
+// List / Grid (remembered, like home's view switch). Scrolling down slides the title, field and
+// game tabs away and keeps that control row pinned; scrolling up brings them back.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { Animated, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
+import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
@@ -15,6 +18,11 @@ import { buyPrices, cardNumber, displayName, type Game } from '../../src/service
 import {
   catalogProgress,
   changeOf,
+  chips,
+  LANGUAGE_NAME,
+  toggle,
+  withoutChip,
+  type Lang,
   EMPTY_QUERY,
   filterCount,
   findCards,
@@ -26,17 +34,22 @@ import {
   type Query,
   type Sort,
 } from '../../src/services/searchFilters';
+import { useDisplay } from '../../src/store/display';
 import { useRules } from '../../src/store/rules';
 import { color, radius, shadow, size, space, type } from '../../src/theme/tokens';
 import type { PricingRules } from '../../src/types';
 
 type GameFilter = 'all' | Game;
+const GRID_GAP = space.l;
 
 export default function Search() {
   const insets = useSafeAreaInsets();
   // Con mode opens search with ?con=1: each result also shows what to pay, from the buying rules.
   const con = useLocalSearchParams<{ con?: string }>().con === '1';
   const rules = useRules((s) => s.rules);
+  const { searchLayout: layout, setSearchLayout } = useDisplay();
+  const { width } = useWindowDimensions();
+  const cellW = Math.floor((width - space.gutter * 2 - GRID_GAP) / 2);
   const [f, setF] = useState<Query>(EMPTY_QUERY);
   const set = (patch: Partial<Query>) => setF((prev) => ({ ...prev, ...patch }));
   const [results, setResults] = useState<Found[]>([]);
@@ -46,6 +59,27 @@ export default function Search() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuTop, setMenuTop] = useState(0);
+  const [topH, setTopH] = useState(0); // the part that slides away
+  const [headerH, setHeaderH] = useState(0); // all of it, pinned row included
+  const controlsRef = useRef<ComponentRef<typeof View>>(null);
+  const listRef = useRef<FlatList<Found>>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  // Follows scroll direction: down hides up to topH, any scroll up reveals again.
+  const slide = useMemo(
+    () =>
+      Animated.diffClamp(scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' }), 0, Math.max(topH, 1)).interpolate({
+        inputRange: [0, Math.max(topH, 1)],
+        outputRange: [0, -Math.max(topH, 1)],
+      }),
+    [scrollY, topH],
+  );
+  const openSort = () => {
+    // The row moves with the header, so measure where it is now.
+    controlsRef.current?.measureInWindow((_x, y, _w, h) => {
+      setMenuTop(y + h);
+      setSortOpen(true);
+    });
+  };
   const latest = useRef(0);
 
   useEffect(() => {
@@ -61,6 +95,7 @@ export default function Search() {
     }
     const id = ++latest.current;
     setState('loading');
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
     const t = setTimeout(() => {
       findCards(f)
         .then((r) => {
@@ -93,77 +128,132 @@ export default function Search() {
   const sortLabel = SORTS.find((s) => s.value === f.sort)!.label;
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
-      <View style={styles.nav}>
-        <IconButton label="Back" onPress={() => router.back()}>
-          <BackIcon />
-        </IconButton>
-      </View>
-      <View style={styles.gutter}>
-        <Text style={[type.title, { color: color.ink, paddingBottom: space.l }]}>{con ? 'Search to buy' : 'Search'}</Text>
-        <View style={styles.field}>
-          <SearchIcon s={18} tint={color.secondary} />
-          <TextInput
-            value={f.q}
-            onChangeText={(q) => set({ q })}
-            autoFocus
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-            placeholder={f.set ? `Search ${f.set.name}` : 'Umbreon VMAX 215'}
-            placeholderTextColor={color.secondary}
-            style={[type.body, styles.input]}
-            accessibilityLabel="Search cards"
-          />
+    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+      <Animated.View
+        style={[styles.header, { top: insets.top, transform: [{ translateY: slide }] }]}
+        onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
+      >
+        <View onLayout={(e) => setTopH(e.nativeEvent.layout.height)}>
+          <View style={styles.nav}>
+            <IconButton label="Back" onPress={() => router.back()}>
+              <BackIcon />
+            </IconButton>
+          </View>
+          <View style={styles.gutter}>
+            <Text style={[type.title, { color: color.ink, paddingBottom: space.l }]}>{con ? 'Search to buy' : 'Search'}</Text>
+            <View style={styles.field}>
+              <SearchIcon s={18} tint={color.secondary} />
+              <TextInput
+                value={f.q}
+                onChangeText={(q) => set({ q })}
+                autoFocus
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+                placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Umbreon VMAX 215'}
+                placeholderTextColor={color.secondary}
+                style={[type.body, styles.input]}
+                accessibilityLabel="Search cards"
+              />
+            </View>
+            <Segmented<GameFilter>
+              style={{ marginTop: space.m }}
+              value={f.game ?? 'all'}
+              onChange={(g) =>
+                // Sets and rarities belong to one game; Japanese only exists for Pokémon.
+                set({
+                  game: g === 'all' ? null : g,
+                  sets: [],
+                  rarities: [],
+                  languages: g === 'all' || g === 'pokemon' ? f.languages : [],
+                })
+              }
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'pokemon', label: 'Pokémon' },
+                { value: 'onepiece', label: 'One Piece' },
+                { value: 'riftbound', label: 'Riftbound' },
+              ]}
+            />
+          </View>
         </View>
-        <Segmented<GameFilter>
-          style={{ marginTop: space.m }}
-          value={f.game ?? 'all'}
-          onChange={(g) =>
-            // Sets and rarities belong to one game; Japanese only exists for Pokémon.
-            set({
-              game: g === 'all' ? null : g,
-              set: null,
-              rarities: [],
-              language: g === 'all' || g === 'pokemon' ? f.language : null,
-            })
-          }
-          options={[
-            { value: 'all', label: 'All' },
-            { value: 'pokemon', label: 'Pokémon' },
-            { value: 'onepiece', label: 'One Piece' },
-            { value: 'riftbound', label: 'Riftbound' },
-          ]}
+
+        {runnable(f) ? (
+          <View ref={controlsRef} style={styles.controls}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Filter" onPress={() => setFilterOpen(true)} hitSlop={8} style={styles.control}>
+              <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{nFilters ? `Filter · ${nFilters}` : 'Filter'}</Text>
+            </Pressable>
+            <View style={styles.controlsRight}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Sort" onPress={openSort} hitSlop={8} style={styles.control}>
+                <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{sortLabel} ▾</Text>
+              </Pressable>
+              <ViewSwitch value={layout} onChange={setSearchLayout} modes={SEARCH_MODES} />
+            </View>
+          </View>
+        ) : null}
+        {runnable(f) && filterCount(f) ? (
+          // What's applied, newest last; tap one to take it off.
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} keyboardShouldPersistTaps="handled">
+            {chips(f).map((c) => (
+              <Pressable
+                key={`${c.kind}:${c.key}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${c.label}`}
+                onPress={() => setF((prev) => withoutChip(prev, c))}
+                style={({ pressed }) => [styles.chip, pressed && { opacity: 0.6 }]}
+              >
+                <Text numberOfLines={1} style={[type.secondary, { color: color.ink, maxWidth: 180 }]}>
+                  {c.label}
+                </Text>
+                <Text style={[type.secondary, { color: color.secondary }]}>×</Text>
+              </Pressable>
+            ))}
+            {filterCount(f) > 1 ? (
+              <Pressable accessibilityRole="button" onPress={() => set({ languages: [], sets: [], rarities: [] })} hitSlop={8} style={styles.chipClear}>
+                <Text style={[type.secondary, { color: color.secondary }]}>Clear</Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
+        ) : null}
+        {/* A hairline under the pinned row once results scroll beneath it. */}
+        <Animated.View
+          style={{
+            height: StyleSheet.hairlineWidth * 2,
+            backgroundColor: color.hairline,
+            opacity: scrollY.interpolate({ inputRange: [0, 8], outputRange: [0, 1], extrapolate: 'clamp' }),
+          }}
         />
-      </View>
+      </Animated.View>
+      {/* Covers the status bar so the header slides under it. */}
+      <View style={[styles.statusCover, { height: insets.top }]} />
 
-      {runnable(f) ? (
-        <View style={styles.controls} onLayout={(e) => setMenuTop(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Filter" onPress={() => setFilterOpen(true)} hitSlop={8} style={styles.control}>
-            <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{nFilters ? `Filter · ${nFilters}` : 'Filter'}</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Sort" onPress={() => setSortOpen(true)} hitSlop={8} style={styles.control}>
-            <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{sortLabel} ▾</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {hint ? (
-        <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.xl }]}>{hint}</Text>
-      ) : (
-        <FlatList
-          data={results}
+      {headerH ? (
+        <Animated.FlatList
+          ref={listRef}
+          key={layout}
+          data={hint ? [] : results}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          scrollEventThrottle={16}
+          scrollIndicatorInsets={{ top: headerH }}
+          style={{ paddingTop: insets.top }}
+          ListEmptyComponent={hint ? <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text> : undefined}
+          numColumns={layout === 'grid' ? 2 : 1}
           keyExtractor={(c) => String(c.productId)}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: insets.bottom + space.xl }}
-          ItemSeparatorComponent={() => <Hairline inset={space.gutter + size.thumbW + space.m} />}
-          renderItem={({ item }) => (
-            <ResultRow card={item} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
-          )}
+          contentContainerStyle={{ paddingBottom: insets.bottom + space.xl, paddingTop: headerH + (layout === 'grid' ? space.m : 0) }}
+          columnWrapperStyle={layout === 'grid' ? styles.gridRow : undefined}
+          ItemSeparatorComponent={layout === 'grid' ? undefined : () => <Hairline inset={space.gutter + size.thumbW + space.m} />}
+          renderItem={({ item }) =>
+            layout === 'grid' ? (
+              <ResultTile card={item} width={cellW} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+            ) : (
+              <ResultRow card={item} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+            )
+          }
         />
-      )}
+      ) : null}
 
       <SortMenu open={sortOpen} top={menuTop} sort={f.sort} onSort={(sort) => set({ sort })} onClose={() => setSortOpen(false)} />
       <FilterSheet
@@ -202,8 +292,10 @@ function SortMenu({ open, top, sort, onSort, onClose }: { open: boolean; top: nu
 }
 
 /**
- * Filters for the current search, from what actually matches it (with counts): language
- * (Pokémon only), rarity (pick several) and one set. Changes apply as you tap.
+ * Filters for the current search, from what actually matches it (with counts). Every group is
+ * pick-several: languages (Pokémon only), rarities, sets. Changes apply as you tap.
+ * The scrim fades and the sheet slides as one motion, starting only once the sheet's height is
+ * known, so nothing dims before the sheet is there.
  */
 function FilterSheet({
   open,
@@ -222,21 +314,54 @@ function FilterSheet({
   onClose: () => void;
   bottom: number;
 }) {
+  const [mounted, setMounted] = useState(open);
+  const [sheetH, setSheetH] = useState(0);
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (open) setMounted(true);
+    else if (mounted) {
+      Animated.timing(progress, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setMounted(false));
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (open && mounted && sheetH) {
+      progress.setValue(0);
+      Animated.timing(progress, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    }
+  }, [open, mounted, sheetH]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!mounted) return null;
+
   const showLanguage = !f.game || f.game === 'pokemon';
   const sets = facets?.sets ?? [];
   const rarities = facets?.rarities ?? [];
-  // Keep a picked set or rarity visible even when it falls out of the facet list.
-  const setRows = f.set && !sets.some((s) => s.id === f.set!.id) ? [{ ...f.set, n: 0 }, ...sets] : sets;
+  const languages = (['en', 'ja'] as Lang[]).map((key) => ({ key, n: facets?.languages.find((x) => x.key === key)?.n ?? 0 }));
+  // Keep picked sets and rarities visible even when they fall out of the facet list.
+  const setRows = [...f.sets.filter((x) => !sets.some((s) => s.id === x.id)).map((x) => ({ ...x, n: 0 })), ...sets];
   const rarityRows = [...f.rarities.filter((r) => !rarities.some((x) => x.key === r)).map((key) => ({ key, n: 0 })), ...rarities];
+
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} accessibilityLabel="Close" />
-      <View style={[styles.sheet, { paddingBottom: bottom + space.l }]}>
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, { opacity: progress }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+      </Animated.View>
+      <Animated.View
+        onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
+        style={[
+          styles.sheet,
+          { paddingBottom: bottom + space.l },
+          sheetH
+            ? { transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [sheetH, 0] }) }] }
+            : { opacity: 0 },
+        ]}
+      >
         <View style={styles.grabber} />
         <View style={styles.sheetHead}>
           <Text style={[type.section, { color: color.ink }]}>Filter</Text>
           {filterCount(f) ? (
-            <Pressable accessibilityRole="button" onPress={() => onChange({ language: null, set: null, rarities: [] })} hitSlop={8}>
+            <Pressable accessibilityRole="button" onPress={() => onChange({ languages: [], sets: [], rarities: [] })} hitSlop={8}>
               <Text style={[type.text, { color: color.secondary }]}>Clear</Text>
             </Pressable>
           ) : null}
@@ -245,17 +370,15 @@ function FilterSheet({
           {showLanguage ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Language</Text>
-              <View style={styles.gutter}>
-                <Segmented<'all' | 'en' | 'ja'>
-                  value={f.language ?? 'all'}
-                  onChange={(l) => onChange({ language: l === 'all' ? null : l, set: null, rarities: [] })}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'en', label: 'English' },
-                    { value: 'ja', label: 'Japanese' },
-                  ]}
+              {languages.map((l) => (
+                <CheckRow
+                  key={l.key}
+                  label={LANGUAGE_NAME[l.key]}
+                  detail={l.n ? String(l.n) : undefined}
+                  on={f.languages.includes(l.key)}
+                  onPress={() => onChange({ languages: toggle(f.languages, l.key) })}
                 />
-              </View>
+              ))}
             </View>
           ) : null}
 
@@ -268,9 +391,7 @@ function FilterSheet({
                   label={r.key}
                   detail={r.n ? String(r.n) : undefined}
                   on={f.rarities.includes(r.key)}
-                  onPress={() =>
-                    onChange({ rarities: f.rarities.includes(r.key) ? f.rarities.filter((x) => x !== r.key) : [...f.rarities, r.key] })
-                  }
+                  onPress={() => onChange({ rarities: toggle(f.rarities, r.key) })}
                 />
               ))}
             </View>
@@ -279,13 +400,13 @@ function FilterSheet({
           {setRows.length ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Set</Text>
-              {setRows.slice(0, 40).map((s) => (
+              {setRows.slice(0, 40).map((x) => (
                 <CheckRow
-                  key={s.id}
-                  label={s.name}
-                  detail={s.n ? String(s.n) : undefined}
-                  on={f.set?.id === s.id}
-                  onPress={() => onChange({ set: f.set?.id === s.id ? null : { id: s.id, name: s.name } })}
+                  key={x.id}
+                  label={x.name}
+                  detail={x.n ? String(x.n) : undefined}
+                  on={f.sets.some((y) => y.id === x.id)}
+                  onPress={() => onChange({ sets: toggle(f.sets, { id: x.id, name: x.name }, (a, b) => a.id === b.id) })}
                 />
               ))}
             </View>
@@ -298,7 +419,7 @@ function FilterSheet({
         <View style={styles.gutter}>
           <PrimaryButton title={`Show ${count} ${count === 1 ? 'card' : 'cards'}`} onPress={onClose} />
         </View>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -316,6 +437,40 @@ function CheckRow({ label, detail, on, onPress }: { label: string; detail?: stri
       </Text>
       {detail ? <Text style={[type.secondary, { color: color.secondary }]}>{detail}</Text> : null}
       <Text style={[type.text, { color: color.ink, width: 16, textAlign: 'right' }]}>{on ? '✓' : ''}</Text>
+    </Pressable>
+  );
+}
+
+type ResultProps = { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number };
+
+const openCard = (card: Found, con: boolean) => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`);
+
+/** Grid tile: the card photo, then name, set · number and price, like home's grid. */
+function ResultTile({ card, width, con, rules, change, days }: ResultProps & { width: number }) {
+  const no = cardNumber(card.number);
+  const buy = con ? buyPrices(card.marketCents, rules) : null;
+  return (
+    <Pressable accessibilityRole="button" onPress={() => openCard(card, con)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
+      <View style={[styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
+        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}
+      </View>
+      <View style={{ gap: 2, paddingTop: space.m }}>
+        <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
+          {displayName(card.name)}
+        </Text>
+        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+          {[no && `#${no}`, card.language === 'ja' ? 'JP' : null, card.setName].filter(Boolean).join(' · ')}
+        </Text>
+        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+          raw <Text style={{ color: color.ink }}>{card.marketCents != null ? money(card.marketCents) : '—'}</Text>
+          {change != null ? <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{`  ${pct(change)} ${days}d`}</Text> : null}
+        </Text>
+        {buy ? (
+          <Text numberOfLines={1} style={[type.secondary, { color: color.ink }]}>
+            pay {money(buy.target)}–{money(buy.max).replace('$', '')}
+          </Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -388,6 +543,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: space.m,
     paddingBottom: space.xs,
+    backgroundColor: color.canvas,
   },
   control: { minHeight: size.touch - 12, justifyContent: 'center' },
   menu: {
@@ -422,5 +578,21 @@ const styles = StyleSheet.create({
   },
   sheetSection: { paddingTop: space.m, paddingBottom: space.s },
   sectionTitle: { color: color.ink, fontWeight: '600', paddingHorizontal: space.gutter, paddingBottom: space.s },
+  header: { position: 'absolute', left: 0, right: 0, zIndex: 1, backgroundColor: color.canvas },
+  statusCover: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, backgroundColor: color.canvas },
+  chips: { gap: space.s, paddingHorizontal: space.gutter, paddingBottom: space.s, alignItems: 'center' },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    height: size.chip,
+    paddingHorizontal: space.m,
+    borderRadius: radius.chip,
+    backgroundColor: color.well,
+  },
+  chipClear: { height: size.chip, justifyContent: 'center', paddingHorizontal: space.xs },
+  controlsRight: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginRight: -10 },
+  gridRow: { gap: GRID_GAP, paddingHorizontal: space.gutter, paddingBottom: space.xxl },
+  tileArt: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
   thumb: { width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, backgroundColor: color.well, overflow: 'hidden' },
 });
