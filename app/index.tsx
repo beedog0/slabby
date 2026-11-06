@@ -21,7 +21,7 @@ import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
 import type { SlabActions } from '../src/components/collection/actions';
-import { confirmRemove } from '../src/components/collection/remove';
+import { removeWithUndo } from '../src/components/collection/remove';
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { openSlabMenu } from '../src/components/menu/Menu';
 import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
@@ -197,7 +197,7 @@ export default function Home() {
         { label: 'Open', onPress: () => router.push(`/card/${row.card.id}`) },
         { label: 'Select', onPress: () => startSelecting(row.card.id) },
       ],
-      [{ label: 'Remove from vault', onPress: () => confirmRemove([row.card]) }],
+      [{ label: 'Remove from vault', onPress: () => removeWithUndo([row.card]) }],
     ]);
   };
 
@@ -207,7 +207,7 @@ export default function Home() {
     if (picks.length > MAX_SHARE) Alert.alert(`Sharing the first ${MAX_SHARE}`, `One image fits up to ${MAX_SHARE} slabs.`);
     shareSlabs(picks);
   };
-  const removeSelected = () => confirmRemove(picks, doneSelecting);
+  const removeSelected = () => removeWithUndo(picks, doneSelecting);
 
   const actions: SlabActions = selecting
     ? { selected, onPress: (r) => toggle(r.card.id), onLongPress: (r) => toggle(r.card.id) }

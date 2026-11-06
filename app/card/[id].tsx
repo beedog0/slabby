@@ -11,7 +11,7 @@ import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { shareSlab } from '../../src/components/share/ShareCard';
 import { openSlabMenu } from '../../src/components/menu/Menu';
-import { confirmRemove } from '../../src/components/collection/remove';
+import { removeWithUndo } from '../../src/components/collection/remove';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
@@ -50,7 +50,7 @@ export default function SlabDetail() {
         { label: 'Share card', onPress: () => shareSlab(card) },
       ],
       // Leave the page first: it has nothing to show once the slab is gone.
-      [{ label: 'Remove from vault', onPress: () => confirmRemove([card], () => router.back()) }],
+      [{ label: 'Remove from vault', onPress: () => removeWithUndo([card], () => router.back()) }],
     ]);
 
   const subtitle = [card.grader === 'raw' ? null : LANGUAGE[card.language] ?? card.language, gradeLabel(card.grader, card.grade, card.condition)]
