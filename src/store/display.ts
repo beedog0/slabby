@@ -16,6 +16,9 @@ type DisplayState = {
   setFilter: (f: CollectionFilter) => void;
   searchLayout: SearchLayout;
   setSearchLayout: (l: SearchLayout) => void;
+  /** Con mode's Selling list: rows or two slabs across. */
+  conLayout: SearchLayout;
+  setConLayout: (l: SearchLayout) => void;
 };
 
 export const useDisplay = create<DisplayState>()(
@@ -27,6 +30,8 @@ export const useDisplay = create<DisplayState>()(
       setFilter: (filter) => set({ filter }),
       searchLayout: 'grid',
       setSearchLayout: (searchLayout) => set({ searchLayout }),
+      conLayout: 'grid',
+      setConLayout: (conLayout) => set({ conLayout }),
     }),
     { name: 'slabby.display', version: 1, storage: createJSONStorage(() => AsyncStorage) },
   ),
