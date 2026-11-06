@@ -57,3 +57,12 @@ describe('lookupCert on mocks', () => {
     expect((await lookupCert('12345678')).status).toBe('not_found');
   });
 });
+
+describe('cardFromDetails game', () => {
+  const base = { cert: null, grader: 'raw' as const, grade: 10, name: 'Luffy', setName: 'OP05', number: 'OP05-119', language: 'en', paidCents: null, plan: 'hold' as const };
+  it('keeps the game it was given', () => {
+    const { cardFromDetails } = require('../psa');
+    expect(cardFromDetails({ ...base, game: 'onepiece' }).game).toBe('onepiece');
+    expect(cardFromDetails({ ...base, game: 'pokemon' }).game).toBe('pokemon');
+  });
+});

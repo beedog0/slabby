@@ -128,6 +128,14 @@ export const shadow = {
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
   },
+  /** Dropdown menus: the one floating surface besides the slab. */
+  menu: {
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
   slabContact: {
     shadowColor: '#000',
     shadowOpacity: 0.14,

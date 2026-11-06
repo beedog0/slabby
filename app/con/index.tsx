@@ -14,7 +14,7 @@ import { SearchSort } from '../../src/components/collection/SearchSort';
 import { Segmented } from '../../src/components/Segmented';
 import { openConStatusMenu } from '../../src/components/conStatusMenu';
 import { TableSheet, type TableSheetOpen } from '../../src/components/con/TableSheet';
-import { Hairline, PlusIcon, PrimaryButton } from '../../src/components/ui';
+import { Hairline, PlusIcon, PrimaryButton, SearchIcon } from '../../src/components/ui';
 import { conTabFor, type ConStatus } from '../../src/lib/conStatus';
 import { elapsed, money } from '../../src/lib/format';
 import { arrange, type SortKey } from '../../src/pricing/arrange';
@@ -198,6 +198,14 @@ export default function ConMode() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.l }]}>
         <PrimaryButton style={{ flex: 1 }} title="Got an offer" onPress={() => router.push('/con/pick')} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Search a card to buy"
+          onPress={() => router.push('/search?con=1')}
+          style={({ pressed }) => [styles.add, pressed && { opacity: 0.6 }]}
+        >
+          <SearchIcon />
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add a slab to the table"

@@ -236,7 +236,7 @@ export type ManualDetails = {
   language: string;
   paidCents: number | null;
   plan: Card['plan'];
-  /** From card search: the set code and the card photo are already known. */
+  /** From card search: the set code and card photo are already known. */
   setCode?: string | null;
   imageFrontUrl?: string | null;
 };

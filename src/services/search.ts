@@ -5,9 +5,12 @@
 import catalogJson from '../mocks/catalog.json';
 import pricesJson from '../mocks/prices.json';
 import type { CardPrice } from './comps';
+import { buyMax, buyTarget } from '../pricing/rules';
+import type { PricingRules } from '../types';
 import { supabase } from './supabase';
 
-export type Game = 'pokemon' | 'onepiece' | 'riftbound';
+export type { Game } from '../types';
+import type { Game } from '../types';
 
 export type CatalogCard = {
   productId: number;
@@ -90,7 +93,7 @@ export async function searchCards(q: string, game: Game | null): Promise<Catalog
   if (!supabase) {
     out = mockCatalog.filter((c) => (!game || c.game === game) && matches(c, q));
   } else {
-    const { data, error } = await supabase.rpc('search_catalog', { q, game_filter: game, lim: 40 });
+    const { data, error } = await supabase.rpc('search_catalog', { q, game_filter: game, lim: 60 });
     if (error) throw error;
     out = ((data ?? []) as Row[]).map(fromRow);
   }
@@ -180,4 +183,41 @@ export function addParams(c: CatalogCard, grade: SearchGrade | 'raw'): Record<st
     productId: String(c.productId),
     image: c.imageUrl ?? '',
   };
+}
+
+/**
+ * Con mode: what to open at and the most to pay for a card at this market price, from the
+ * user's buying rules (src/pricing/rules.ts). Null without a price.
+ */
+export function buyPrices(marketCents: number | null | undefined, rules: PricingRules): { target: number; max: number } | null {
+  if (marketCents == null || marketCents <= 0) return null;
+  const i = { marketCents, low30Cents: marketCents, rules };
+  return { target: buyTarget(i), max: buyMax(i) };
+}
+
+export type SearchSort = 'best' | 'priceHigh' | 'priceLow' | 'name';
+export type SearchLanguage = 'all' | 'en' | 'ja';
+
+export const SORT_LABEL: Record<SearchSort, string> = {
+  best: 'Best match',
+  priceHigh: 'Price high',
+  priceLow: 'Price low',
+  name: 'Name',
+};
+
+/**
+ * Sort and filter a page of results on the phone. Cards with no price go last in price sorts.
+ * "Best match" keeps the server's order (closest name first).
+ */
+export function arrange(cards: CatalogCard[], sort: SearchSort, language: SearchLanguage): CatalogCard[] {
+  const kept = language === 'all' ? cards : cards.filter((c) => c.language === language);
+  if (sort === 'best') return kept;
+  const out = [...kept];
+  if (sort === 'name') return out.sort((a, b) => displayName(a.name).localeCompare(displayName(b.name)));
+  const dir = sort === 'priceHigh' ? -1 : 1;
+  return out.sort((a, b) => {
+    if (a.marketCents == null) return b.marketCents == null ? 0 : 1;
+    if (b.marketCents == null) return -1;
+    return dir * (a.marketCents - b.marketCents);
+  });
 }

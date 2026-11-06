@@ -3,18 +3,20 @@
 // Card search opens it prefilled (name, set, number, grade, photo) with the product already known.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KEYBOARD_DONE, KeyboardDone } from '../src/components/KeyboardDone';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Segmented } from '../src/components/Segmented';
+import { SlabView } from '../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton, Stepper } from '../src/components/ui';
 import { matchNewCard, refreshPrices } from '../src/services/comps';
 import { GAMES, GAME_LIST, LANGUAGE_NAME } from '../src/lib/games';
 import { cardFromDetails } from '../src/services/psa';
 import type { Game } from '../src/types';
 import { useVault } from '../src/store/vault';
-import { color, space, type } from '../src/theme/tokens';
+import { color, size, space, type } from '../src/theme/tokens';
+import type { Card } from '../src/types';
 
 type Grader = 'psa' | 'bgs' | 'cgc' | 'raw';
 
@@ -48,6 +50,37 @@ export default function AddByHand() {
   const info = GAMES[game];
   const [paid, setPaid] = useState('');
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
+
+  // From search: show the card as it will look in the vault, slabbed at the chosen grade or raw.
+  const preview = useMemo<Card | null>(
+    () =>
+      fromSearch
+        ? {
+            id: `add-preview-${p.productId}`,
+            certNumber: cert || null,
+            grader,
+            grade: grader === 'raw' ? null : grade,
+            name: name.trim() || ' ',
+            setName: setTitle.trim() || null,
+            setCode: p.setCode && setTitle === p.set ? p.setCode : null,
+            number: number.trim() || null,
+            language,
+            year: null,
+            imageFrontUrl: p.image || null,
+            paidCents: null,
+            paidAt: null,
+            plan,
+            floorOverrideCents: null,
+            askOverrideCents: null,
+            status: 'owned',
+            soldCents: null,
+            soldAt: null,
+            soldWhere: null,
+            createdAt: new Date(0).toISOString(),
+          }
+        : null,
+    [fromSearch, p.productId, p.setCode, p.set, p.image, cert, grader, grade, name, setTitle, number, language, plan],
+  );
 
   const step = grader === 'psa' ? 1 : 0.5;
   const ready = name.trim().length > 0;
@@ -100,6 +133,11 @@ export default function AddByHand() {
               : 'Type what the label says. Prices fill in once the card is matched.'}
           </Text>
 
+          {preview ? (
+            <View style={styles.preview}>
+              <SlabView card={preview} width={size.heroW * 0.75} />
+            </View>
+          ) : null}
           <Field label="Game">
             <Segmented<Game>
               style={{ width: 250 }}
@@ -247,6 +285,7 @@ function Field({ label, children, last }: { label: string; children: ReactNode; 
 
 const styles = StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
+  preview: { alignItems: 'center', paddingBottom: space.xl },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   field: { minHeight: 56, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.l },
   input: { flex: 1, textAlign: 'right', color: color.ink, paddingVertical: space.m },
