@@ -3,8 +3,9 @@
 // Body: { cardKey, game, variety, name, number, language, setName, setCode }. game defaults to pokemon.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { gradeKey, gradedDaily, rawDaily, rawToday, type DailySales } from '../_shared/comps-math.ts';
-import { fetchComps, matchCard } from '../_shared/ppt.ts';
+import { rawToday } from '../_shared/comps-math.ts';
+import { refreshProduct } from '../_shared/comps-write.ts';
+import { matchCard } from '../_shared/ppt.ts';
 import { tcgcsvMarket, tcgcsvMatch, type TcgMatch } from '../_shared/tcgcsv.ts';
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
@@ -61,14 +62,7 @@ Deno.serve(async (req) => {
 
 /** Prices for a brand-new card now, instead of waiting for tonight's comps-nightly run. 3 credits. */
 async function firstComps(admin: ReturnType<typeof createClient>, cardKey: string, tcgPlayerId: string, language: string) {
-  const card = await fetchComps(tcgPlayerId, language);
-  const [grader, grade] = cardKey.split(':');
-  const gk = gradeKey(grader, grade ? Number(grade) : null);
-  const today = new Date().toISOString().slice(0, 10);
-  const rows = gk
-    ? gradedDaily((card.ebay?.priceHistory?.[gk] ?? {}) as DailySales, today)
-    : rawDaily(card.priceHistory?.conditions?.['Near Mint']?.history ?? [], today);
-  if (rows.length) await admin.from('price_daily').upsert(rows.map((r) => ({ card_key: cardKey, ...r })));
+  await refreshProduct(admin, tcgPlayerId, language, [cardKey]);
 }
 
 /**

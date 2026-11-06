@@ -114,3 +114,56 @@ describe('other games', () => {
     expect(rawToday([], 12.5, '2026-11-05')).toMatchObject({ market_cents: 1250, low_cents: 1250, high_cents: 1250 });
   });
 });
+
+import { lastRawDay, lastSaleDay } from '../../../supabase/functions/_shared/comps-math';
+
+describe('last sale', () => {
+  it('takes the latest graded day with a sale and a price', () => {
+    expect(
+      lastSaleDay({
+        '2026-11-01': { average: 120.4, count: 2 },
+        '2026-11-04': { average: 99.995, count: 1 },
+        '2026-11-05': { average: 0, count: 1 }, // no price
+        '2026-11-06': { average: 140, count: 0 }, // no sale
+      }),
+    ).toEqual({ day: '2026-11-04', cents: 10_000 });
+  });
+  it('is null with no sales', () => {
+    expect(lastSaleDay({})).toBeNull();
+    expect(lastSaleDay({ '2026-11-01': { average: 50, count: 0 } })).toBeNull();
+  });
+  it('takes the latest raw market point', () => {
+    expect(
+      lastRawDay([
+        { date: '2026-11-03T00:00:00.000Z', market: 12.5 },
+        { date: '2026-11-01T00:00:00.000Z', market: 10 },
+        { date: '2026-11-04T00:00:00.000Z', market: null },
+      ]),
+    ).toEqual({ day: '2026-11-03', cents: 1_250 });
+    expect(lastRawDay([])).toBeNull();
+  });
+});
+
+describe('fromDaily 90-day sales', () => {
+  const row = (day: string, sales_30d: number) => ({ card_key: 'k', day, market_cents: 100, low_cents: 90, high_cents: 110, sales_30d });
+  it('sums sales_30d on the last day and 30 and 60 days before, by date', () => {
+    const p = fromDaily([row('2026-11-05', 9), row('2026-10-06', 7), row('2026-09-06', 4), row('2026-09-07', 100)])!;
+    expect(p.sales90d).toBe(20);
+  });
+  it('counts a missing day as zero', () => {
+    expect(fromDaily([row('2026-11-05', 9), row('2026-10-07', 7)])!.sales90d).toBe(9);
+  });
+});
+
+import { isStale } from '../../services/comps';
+
+describe('isStale', () => {
+  const now = Date.parse('2026-11-06T12:00:00Z');
+  it('is stale past six hours or when unknown', () => {
+    expect(isStale('2026-11-06T07:00:00Z', now)).toBe(false);
+    expect(isStale('2026-11-06T05:59:00Z', now)).toBe(true);
+    expect(isStale(null, now)).toBe(true);
+    expect(isStale(undefined, now)).toBe(true);
+    expect(isStale('2026-11-06T11:00:00Z', now, 30 * 60_000)).toBe(true);
+  });
+});

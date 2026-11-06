@@ -7,7 +7,7 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { SearchSort } from '../../src/components/collection/SearchSort';
@@ -19,6 +19,8 @@ import { conTabFor, type ConStatus } from '../../src/lib/conStatus';
 import { elapsed, money } from '../../src/lib/format';
 import { arrange, type SortKey } from '../../src/pricing/arrange';
 import { conSummary, rowFor } from '../../src/pricing/portfolio';
+import { conFreshnessLine } from '../../src/pricing/trend';
+import { CON_MIN_AGE_MS, refreshCards } from '../../src/services/comps';
 import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
 import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
@@ -53,6 +55,8 @@ export default function ConMode() {
     if (params.flash) setFlash({ ids: [params.flash], at: Date.now() });
   }, [params.tab, params.flash, params.at]);
   const [, tick] = useState(0);
+  const [refreshing, setRefreshing] = useState(0);
+  const [refreshFailed, setRefreshFailed] = useState(false);
 
   useEffect(() => {
     if (!session) {
@@ -71,6 +75,23 @@ export default function ConMode() {
   const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   if (!session) return null;
   const sum = conSummary(rows, session.startedAt);
+  // Cards on the table: for sale or trade only.
+  const onTable = rows.filter((r) => r.card.status === 'owned' && (r.card.plan === 'sell' || r.card.plan === 'trade'));
+  // Quiet during a pull (the spinner says it); the line shows only when behind or failed.
+  const freshness = conFreshnessLine(
+    onTable.flatMap((r) => (r.price ? [r.price] : [])),
+    { failed: refreshFailed },
+  );
+
+  const pull = async () => {
+    const list = onTable.map((r) => r.card);
+    if (!list.length) return;
+    setRefreshing(list.length);
+    // Cards written in the last hour aren't worth a call.
+    const statuses = await refreshCards(list, { force: true, minAgeMs: CON_MIN_AGE_MS });
+    setRefreshFailed(statuses.some((s) => s === 'failed'));
+    setRefreshing(0);
+  };
 
   const onTab = rows.filter((r) => {
     const c = r.card;
@@ -116,6 +137,11 @@ export default function ConMode() {
           <Text style={[type.secondary, { color: color.secondary }]}>if everything hits floor</Text>
         </View>
       </View>
+      {freshness ? (
+        <Text numberOfLines={1} style={[type.secondary, styles.freshness, { color: color.secondary }]}>
+          {freshness}
+        </Text>
+      ) : null}
 
       <Segmented<Tab>
         style={{ marginHorizontal: space.gutter, marginTop: space.xl }}
@@ -136,6 +162,7 @@ export default function ConMode() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.xs, paddingBottom: space.xxl }}
+        refreshControl={<RefreshControl refreshing={refreshing > 0} onRefresh={pull} tintColor={color.secondary} />}
       >
         {visible.map((r) => (
           <View key={r.card.id}>
@@ -218,6 +245,7 @@ const styles = StyleSheet.create({
   },
   totals: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: space.gutter, paddingTop: space.xl },
   flash: { position: 'absolute', top: 0, bottom: 0, left: -space.gutter, right: -space.gutter, backgroundColor: color.well },
+  freshness: { paddingHorizontal: space.gutter, paddingTop: space.s },
   footer: { flexDirection: 'row', gap: space.m, paddingHorizontal: space.gutter, paddingTop: space.s },
   add: {
     width: size.button,

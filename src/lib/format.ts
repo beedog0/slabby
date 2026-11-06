@@ -67,3 +67,8 @@ export function changeText(deltaCents: number, nowCents: number): string | null 
     start > 0 ? ` (${sign}${(Math.round((Math.abs(deltaCents) / start) * 1000) / 10).toFixed(1)}%)` : '';
   return `${sign}${money(Math.abs(deltaCents))}${pctText}`;
 }
+
+/** "2026-11-05" → "Nov 5". */
+export function shortDay(day: string): string {
+  return new Date(`${day.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
