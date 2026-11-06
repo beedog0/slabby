@@ -8,7 +8,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Segmented } from '../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, Stepper } from '../src/components/ui';
 import { matchNewCard, refreshPrices } from '../src/services/comps';
+import { GAMES, GAME_LIST, LANGUAGE_NAME } from '../src/lib/games';
 import { cardFromDetails } from '../src/services/psa';
+import type { Game } from '../src/types';
 import { useVault } from '../src/store/vault';
 import { color, space, type } from '../src/theme/tokens';
 
@@ -18,13 +20,16 @@ export default function AddByHand() {
   const { cert: certParam } = useLocalSearchParams<{ cert?: string }>();
   const insets = useSafeAreaInsets();
   const add = useVault((s) => s.add);
+  const [game, setGame] = useState<Game>('pokemon');
   const [cert, setCert] = useState(certParam ?? '');
   const [grader, setGrader] = useState<Grader>('psa');
   const [grade, setGrade] = useState(10);
   const [name, setName] = useState('');
   const [setTitle, setSetTitle] = useState('');
   const [number, setNumber] = useState('');
-  const [language, setLanguage] = useState<'en' | 'ja'>('en');
+  const [variety, setVariety] = useState('');
+  const [language, setLanguage] = useState('en');
+  const info = GAMES[game];
   const [paid, setPaid] = useState('');
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
 
@@ -35,12 +40,15 @@ export default function AddByHand() {
     if (!ready) return;
     const dollars = parseInt(paid, 10);
     const card = cardFromDetails({
+      game,
       cert: cert.trim() || null,
       grader,
       grade,
       name,
       setName: setTitle,
       number,
+      // Pokémon numbers are unique per printing; the other games reuse them for parallels.
+      variety: game === 'pokemon' ? undefined : variety,
       language,
       paidCents: Number.isFinite(dollars) ? dollars * 100 : null,
       plan,
@@ -70,11 +78,23 @@ export default function AddByHand() {
             Type what the label says. Prices fill in once the card is matched.
           </Text>
 
+          <Field label="Game">
+            <Segmented<Game>
+              style={{ width: 250 }}
+              value={game}
+              onChange={(g) => {
+                setGame(g);
+                // Riftbound prints in Chinese, not Japanese; keep the choice valid for the game.
+                if (!GAMES[g].languages.includes(language)) setLanguage('en');
+              }}
+              options={GAME_LIST.map((g) => ({ value: g.id, label: g.name }))}
+            />
+          </Field>
           <Field label="Card name">
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="Mew ex"
+              placeholder={info.example.name}
               placeholderTextColor={color.secondary}
               autoCapitalize="words"
               style={[type.body, styles.input]}
@@ -84,7 +104,7 @@ export default function AddByHand() {
             <TextInput
               value={setTitle}
               onChangeText={setSetTitle}
-              placeholder="151"
+              placeholder={info.example.set}
               placeholderTextColor={color.secondary}
               autoCapitalize="words"
               style={[type.body, styles.input]}
@@ -94,21 +114,30 @@ export default function AddByHand() {
             <TextInput
               value={number}
               onChangeText={setNumber}
-              placeholder="205"
+              placeholder={info.example.number}
               placeholderTextColor={color.secondary}
               keyboardType="numbers-and-punctuation"
               style={[type.body, styles.input]}
             />
           </Field>
+          {game === 'pokemon' ? null : (
+            <Field label="Variety">
+              <TextInput
+                value={variety}
+                onChangeText={setVariety}
+                placeholder="Optional, e.g. Parallel"
+                placeholderTextColor={color.secondary}
+                autoCapitalize="words"
+                style={[type.body, styles.input]}
+              />
+            </Field>
+          )}
           <Field label="Language">
             <Segmented
               style={{ width: 170 }}
               value={language}
               onChange={setLanguage}
-              options={[
-                { value: 'en', label: 'English' },
-                { value: 'ja', label: 'Japanese' },
-              ]}
+              options={info.languages.map((l) => ({ value: l, label: LANGUAGE_NAME[l] ?? l }))}
             />
           </Field>
           <Field label="Grader">

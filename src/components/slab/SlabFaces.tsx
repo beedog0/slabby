@@ -8,7 +8,8 @@ import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
 import type { Card } from '../../types';
 import { ArtImage } from '../ArtImage';
-import { cardBack } from './cardBacks';
+import { gameOf } from '../../lib/games';
+import { cardBack, cardBackPlain } from './cardBacks';
 import { code128B } from './code128';
 import { labelInk, type SlabLayout } from './geometry';
 import { labelNameLine, labelSetLine } from './label';
@@ -193,7 +194,8 @@ export const FrontFace = memo(function FrontFace({ card, L, sharp = false }: { c
 });
 
 export const BackFace = memo(function BackFace({ card, L }: { card: Card; L: SlabLayout }) {
-  const back = cardBack(card.language);
+  const game = gameOf(card);
+  const back = cardBack(game, card.language);
   const hair = Math.max(StyleSheet.hairlineWidth, 0.35 * L.k);
   const ink = labelInk(card.grader, card.grade);
   const k = L.k;
@@ -217,16 +219,16 @@ export const BackFace = memo(function BackFace({ card, L }: { card: Card; L: Sla
         <LinearGradient colors={ACRYLIC.well} start={{ x: 1, y: 0 }} end={{ x: 0.4, y: 1 }} style={StyleSheet.absoluteFill} />
       </Recess>
       <CardFrame L={L} hair={hair} />
-      {/* Card back: the printed back for the card's language, or plain blue until we have it. */}
+      {/* Card back: the printed back for the card's language, or a plain back until we have it. */}
       <View
         style={[
           styles.abs,
           styles.contact,
-          { left: L.card.x, top: L.card.y, width: L.card.w, height: L.card.h, borderRadius: L.card.r, overflow: 'hidden', backgroundColor: '#1D3F8F' },
+          { left: L.card.x, top: L.card.y, width: L.card.w, height: L.card.h, borderRadius: L.card.r, overflow: 'hidden', backgroundColor: cardBackPlain(game) },
         ]}
       >
         <LinearGradient colors={['#2A5AC0', '#1C3C88', '#132B66']} start={{ x: 0.5, y: 0.2 }} end={{ x: 0.5, y: 1 }} style={StyleSheet.absoluteFill} />
-        {back ? <ArtImage uri={back} recyclingKey={`back-${card.language}`} style={StyleSheet.absoluteFill} /> : null}
+        {back ? <ArtImage uri={back} recyclingKey={`back-${game}-${card.language}`} style={StyleSheet.absoluteFill} /> : null}
         <View
           style={[
             styles.abs,

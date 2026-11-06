@@ -14,6 +14,7 @@ import { CardThumb } from '../src/components/CardThumb';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
+import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
 import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
 import { matchNewCard, priceFor, refreshPrices } from '../src/services/comps';
 import { parseLabel } from '../src/services/label';
@@ -21,7 +22,6 @@ import { useVault } from '../src/store/vault';
 import { LabelReader } from '../modules/label-reader';
 import { color, radius, size, space, type } from '../src/theme/tokens';
 
-const LANG_NAME: Record<string, string> = { ja: 'Japanese', en: 'English', ko: 'Korean', zh: 'Chinese' };
 const SCAN_BG = '#2A2A2C'; // camera chrome only; never used on app UI
 
 export default function Scan() {
@@ -222,7 +222,9 @@ export default function Scan() {
                     {rowTitle(preview)}
                   </Text>
                   <Text style={[type.text, { color: color.secondary }]}>
-                    {LANG_NAME[preview.language] ?? preview.language} · {gradeLabel(preview.grader, preview.grade)}
+                    {[gameOf(preview) === 'pokemon' ? null : GAMES[gameOf(preview)].name, LANGUAGE_NAME[preview.language] ?? preview.language, gradeLabel(preview.grader, preview.grade)]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>

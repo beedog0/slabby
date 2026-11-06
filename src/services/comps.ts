@@ -94,6 +94,8 @@ export async function matchNewCard(card: Card): Promise<CardRef | null> {
   const { data, error } = await supabase.functions.invoke<CardRef>('card-match', {
     body: {
       cardKey: cardKey(card),
+      game: card.game ?? 'pokemon',
+      variety: card.variety ?? null,
       name: card.name,
       number: card.number,
       language: card.language,

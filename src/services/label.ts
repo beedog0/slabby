@@ -10,6 +10,9 @@
 //                                                  81234560
 //
 //   2016 POKEMON XY EVOLUTIONS #11  CHARIZARD-HOLO  GEM MT 10  26474744
+//
+//   2023 ONE PIECE JAPANESE OP05-AWAKENING OF THE NEW ERA  #119
+//   2025 RIFTBOUND: LEAGUE OF LEGENDS SFD-SPIRITFORGED     #T03a
 
 import type { PsaCertPayload } from './psa';
 
@@ -19,12 +22,16 @@ export type LabelLine = { text: string; x: number; y: number };
 // Case-sensitive on purpose: labels print grades in capitals, card names use "ex"/"EX" too.
 const GRADE_WORDS = /(?:^|\s)(GEM MT|GEM MINT|MINT|NM-MT\+?|NM\+?|EX-MT\+?|EX\+?|VG-EX\+?|VG\+?|GOOD\+?|FAIR|PR|AUTHENTIC|AUTH)(?=\s|$|\d)/;
 const GRADE_NUM = /^\s*(10|[1-9](?:\.5)?)(?!\d)/;
-const YEAR_BRAND = /\b((?:19|20)\d{2})\s+(P(?:OK[EÉ]M[O0]N|\.?M\.?)\b.*)$/i;
+// The brand opens the set line: Pokémon (OCR reads O as 0, old labels print "P.M."), One Piece, Riftbound.
+const BRAND_START = String.raw`(?:P(?:OK[EÉ]M[O0]N|\.?M\.?)|[O0]NE\s?P[I1]ECE|R[I1]FTB[O0]UND)`;
+const YEAR_BRAND = new RegExp(String.raw`\b((?:19|20)\d{2})\s+(${BRAND_START}(?:\b|:).*)$`, 'i');
 // Some labels (and some photos) split the year and the brand onto separate lines.
-const BRAND_ONLY = /^(P(?:OK[EÉ]M[O0]N|\.?M\.?)\b.*)$/i;
+const BRAND_ONLY = new RegExp(String.raw`^(${BRAND_START}(?:\b|:).*)$`, 'i');
+// Riftbound's brand is long and wraps: "2025 RIFTBOUND: LEAGUE OF" / "LEGENDS OGN-ORIGINS".
+const BRAND_WRAP = /^(?:LEAGUE OF LEGENDS|OF LEGENDS|LEGENDS)\b/i;
 const YEAR_ONLY = /^((?:19|20)\d{2})$/;
 const CERT = /^\d{8,10}$/;
-const VARIETY = /^(HOLO|REVERSE HOLO|1ST EDITION|SHADOWLESS|FULL ART|ALT(?:ERNATE)? ART|SPECIAL ART RARE|ILLUSTRATION RARE|SPECIAL ILLUSTRATION RARE|SECRET|RAINBOW|GOLD|PROMO|STAFF|ART RARE|SUPER RARE|ULTRA RARE|HYPER RARE)\b/i;
+const VARIETY = /^(HOLO|REVERSE HOLO|1ST EDITION|SHADOWLESS|FULL ART|ALT(?:ERNATE)? ART|SPECIAL ART RARE|ILLUSTRATION RARE|SPECIAL ILLUSTRATION RARE|SECRET|RAINBOW|GOLD|PROMO|STAFF|ART RARE|SUPER RARE|ULTRA RARE|HYPER RARE|PARALLEL|MANGA|SP|SPECIAL|1ST ANNIVERSARY|TREASURE RARE|SIGNATURE|OVERNUMBERED|SHOWCASE|FOIL)\b/i;
 
 export type ParsedLabel = {
   payload: PsaCertPayload;
@@ -93,8 +100,21 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
       year = lines.map((l) => l.text.match(YEAR_ONLY)?.[1]).find(Boolean);
     }
   }
-  // OCR reads O as 0 and drops accents; parseBrand expects "POKEMON".
-  if (brand) brand = brand.replace(/^P(?:OK[EÉ]M[O0]N)\b/i, 'POKEMON').replace(/\bJPN\b/i, 'JAPANESE');
+  // A wrapped brand continues on the next line; that line isn't the card name.
+  if (brand && /RIFTB/i.test(brand)) {
+    const next = lines[brandIndex + 1]?.text;
+    if (next && BRAND_WRAP.test(next) && !/LEGENDS/i.test(brand)) {
+      brand = `${brand} ${next.replace(/#\s*[A-Z0-9-]+.*$/i, '').trim()}`;
+      brandIndex += 1;
+    }
+  }
+  // OCR reads O as 0 and drops accents; parseBrand expects the brand as PSA spells it.
+  if (brand)
+    brand = brand
+      .replace(/^P(?:OK[EÉ]M[O0]N)\b/i, 'POKEMON')
+      .replace(/^[O0]NE\s?P[I1]ECE\b/i, 'ONE PIECE')
+      .replace(/^R[I1]FTB[O0]UND\b/i, 'RIFTBOUND')
+      .replace(/\bJPN\b/i, 'JAPANESE');
 
   // A grade on its own line ("10") next to the grade words.
   if (gradeWord && !grade) {
