@@ -10,7 +10,7 @@ import type { Card } from '../../types';
 import { ArtImage } from '../ArtImage';
 import { cardBack } from './cardBacks';
 import { code128B } from './code128';
-import { labelInk, type SlabLayout } from './geometry';
+import { gradeDescriptor, labelInk, type LabelInk, type SlabLayout } from './geometry';
 import { labelNameLine, labelSetLine } from './label';
 
 export const ACRYLIC = {
@@ -24,7 +24,6 @@ export const ACRYLIC = {
   recessLight: 'rgba(255,255,255,0.9)',
 };
 
-const DESCRIPTOR: Record<number, string> = { 10: 'GEM MT', 9: 'MINT', 8: 'NM-MT', 7: 'NM', 6: 'EX-MT', 5: 'EX' };
 
 /** The case body shared by both faces: acrylic, bevelled outer edge, the frame step. */
 function CaseBody({ L, children }: { L: SlabLayout; children: ReactNode }) {
@@ -107,6 +106,18 @@ function CardFrame({ L, hair }: { L: SlabLayout; hair: number }) {
   );
 }
 
+/** The label's paper colour and its printed frame: the grader's colour cue. */
+function LabelPaper({ ink, k }: { ink: LabelInk; k: number }) {
+  return (
+    <>
+      {ink.paper2 ? (
+        <LinearGradient colors={[ink.paper, ink.paper2]} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 1 }} style={StyleSheet.absoluteFill} />
+      ) : null}
+      <View pointerEvents="none" style={[styles.abs, { inset: 0.9 * k, borderRadius: 0.4 * k, borderWidth: 0.5 * k, borderColor: ink.frame }]} />
+    </>
+  );
+}
+
 function Barcode({ value, width, height, ink }: { value: string; width: number; height: number; ink: string }) {
   const modules = code128B(value);
   if (!modules.length) return null;
@@ -130,7 +141,7 @@ export const FrontFace = memo(function FrontFace({ card, L, sharp = false }: { c
   const ink = labelInk(card.grader, card.grade);
   const k = L.k;
   const pad = 2.8 * k;
-  const descriptor = card.grade != null ? DESCRIPTOR[Math.floor(card.grade)] : undefined;
+  const descriptor = gradeDescriptor(card.grader, card.grade);
   const showCert = !!card.certNumber && L.w >= 90;
   const showBarcode = !!card.certNumber && L.w >= 140;
 
@@ -138,9 +149,7 @@ export const FrontFace = memo(function FrontFace({ card, L, sharp = false }: { c
     <CaseBody L={L}>
       {/* Label pocket and the label paper sitting in it. */}
       <Recess box={L.label} radius={0.8 * k} hair={hair} style={{ backgroundColor: ink.paper }}>
-        {ink.frame ? (
-          <View pointerEvents="none" style={[styles.abs, { inset: 0.9 * k, borderRadius: 0.4 * k, borderWidth: 0.5 * k, borderColor: ink.frame }]} />
-        ) : null}
+        <LabelPaper ink={ink} k={k} />
         <View style={[styles.labelRow, { paddingHorizontal: pad, paddingVertical: 1.8 * k, gap: 1.5 * k }]}>
           <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
             <Text numberOfLines={1} style={[styles.label, { color: ink.ink, fontSize: 3.1 * k, lineHeight: 3.8 * k }]}>
@@ -200,6 +209,7 @@ export const BackFace = memo(function BackFace({ card, L }: { card: Card; L: Sla
   return (
     <CaseBody L={L}>
       <Recess box={L.label} radius={0.8 * k} hair={hair} style={{ backgroundColor: ink.paper }}>
+        <LabelPaper ink={ink} k={k} />
         <View style={[styles.backLabel, { padding: 2 * k, gap: 1 * k }]}>
           {card.certNumber ? (
             <>
