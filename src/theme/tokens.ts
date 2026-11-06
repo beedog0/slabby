@@ -75,6 +75,8 @@ export const size = {
   grabberH: 5,
   /** Home … dropdown width. */
   dropdownW: 224,
+  /** Applied-filter chips under search's control row. */
+  chip: 30,
 } as const;
 
 /** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */
@@ -83,8 +85,6 @@ export const motion = {
   sheetOut: 180,
   dropIn: 160,
   dropOut: 120,
-  /** Applied-filter chips under search's control row. */
-  chip: 30,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };
