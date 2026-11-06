@@ -4,6 +4,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KEYBOARD_DONE, KeyboardDone } from '../src/components/KeyboardDone';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Segmented } from '../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, Stepper } from '../src/components/ui';
@@ -58,7 +59,7 @@ export default function AddByHand() {
       style={{ flex: 1, backgroundColor: color.canvas }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
         <View style={styles.nav}>
           <IconButton label="Back" onPress={() => router.back()}>
             <BackIcon />
@@ -141,6 +142,7 @@ export default function AddByHand() {
               placeholder="Optional"
               placeholderTextColor={color.secondary}
               keyboardType="number-pad"
+              inputAccessoryViewID={KEYBOARD_DONE}
               style={[type.body, styles.input]}
             />
           </Field>
@@ -151,6 +153,7 @@ export default function AddByHand() {
               placeholder="$0"
               placeholderTextColor={color.secondary}
               keyboardType="number-pad"
+              inputAccessoryViewID={KEYBOARD_DONE}
               style={[type.body, styles.input]}
             />
           </Field>
@@ -170,6 +173,7 @@ export default function AddByHand() {
       <View style={[styles.gutter, { paddingBottom: insets.bottom + space.l, paddingTop: space.m }]}>
         <PrimaryButton title="Add to vault" onPress={save} style={ready ? undefined : { opacity: 0.4 }} />
       </View>
+      <KeyboardDone />
     </KeyboardAvoidingView>
   );
 }
