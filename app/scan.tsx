@@ -14,9 +14,10 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { AppState, Keyboard, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { KEYBOARD_DONE, KeyboardDone, useKeyboardHeight } from '../src/components/KeyboardDone';
 import { SlabView } from '../src/components/SlabView';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
@@ -67,6 +68,8 @@ export default function Scan() {
   // A loose card read from the frame: matches is null while the catalog lookup runs.
   const [raw, setRaw] = useState<RawRead | null>(null);
   const win = useWindowDimensions();
+  // The sheet sits on the bottom edge; lift it above the number pad while typing what you paid.
+  const keyboardH = useKeyboardHeight();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
 
@@ -364,6 +367,7 @@ export default function Scan() {
               placeholder="Or type the cert number"
               placeholderTextColor="rgba(255,255,255,0.5)"
               keyboardType="number-pad"
+                  inputAccessoryViewID={KEYBOARD_DONE}
               returnKeyType="search"
               style={[type.body, styles.manualInput]}
             />
@@ -384,10 +388,15 @@ export default function Scan() {
         </View>
       ) : null}
 
-      {raw ? <RawSheet raw={raw} setRaw={setRaw} rescan={rescan} bottom={insets.bottom} /> : null}
+      {(result || raw) && keyboardH > 0 ? (
+        // Tap above the sheet to close the number pad.
+        <Pressable accessibilityLabel="Close keyboard" style={StyleSheet.absoluteFill} onPress={() => Keyboard.dismiss()} />
+      ) : null}
+
+      {raw ? <RawSheet raw={raw} setRaw={setRaw} rescan={rescan} bottom={insets.bottom} keyboardH={keyboardH} /> : null}
 
       {result ? (
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + space.l }]}>
+        <View style={[styles.sheet, keyboardH > 0 ? { bottom: keyboardH, paddingBottom: space.l } : { paddingBottom: insets.bottom + space.l }]}>
           <View style={styles.grabber} />
           {result.status === 'found' && preview ? (
             <>
@@ -436,6 +445,7 @@ export default function Scan() {
                   placeholder="$0"
                   placeholderTextColor={color.secondary}
                   keyboardType="number-pad"
+                  inputAccessoryViewID={KEYBOARD_DONE}
                   style={[type.rowPrice, styles.paidInput]}
                   accessibilityLabel="What you paid"
                 />
@@ -504,6 +514,7 @@ export default function Scan() {
           )}
         </View>
       ) : null}
+      <KeyboardDone />
     </View>
   );
 }
@@ -538,11 +549,13 @@ function RawSheet({
   setRaw,
   rescan,
   bottom,
+  keyboardH,
 }: {
   raw: RawRead;
   setRaw: (f: (r: RawRead | null) => RawRead | null) => void;
   rescan: () => void;
   bottom: number;
+  keyboardH: number;
 }) {
   const [paid, setPaid] = useState('');
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
@@ -588,7 +601,7 @@ function RawSheet({
   );
 
   return (
-    <View style={[styles.sheet, { paddingBottom: bottom + space.l }]}>
+    <View style={[styles.sheet, keyboardH > 0 ? { bottom: keyboardH, paddingBottom: space.l } : { paddingBottom: bottom + space.l }]}>
       <View style={styles.grabber} />
       {raw.matches === null ? (
         <>

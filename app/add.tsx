@@ -5,6 +5,7 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KEYBOARD_DONE, KeyboardDone } from '../src/components/KeyboardDone';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Segmented } from '../src/components/Segmented';
 import { SlabView } from '../src/components/SlabView';
@@ -134,7 +135,12 @@ export default function AddByHand() {
     >
       {/* A tilt drag on the preview must not start iOS 26's swipe-back. */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
-      <ScrollView scrollEnabled={!tilting} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
+      <ScrollView
+        scrollEnabled={!tilting}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}
+      >
         <View style={styles.nav}>
           <IconButton label="Back" onPress={() => router.back()}>
             <BackIcon />
@@ -227,6 +233,7 @@ export default function AddByHand() {
               placeholder="Optional"
               placeholderTextColor={color.secondary}
               keyboardType="number-pad"
+              inputAccessoryViewID={KEYBOARD_DONE}
               style={[type.body, styles.input]}
             />
           </Field>
@@ -237,6 +244,7 @@ export default function AddByHand() {
               placeholder="$0"
               placeholderTextColor={color.secondary}
               keyboardType="number-pad"
+              inputAccessoryViewID={KEYBOARD_DONE}
               style={[type.body, styles.input]}
             />
           </Field>
@@ -261,6 +269,7 @@ export default function AddByHand() {
         ) : null}
         <PrimaryButton title={certOwned ? 'Add again' : 'Add to vault'} onPress={save} style={ready ? undefined : { opacity: 0.4 }} />
       </View>
+      <KeyboardDone />
     </KeyboardAvoidingView>
   );
 }
