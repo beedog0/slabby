@@ -2,7 +2,7 @@
 
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
+import { cardLabel, money, pct, rowTitle } from '../../lib/format';
 import type { CardRow } from '../../pricing/portfolio';
 import { color, space, type } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
@@ -46,7 +46,7 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
         {rowTitle(card)}
       </Text>
       <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-        {gradeLabel(card.grader, card.grade, card.condition)}
+        {cardLabel(card)}
         {' · '}
         <Text style={{ color: color.ink }}>{value != null ? money(value) : '—'}</Text>
         {!sold && gain != null ? (

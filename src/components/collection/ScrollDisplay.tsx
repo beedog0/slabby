@@ -12,7 +12,7 @@ import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-nat
 import type { CardRow } from '../../pricing/portfolio';
 import { color, size, space, type } from '../../theme/tokens';
 import { prefetchArt } from '../ArtImage';
-import { gradeLabel, money, rowTitle } from '../../lib/format';
+import { cardLabel, langTag, money, rowTitle } from '../../lib/format';
 import { SlabView } from '../SlabView';
 
 // Room between cases: the slab now has a real case edge and shadow, so neighbours need air.
@@ -214,7 +214,11 @@ function SwipeCaption({ row }: { row: CardRow }) {
       <Text numberOfLines={1} style={[type.body, ink]}>
         {rowTitle(card)}
         {/* Graded slabs show their grade on the label; raw cards say so here. */}
-        {card.grader === 'raw' ? <Text style={muted}>{` · ${gradeLabel(card.grader, card.grade, card.condition)}`}</Text> : null}
+        {card.grader === 'raw' ? (
+          <Text style={muted}>{` · ${cardLabel(card)}`}</Text>
+        ) : langTag(card.language) ? (
+          <Text style={muted}>{` · ${langTag(card.language)}`}</Text>
+        ) : null}
       </Text>
       <Text style={[type.rowPrice, ink, { paddingTop: space.xs }]}>{value != null ? money(value) : '—'}</Text>
       <Text numberOfLines={1} style={[type.secondary, muted, { paddingTop: 2 }]}>

@@ -1,7 +1,7 @@
 // Con mode row: thumb, name, sparkline, ask and floor. 74 pt tall.
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { bare, gradeLabel, money, rowTitle } from '../lib/format';
+import { bare, cardLabel, money, rowTitle } from '../lib/format';
 import type { CardRow } from '../pricing/portfolio';
 import { color, size, space, type } from '../theme/tokens';
 import { CardThumb } from './CardThumb';
@@ -18,7 +18,7 @@ export function ConRow({ row, onPress }: { row: CardRow; onPress: () => void }) 
           {rowTitle(card)}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-          {gradeLabel(card.grader, card.grade, card.condition)}
+          {cardLabel(card)}
         </Text>
       </View>
       {price && !sold ? <Sparkline values={price.series90.slice(-30)} change={row.trend30} /> : null}

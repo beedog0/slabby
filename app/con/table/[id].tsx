@@ -11,7 +11,7 @@ import { PriceLine, type Tick } from '../../../src/components/PriceLine';
 import { Segmented } from '../../../src/components/Segmented';
 import { SoldState } from '../../../src/components/SoldState';
 import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, Stepper } from '../../../src/components/ui';
-import { gradeLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
+import { cardLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
 import { minFloorOverride } from '../../../src/pricing/rules';
 import { useCardRow } from '../../../src/pricing/useCardRow';
 import { useRules } from '../../../src/store/rules';
@@ -60,7 +60,7 @@ export default function BeforeTheTable() {
           {rowTitle(card)}
         </Text>
         <Text style={[type.text, { color: color.secondary }]}>
-          {gradeLabel(card.grader, card.grade, card.condition)}
+          {cardLabel(card)}
           {price ? ` · market ${money(price.marketCents)}` : ''}
         </Text>
       </View>
