@@ -88,7 +88,7 @@ async function writeSales(admin: Admin, key: string, sales: DailySales, listings
       if (rows.length) {
         const { error } = await admin
           .from('sales')
-          .upsert(rows.map((r) => ({ card_key: key, ...r })), { onConflict: 'source,listing_id' });
+          .upsert(rows.map((r) => ({ card_key: key, ...r })), { onConflict: 'card_key,source,listing_id' });
         if (error) console.error(`sales ${key}: ${error.message}`);
       }
     }

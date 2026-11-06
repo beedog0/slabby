@@ -158,6 +158,10 @@ describe('dailySales', () => {
   it('honours the window', () => {
     expect(dailySales(sales, '2026-11-05', 3).map((r) => r.day)).toEqual(['2026-11-05']);
   });
+  it('merges keys for the same day: counts add, averages weight by count', () => {
+    const dup = { '2026-11-05': { average: 1000, count: 3 }, '2026-11-05T00:00:00Z': { average: 1400, count: 1 } };
+    expect(dailySales(dup, '2026-11-05')).toEqual([{ day: '2026-11-05', sales: 4, avg_cents: 110000 }]);
+  });
   it('survives garbage', () => {
     expect(dailySales(undefined as never, '2026-11-05')).toEqual([]);
     expect(dailySales({ x: null, 'not-a-day': { average: 5, count: 1 } } as never, '2026-11-05')).toEqual([]);
@@ -192,6 +196,18 @@ describe('parseSoldListings', () => {
         { id: 'f', price: 12, soldAt: '2026-11-05' },
       ]),
     ).toEqual([{ source: 'ebay', listing_id: 'f', sold_day: '2026-11-05', sold_at: null, price_cents: 1000, kind: null, title: null, url: null }]);
+  });
+  it('reads price objects {value, currency} when USD or no currency', () => {
+    const rows = parseSoldListings([
+      { id: 'u', price: { value: '1,020.50', currency: 'USD' }, soldAt: '2026-11-05' },
+      { id: 'n', price: { value: 980 }, soldAt: '2026-11-05' },
+      { id: 'e', price: { value: 900, currency: 'EUR' }, soldAt: '2026-11-05' },
+      { id: 'z', price: { currency: 'USD' }, soldAt: '2026-11-05' },
+    ]);
+    expect(rows.map((r) => [r.listing_id, r.price_cents])).toEqual([
+      ['u', 102050],
+      ['n', 98000],
+    ]);
   });
   it('returns nothing for garbage input', () => {
     for (const g of [null, undefined, 42, 'sales', {}, { listings: [] }, [null, 1, 'x', [], true]]) expect(parseSoldListings(g)).toEqual([]);

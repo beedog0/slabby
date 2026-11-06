@@ -16,13 +16,26 @@ describe('summarize', () => {
 });
 
 describe('outlier', () => {
-  const v = [980, 1000, 1010, 1020, 1030, 1050, 1080];
-  it('flags prices outside 1.5×IQR', () => {
-    // q1 1005, q3 1040, IQR 35 → fences 952.5 and 1092.5
-    expect(outlier(1093, v)).toBe('above');
-    expect(outlier(1092, v)).toBeNull();
-    expect(outlier(952, v)).toBe('below');
-    expect(outlier(1020, v)).toBeNull();
+  it('flags prices outside 1.5×IQR when the IQR is wide', () => {
+    const v = [800, 900, 1000, 1100, 1200, 1300, 1400];
+    // q1 950, q3 1250, IQR 300 → fence 450 (beats 10% of median, 110) → 500 and 1700
+    expect(outlier(1701, v)).toBe('above');
+    expect(outlier(1700, v)).toBeNull();
+    expect(outlier(499, v)).toBe('below');
+    expect(outlier(1000, v)).toBeNull();
+  });
+  it('uses 10% of the median when the IQR is narrow', () => {
+    const v = [980, 1000, 1010, 1020, 1030, 1050, 1080];
+    // q1 1005, q3 1040; 1.5×IQR 52.5 < 10% of 1020 = 102 → 903 and 1142
+    expect(outlier(1100, v)).toBeNull();
+    expect(outlier(1143, v)).toBe('above');
+    expect(outlier(902, v)).toBe('below');
+  });
+  it('all-equal prices do not flag small differences', () => {
+    const v = [1000, 1000, 1000, 1000, 1000, 1000];
+    expect(outlier(1001, v)).toBeNull();
+    expect(outlier(999, v)).toBeNull();
+    expect(outlier(1101, v)).toBe('above');
   });
   it('needs at least five values', () => {
     expect(outlier(5000, [1000, 1000, 1000, 1000])).toBeNull();
@@ -46,6 +59,22 @@ describe('values from a result', () => {
     expect(salesValues(sales)).toEqual([500]);
     expect(salesPoints(sales)).toEqual([500]);
     expect(salesCount(sales)).toBe(1);
+  });
+  it('caps a day at 50 in both values and count, and survives junk counts', () => {
+    const big: SalesResult = {
+      kind: 'daily',
+      rows: [
+        { day: '2026-11-05', sales: 80, avgCents: 100 },
+        { day: '2026-11-04', sales: 2.7, avgCents: 200 },
+        { day: '2026-11-03', sales: NaN, avgCents: 300 },
+        { day: '2026-11-02', sales: undefined as never, avgCents: 400 },
+        { day: '2026-11-01', sales: -3, avgCents: 500 },
+      ],
+    };
+    expect(salesValues(big)).toHaveLength(52);
+    expect(salesCount(big)).toBe(52);
+    expect(summarize(salesValues(big))?.count).toBe(salesCount(big));
+    expect(salesPoints(big)).toEqual([100, 200]);
   });
   it('none is empty', () => {
     expect(salesValues({ kind: 'none' })).toEqual([]);

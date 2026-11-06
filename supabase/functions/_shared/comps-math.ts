@@ -137,21 +137,27 @@ export type SalesDailyRow = { day: string; sales: number; avg_cents: number };
 
 /**
  * One sales_daily row per day with a sale (count > 0, average > 0) in the last `days` days
- * ending `today`, newest first.
+ * ending `today`, newest first. Keys that land on the same day ("2026-11-05" and
+ * "2026-11-05T00:00:00Z") merge: counts add, averages weight by count.
  */
 export function dailySales(sales: DailySales, today: string, days = 90): SalesDailyRow[] {
   const since = addDays(today, -(days - 1));
-  const byDay = new Map<string, SalesDailyRow>();
+  const byDay = new Map<string, { count: number; total: number }>();
   for (const [date, s] of Object.entries(sales ?? {})) {
     if (!s || typeof s !== 'object') continue;
     const count = Number(s.count);
     const average = Number(s.average);
-    if (!(count > 0) || !(average > 0)) continue;
+    if (!(count > 0) || !(average > 0) || !Number.isFinite(count) || !Number.isFinite(average)) continue;
     const day = String(date).slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < since || day > today) continue;
-    byDay.set(day, { day, sales: Math.round(count), avg_cents: cents(average) });
+    const d = byDay.get(day) ?? { count: 0, total: 0 };
+    d.count += count;
+    d.total += count * average;
+    byDay.set(day, d);
   }
-  return [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day));
+  return [...byDay.entries()]
+    .map(([day, d]) => ({ day, sales: Math.max(1, Math.round(d.count)), avg_cents: cents(d.total / d.count) }))
+    .sort((a, b) => b.day.localeCompare(a.day));
 }
 
 export type SaleKind = 'auction' | 'bin' | 'offer';
@@ -172,8 +178,17 @@ const pick = (o: Record<string, unknown>, names: string[]): unknown => {
   return undefined;
 };
 
-/** Dollars as a number or a string ("$1,020.00") → cents; null when it isn't a positive price. */
+/**
+ * Dollars as a number, a string ("$1,020.00") or an object ({ value, currency }, USD or no
+ * currency) → cents; null when it isn't a positive price.
+ */
 function priceCents(v: unknown): number | null {
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    const o = v as Record<string, unknown>;
+    const currency = typeof o.currency === 'string' ? o.currency.trim().toUpperCase() : o.currency;
+    if (currency != null && currency !== '' && currency !== 'USD') return null;
+    return priceCents(o.value);
+  }
   const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.replace(/[$,\s]/g, '')) : NaN;
   return Number.isFinite(n) && n > 0 ? cents(n) : null;
 }

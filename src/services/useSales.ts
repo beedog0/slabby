@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cardKey } from '../pricing/cardKey';
-import { useSalesCache } from '../store/sales';
+import { useSalesCache, validEntry } from '../store/sales';
 import type { Card, SalesResult } from '../types';
 import { loadSales, type SalesDays } from './sales';
 
@@ -10,7 +10,8 @@ export type SalesState = 'loading' | 'ready' | 'failed';
 
 export function useSales(card: Card | undefined, days: SalesDays) {
   const key = card ? cardKey(card) : null;
-  const cached = useSalesCache((s) => (key ? s.byKey[`${key}|${days}`] : undefined));
+  const entry = useSalesCache((s) => (key ? s.byKey?.[`${key}|${days}`] : undefined));
+  const cached = validEntry(entry) ? entry : undefined;
   const [fresh, setFresh] = useState<{ id: string; result: SalesResult } | null>(null);
   const [state, setState] = useState<SalesState>('loading');
   const run = useRef(0);

@@ -23,7 +23,7 @@ create table sales (
   kind text check (kind in ('auction', 'bin', 'offer')),
   title text,
   url text,
-  primary key (source, listing_id)
+  primary key (card_key, source, listing_id) -- one listing can be written under several card_keys
 );
 create index sales_card_day on sales (card_key, sold_day desc);
 

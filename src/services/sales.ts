@@ -1,11 +1,11 @@
 // Recent sales for the sales screen (0008_recent_sales.sql). Individual listings (`sales`) when
 // the server has them, else daily averages (`sales_daily`). Without Supabase, mocks. A table
-// that isn't there yet reads as no sales; a network failure throws SalesOffline so the screen
-// can keep showing the cached answer.
+// that isn't there yet reads as no sales; any other failure throws SalesOffline and leaves the
+// cache alone so the screen keeps showing the last answer.
 
 import salesJson from '../mocks/sales.json';
 import { cardKey } from '../pricing/cardKey';
-import { useSalesCache, type CachedSales } from '../store/sales';
+import { useSalesCache, validEntry, type CachedSales } from '../store/sales';
 import type { Card, SalesResult } from '../types';
 import { supabase } from './supabase';
 
@@ -42,44 +42,67 @@ export function mockSales(key: string, days: SalesDays): SalesResult {
   return rows.length ? { kind: 'daily', rows } : { kind: 'none' };
 }
 
-/** The last answer for this card and window, if any. */
+/** The last answer for this card and window, if any (a malformed persisted entry reads as none). */
 export function cachedSales(card: Card, days: SalesDays): CachedSales | null {
-  return useSalesCache.getState().byKey[cacheKey(cardKey(card), days)] ?? null;
+  const entry = useSalesCache.getState().byKey?.[cacheKey(cardKey(card), days)];
+  return validEntry(entry) ? entry : null;
 }
 
-type PgError = { code?: string; message?: string } | null;
+type PgResponse = { data: unknown; error: { code?: string; message?: string } | null; status?: number };
 type SaleRowDb = { source: string; listing_id: string; sold_day: string; sold_at: string | null; price_cents: number; kind: string | null; url: string | null };
 type DayRowDb = { day: string; sales: number; avg_cents: number };
 
-/** A PostgREST/Postgres error carries a code (missing table: PGRST205, 42P01); a dropped fetch doesn't. */
-function check(error: PgError): 'ok' | 'missing' {
+/** Postgres/PostgREST codes for a table that isn't deployed yet (before 0008). */
+const MISSING = new Set(['PGRST205', '42P01']);
+
+/**
+ * 'missing' only for a table that isn't there (PGRST205, 42P01, or a 404 with no body). Anything
+ * else (expired JWT, RLS, timeout, schema cache, 5xx, a gateway page, a dropped fetch) throws
+ * SalesOffline so the cache stays as it was.
+ */
+function check(res: PgResponse): 'ok' | 'missing' {
+  const { error } = res;
   if (!error) return 'ok';
-  if (error.code) return 'missing';
+  if (error.code && MISSING.has(error.code)) return 'missing';
+  if (res.status === 404 && !error.code && !error.message) return 'missing';
   throw new SalesOffline();
+}
+
+/** Each query gives up after this long, so no signal reads as offline in seconds, not after retries. */
+export const SALES_TIMEOUT_MS = 5000;
+
+function timeout(ms: number): { signal: AbortSignal; clear: () => void } {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return { signal: controller.signal, clear: () => clearTimeout(id) };
 }
 
 const KINDS = new Set(['auction', 'bin', 'offer']);
 
-/** Newest first. Writes the answer to the cache (not for mocks). */
+/** Newest first. Writes the answer to the cache (not for mocks). Raw cards have no sold comps. */
 export async function loadSales(card: Card, days: SalesDays, now = Date.now()): Promise<SalesResult> {
+  if (card.grader === 'raw') return { kind: 'none' };
   const key = cardKey(card);
   if (!supabase) return mockSales(key, days);
+  const db = supabase;
   const since = new Date(now - (days - 1) * DAY).toISOString().slice(0, 10);
+  const t = timeout(SALES_TIMEOUT_MS);
   let result: SalesResult;
   try {
-    const sales = await supabase
+    const sales: PgResponse = await db
       .from('sales')
       .select('source, listing_id, sold_day, sold_at, price_cents, kind, url')
       .eq('card_key', key)
       .gte('sold_day', since)
       .order('sold_day', { ascending: false })
       .order('sold_at', { ascending: false, nullsFirst: false })
-      .limit(300);
-    if (check(sales.error) === 'missing') result = { kind: 'none' };
-    else if (sales.data?.length) {
+      .limit(300)
+      .abortSignal(t.signal);
+    const salesRows = check(sales) === 'ok' && Array.isArray(sales.data) ? (sales.data as SaleRowDb[]) : [];
+    if (salesRows.length) {
       result = {
         kind: 'sales',
-        rows: (sales.data as SaleRowDb[]).map((r) => ({
+        rows: salesRows.map((r) => ({
           source: r.source,
           listingId: r.listing_id,
           soldDay: r.sold_day,
@@ -90,19 +113,24 @@ export async function loadSales(card: Card, days: SalesDays, now = Date.now()): 
         })),
       };
     } else {
-      const daily = await supabase
+      // No listings (or no sales table yet): daily averages, judged on sales_daily's own answer.
+      const daily: PgResponse = await db
         .from('sales_daily')
         .select('day, sales, avg_cents')
         .eq('card_key', key)
         .gte('day', since)
         .order('day', { ascending: false })
-        .limit(days + 1);
-      if (check(daily.error) === 'missing' || !daily.data?.length) result = { kind: 'none' };
-      else result = { kind: 'daily', rows: (daily.data as DayRowDb[]).map((r) => ({ day: r.day, sales: r.sales, avgCents: r.avg_cents })) };
+        .limit(days + 1)
+        .abortSignal(t.signal);
+      const dayRows = check(daily) === 'ok' && Array.isArray(daily.data) ? (daily.data as DayRowDb[]) : [];
+      result = dayRows.length
+        ? { kind: 'daily', rows: dayRows.map((r) => ({ day: r.day, sales: r.sales, avgCents: r.avg_cents })) }
+        : { kind: 'none' };
     }
-  } catch (e) {
-    if (e instanceof SalesOffline) throw e;
+  } catch {
     throw new SalesOffline();
+  } finally {
+    t.clear();
   }
   useSalesCache.getState().put(cacheKey(key, days), { result, fetchedAt: new Date(now).toISOString() });
   return result;

@@ -27,38 +27,48 @@ export function summarize(values: number[]): SalesSummary | null {
   };
 }
 
-/** 'above' / 'below' when a price is outside 1.5×IQR of the values; needs at least 5 values. */
+/**
+ * 'above' / 'below' when a price is outside the fence around the middle half of the values: the
+ * larger of 1.5×IQR and 10% of the median, so near-equal prices don't flag tiny differences.
+ * Needs at least 5 values.
+ */
 export function outlier(price: number, values: number[]): 'above' | 'below' | null {
   const v = clean(values);
-  if (v.length < 5) return null;
+  if (v.length < 5 || !Number.isFinite(price)) return null;
   const q1 = percentile(v, 0.25);
   const q3 = percentile(v, 0.75);
-  const fence = 1.5 * (q3 - q1);
+  const fence = Math.max(1.5 * (q3 - q1), 0.1 * percentile(v, 0.5));
   if (price > q3 + fence) return 'above';
   if (price < q1 - fence) return 'below';
   return null;
 }
 
+/** A day's sale count as a whole number ≥ 0 (NaN, fractions and junk can't throw or skew). */
+const daySales = (n: unknown) => Math.max(0, Math.floor(Number(n)) || 0);
+
+/** Sales per day that count, like price_daily (comps-math.ts gradedDaily). */
+export const DAY_CAP = 50;
+
 /**
  * Prices behind the summary: each sale, or each day's average once per sale that day (weighted
- * like price_daily, capped at 50 a day).
+ * like price_daily, capped at DAY_CAP a day). summarize(...).count is the header's sale count.
  */
 export function salesValues(r: SalesResult): number[] {
   if (r.kind === 'sales') return r.rows.map((s) => s.priceCents);
-  if (r.kind === 'daily') return r.rows.flatMap((d) => new Array(Math.min(Math.max(d.sales, 0), 50)).fill(d.avgCents));
+  if (r.kind === 'daily') return r.rows.flatMap((d) => new Array<number>(Math.min(daySales(d.sales), DAY_CAP)).fill(d.avgCents));
   return [];
 }
 
 /** One point per sale or per day: what the dot strip draws. */
 export function salesPoints(r: SalesResult): number[] {
   if (r.kind === 'sales') return r.rows.map((s) => s.priceCents);
-  if (r.kind === 'daily') return r.rows.map((d) => d.avgCents);
+  if (r.kind === 'daily') return r.rows.filter((d) => daySales(d.sales) > 0).map((d) => d.avgCents);
   return [];
 }
 
-/** Sales counted in a result (a day row counts its sales). */
+/** Sales counted in a result, with the same per-day cap as salesValues. */
 export function salesCount(r: SalesResult): number {
   if (r.kind === 'sales') return r.rows.length;
-  if (r.kind === 'daily') return r.rows.reduce((n, d) => n + d.sales, 0);
+  if (r.kind === 'daily') return r.rows.reduce((n, d) => n + Math.min(daySales(d.sales), DAY_CAP), 0);
   return 0;
 }
