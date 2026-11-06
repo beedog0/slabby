@@ -25,7 +25,7 @@ export const useDisplay = create<DisplayState>()(
       filter: 'all',
       setMode: (mode) => set({ mode }),
       setFilter: (filter) => set({ filter }),
-      searchLayout: 'list',
+      searchLayout: 'grid',
       setSearchLayout: (searchLayout) => set({ searchLayout }),
     }),
     { name: 'slabby.display', version: 1, storage: createJSONStorage(() => AsyncStorage) },
