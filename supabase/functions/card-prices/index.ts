@@ -1,11 +1,11 @@
 // card-prices: prices for a card opened from search. Body: { productId }.
-// Pokémon: one PokemonPriceTracker call (3 credits) gives raw plus PSA 10/9/8 with history; the
+// Pokémon: one PokemonPriceTracker call (3 credits) gives raw plus PSA 10 to 1 with history; the
 // answer is cached for 24 hours in search_cache and spends from the "search" bucket's own daily
 // cap, so browsing can't starve scans or the nightly vault refresh. Other games (and Pokémon once
 // the cap is hit with nothing cached) answer with tonight's TCGplayer market from `catalog`.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { isFresh, SEARCH_GRADES, summarize, type Summary } from '../_shared/catalog-math.ts';
+import { hasAllGrades, isFresh, SEARCH_GRADES, summarize, type Summary } from '../_shared/catalog-math.ts';
 import { gradedDaily, rawDaily, type DailySales } from '../_shared/comps-math.ts';
 import { fetchComps } from '../_shared/ppt.ts';
 
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
   if (card.game !== 'pokemon') return json(fallback());
 
   const { data: cached } = await admin.from('search_cache').select('payload, fetched_at').eq('product_id', productId).maybeSingle();
-  if (cached && isFresh(cached.fetched_at)) return json(cached.payload);
+  if (cached && isFresh(cached.fetched_at) && hasAllGrades(cached.payload)) return json(cached.payload);
 
   const ok = (await admin.rpc('claim_ppt_credits', { bucket_name: 'search', n: CREDITS_PER_OPEN, daily_cap: SEARCH_CAP })).data === true;
   if (!ok) return json(cached?.payload ? { ...cached.payload, capped: true } : fallback(true));
