@@ -84,3 +84,32 @@ describe('fromDaily', () => {
     expect(fromDaily([])).toBeNull();
   });
 });
+
+import { lastRawDay, lastSaleDay } from '../../../supabase/functions/_shared/comps-math';
+
+describe('last sale', () => {
+  it('takes the latest graded day with a sale and a price', () => {
+    expect(
+      lastSaleDay({
+        '2026-11-01': { average: 120.4, count: 2 },
+        '2026-11-04': { average: 99.995, count: 1 },
+        '2026-11-05': { average: 0, count: 1 }, // no price
+        '2026-11-06': { average: 140, count: 0 }, // no sale
+      }),
+    ).toEqual({ day: '2026-11-04', cents: 10_000 });
+  });
+  it('is null with no sales', () => {
+    expect(lastSaleDay({})).toBeNull();
+    expect(lastSaleDay({ '2026-11-01': { average: 50, count: 0 } })).toBeNull();
+  });
+  it('takes the latest raw market point', () => {
+    expect(
+      lastRawDay([
+        { date: '2026-11-03T00:00:00.000Z', market: 12.5 },
+        { date: '2026-11-01T00:00:00.000Z', market: 10 },
+        { date: '2026-11-04T00:00:00.000Z', market: null },
+      ]),
+    ).toEqual({ day: '2026-11-03', cents: 1_250 });
+    expect(lastRawDay([])).toBeNull();
+  });
+});

@@ -106,3 +106,27 @@ export function rawDaily(points: RawPoint[], today: string, days = 90): DailyRow
 export function bareNumber(n: string | null | undefined): string {
   return (n ?? '').split('/')[0].replace(/^0+(?=\d)/, '').trim();
 }
+
+export type LastSale = { day: string; cents: number };
+
+/** Latest day with a graded sale (count > 0 and a price), with that day's average. */
+export function lastSaleDay(sales: DailySales): LastSale | null {
+  let best: LastSale | null = null;
+  for (const [date, s] of Object.entries(sales ?? {})) {
+    if (!s || !(s.count > 0) || !(s.average > 0)) continue;
+    const day = date.slice(0, 10);
+    if (!best || day > best.day) best = { day, cents: cents(s.average) };
+  }
+  return best;
+}
+
+/** Latest raw TCGplayer market point with a price. */
+export function lastRawDay(points: RawPoint[]): LastSale | null {
+  let best: LastSale | null = null;
+  for (const p of points ?? []) {
+    if (p.market == null || !(p.market > 0)) continue;
+    const day = p.date.slice(0, 10);
+    if (!best || day > best.day) best = { day, cents: cents(p.market) };
+  }
+  return best;
+}
