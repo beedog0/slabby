@@ -1,7 +1,6 @@
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
-jest.mock('../../components/UndoBar', () => ({ showUndo: jest.fn() }));
 import { removeSlabs } from '../../components/collection/remove';
 import { useDisplay } from '../display';
 import { useVault } from '../vault';

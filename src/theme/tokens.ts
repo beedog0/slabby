@@ -72,7 +72,9 @@ export const size = {
   /** Home value chart; its slot keeps this height on every filter so the tabs never move. */
   homeChart: 84,
   /** Menu sheet rows: taller than a vault row's text line, shorter than a con row. */
-  menuRow: 56,
+  menuRow: 52,
+  /** The slab in a menu sheet's header. */
+  menuSlabW: 44,
   grabberW: 36,
   grabberH: 5,
   /** Home … dropdown width. */
@@ -97,8 +99,6 @@ export const motion = {
   sheetOut: 180,
   dropIn: 160,
   dropOut: 120,
-  /** How long "Removed · Undo" stays up. */
-  undoMs: 5000,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };

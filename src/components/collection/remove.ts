@@ -1,17 +1,7 @@
-// Removing slabs happens right away (Bryan didn't want a confirm step); a bar at the bottom offers
-// Undo for a few seconds, which puts the slabs back where they were, pin and shelf order included.
+// Taking slabs out of the vault. The confirm step lives in statusSheets.tsx; this does the work.
 
 import { useDisplay } from '../../store/display';
 import { useVault } from '../../store/vault';
-import type { Card } from '../../types';
-import { showUndo } from '../UndoBar';
-
-/** Remove now, offer Undo. `then` runs just before the slabs go (leave select mode, or the card page). */
-export function removeWithUndo(cards: Card[], then?: () => void) {
-  if (!cards.length) return;
-  const restore = removeSlabs(cards.map((c) => c.id), then);
-  showUndo(cards.length === 1 ? 'Removed from vault' : `Removed ${cards.length} slabs`, restore);
-}
 
 /** Remove slabs, unpin and unorder them. Returns a function that puts everything back. */
 export function removeSlabs(ids: string[], then?: () => void): () => void {

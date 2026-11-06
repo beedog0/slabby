@@ -5,9 +5,13 @@
 //
 // The host is mounted once at the root; call openMenu({...}) anywhere. An item's action runs after
 // the sheet has closed, so pushing a screen or opening the share sheet never fights the modal.
+//
+// Motion: the sheet waits off screen until it has been measured, then slides up on the native
+// driver. Starting before the measure (and swapping the animated node when the height arrived)
+// is what made it open in visible steps on the phone.
 
 import * as Haptics from 'expo-haptics';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   Easing,
@@ -18,13 +22,14 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { gradeLabel, rowTitle } from '../../lib/format';
 import { color, motion, radius, size, space, type } from '../../theme/tokens';
 import type { Card } from '../../types';
-import { CardThumb } from '../CardThumb';
+import { SlabView } from '../SlabView';
 import { Hairline } from '../ui';
 
 export type MenuItem = {
@@ -43,9 +48,20 @@ export type MenuSpec = {
   subtitle?: string;
   /** Items in groups; groups are split by a wider gap instead of a heavier line. */
   items: MenuItem[] | MenuItem[][];
+  /**
+   * Content between the header and the rows: a confirm step's live numbers and its one button.
+   * It closes the sheet itself with closeMenu(then).
+   */
+  body?: ReactNode;
 };
 
 let request: ((spec: MenuSpec) => void) | null = null;
+let closer: ((then?: () => void) => void) | null = null;
+
+/** Close the open sheet, then run `then` (e.g. save, or open the next sheet). */
+export function closeMenu(then?: () => void) {
+  closer?.(then);
+}
 
 /** Open the … menu. Safe to call from anywhere once MenuHost is mounted. */
 export function openMenu(spec: MenuSpec) {
@@ -59,44 +75,53 @@ export function groupsOf(items: MenuSpec['items']): MenuItem[][] {
 
 export function MenuHost() {
   const insets = useSafeAreaInsets();
+  const { height: screenH } = useWindowDimensions();
   const [spec, setSpec] = useState<MenuSpec | null>(null);
-  const [sheetH, setSheetH] = useState(600);
-  const progress = useRef(new Animated.Value(0)).current; // 0 hidden, 1 shown
+  const native = Platform.OS !== 'web';
+  // Sheet offset (its height when hidden, 0 when shown) and scrim opacity, both on the native driver.
+  const offset = useRef(new Animated.Value(screenH)).current;
+  const fade = useRef(new Animated.Value(0)).current;
   const drag = useRef(new Animated.Value(0)).current; // pull-down offset
+  // One animated node for the whole life of the host, so nothing is re-attached mid-animation.
+  const translateY = useRef(Animated.add(offset, drag)).current;
+  const sheetH = useRef(screenH);
+  const opened = useRef(false);
   const closing = useRef(false);
 
   useEffect(() => {
     request = (s) => {
       closing.current = false;
+      opened.current = false;
       drag.setValue(0);
-      progress.setValue(0);
+      fade.setValue(0);
+      offset.setValue(screenH);
       setSpec(s);
     };
     return () => {
       request = null;
     };
-  }, [drag, progress]);
+  }, [drag, fade, offset, screenH]);
 
-  useEffect(() => {
-    if (!spec) return;
-    if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: motion.sheetIn,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: Platform.OS !== 'web',
-    }).start();
-  }, [spec, progress]);
+  // Runs once the sheet has its real height: place it just below the screen edge, then slide up.
+  const onSheetLayout = (h: number) => {
+    sheetH.current = h;
+    if (opened.current || closing.current) return;
+    opened.current = true;
+    offset.setValue(h);
+    if (native) Haptics.selectionAsync().catch(() => {});
+    Animated.parallel([
+      Animated.timing(offset, { toValue: 0, duration: motion.sheetIn, easing: Easing.out(Easing.cubic), useNativeDriver: native }),
+      Animated.timing(fade, { toValue: 1, duration: motion.sheetIn, easing: Easing.out(Easing.quad), useNativeDriver: native }),
+    ]).start();
+  };
 
   const close = (then?: () => void) => {
     if (closing.current) return;
     closing.current = true;
-    Animated.timing(progress, {
-      toValue: 0,
-      duration: motion.sheetOut,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: Platform.OS !== 'web',
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(offset, { toValue: sheetH.current, duration: motion.sheetOut, easing: Easing.in(Easing.cubic), useNativeDriver: native }),
+      Animated.timing(fade, { toValue: 0, duration: motion.sheetOut, useNativeDriver: native }),
+    ]).start(() => {
       setSpec(null);
       drag.setValue(0);
       then?.();
@@ -105,6 +130,7 @@ export function MenuHost() {
 
   const closeRef = useRef(() => {});
   closeRef.current = () => close();
+  closer = close;
 
   // Pull the sheet down to dismiss it, like any iOS sheet.
   const pan = useRef(
@@ -113,10 +139,10 @@ export function MenuHost() {
       onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
       onPanResponderRelease: (_, g) => {
         if (g.dy > 80 || g.vy > 0.8) closeRef.current();
-        else Animated.spring(drag, { toValue: 0, useNativeDriver: Platform.OS !== 'web', bounciness: 0 }).start();
+        else Animated.spring(drag, { toValue: 0, useNativeDriver: native, bounciness: 0 }).start();
       },
       onPanResponderTerminate: () => {
-        Animated.spring(drag, { toValue: 0, useNativeDriver: Platform.OS !== 'web', bounciness: 0 }).start();
+        Animated.spring(drag, { toValue: 0, useNativeDriver: native, bounciness: 0 }).start();
       },
     }),
   ).current;
@@ -126,20 +152,15 @@ export function MenuHost() {
   const title = spec.title;
   const hasHeader = !!(spec.card || title);
 
-  const translateY = Animated.add(
-    progress.interpolate({ inputRange: [0, 1], outputRange: [sheetH, 0] }),
-    drag,
-  );
-
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={() => close()}>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: color.scrim, opacity: progress }]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: color.scrim, opacity: fade }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close menu" style={StyleSheet.absoluteFill} onPress={() => close()} />
       </Animated.View>
 
       <Animated.View
         accessibilityViewIsModal
-        onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
+        onLayout={(e) => onSheetLayout(e.nativeEvent.layout.height)}
         style={[styles.sheet, { paddingBottom: insets.bottom + space.s, transform: [{ translateY }] }]}
         {...pan.panHandlers}
       >
@@ -147,15 +168,16 @@ export function MenuHost() {
 
         {hasHeader ? (
           <View style={styles.header}>
-            {spec.card ? <CardThumb card={spec.card} /> : null}
+            {/* The real slab, label and all; the row thumbnail's grey label strip read as a blank top. */}
+            {spec.card ? <SlabView card={spec.card} width={size.menuSlabW} posed={false} /> : null}
             <View style={{ flex: 1, minWidth: 0 }}>
               {title ? (
-                <Text numberOfLines={1} style={[type.section, { color: color.ink }]}>
+                <Text numberOfLines={1} style={[type.body, styles.title]}>
                   {title}
                 </Text>
               ) : null}
               {spec.subtitle ? (
-                <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
+                <Text numberOfLines={1} style={[type.text, styles.subtitle]}>
                   {spec.subtitle}
                 </Text>
               ) : null}
@@ -163,11 +185,19 @@ export function MenuHost() {
           </View>
         ) : null}
 
+        {spec.body ? (
+          <View>
+            {hasHeader ? <Hairline /> : null}
+            {spec.body}
+          </View>
+        ) : null}
+
         {groups.map((group, gi) => (
-          <View key={gi} style={gi > 0 ? styles.groupGap : undefined}>
+          // Every row is split by the same hairline, groups included, so the rhythm stays even.
+          <View key={gi}>
             {group.map((item, i) => (
               <View key={item.label}>
-                {i > 0 || (gi === 0 && hasHeader) ? <Hairline /> : null}
+                {i > 0 || gi > 0 || hasHeader || spec.body ? <Hairline /> : null}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={item.selected ? { selected: true } : undefined}
@@ -227,15 +257,17 @@ const styles = StyleSheet.create({
     borderRadius: size.grabberH / 2,
     backgroundColor: color.hairline,
     marginTop: space.s,
-    marginBottom: space.l,
+    marginBottom: space.m,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.l,
-    paddingBottom: space.l,
+    gap: space.m,
+    paddingBottom: space.m,
   },
-  groupGap: { marginTop: space.l, borderTopWidth: StyleSheet.hairlineWidth * 2, borderTopColor: color.hairline },
+  // Name and grade read as one block: semibold body over regular secondary, 2 pt apart.
+  title: { color: color.ink, fontWeight: '600' },
+  subtitle: { color: color.secondary, paddingTop: 2 },
   row: {
     minHeight: size.menuRow,
     flexDirection: 'row',
@@ -244,12 +276,13 @@ const styles = StyleSheet.create({
   },
   // Pressed rows dim like the rest of the app's text buttons; no highlight box.
   pressed: { opacity: 0.45 },
-  label: { flex: 1, color: color.ink },
+  // Regular weight, like iOS menus; the header carries the only semibold text.
+  label: { flex: 1, color: color.ink, fontWeight: '400' },
   cancel: {
     height: size.menuRow,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: space.s,
+    marginTop: space.xs,
   },
 });
 
