@@ -61,6 +61,8 @@ export const size = {
   thumbH: 50,
   heroW: 190,
   heroH: 305, // 190 × PSA's 134.6/83.9
+  /** The slab in the scan result sheet. */
+  sheetSlabW: 44,
   sparkW: 56,
   sparkH: 24,
   stepper: 32,
