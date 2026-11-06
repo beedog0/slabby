@@ -1,13 +1,15 @@
 // Card search: any card in TCGplayer's catalog (Pokémon EN/JP, One Piece, Riftbound), not just
 // the vault. Results show tonight's raw market; open a card for PSA prices with charts.
 // Typing, filtering and sorting only query our own catalog table, never a paid API.
-// Quiet controls under the field: "Filter" (language, rarity, set) and the sort dropdown.
+// Quiet controls under the field: "Filter" (language, rarity, set), the sort dropdown, and
+// List / Grid (remembered, like home's view switch).
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
+import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
@@ -26,17 +28,22 @@ import {
   type Query,
   type Sort,
 } from '../../src/services/searchFilters';
+import { useDisplay } from '../../src/store/display';
 import { useRules } from '../../src/store/rules';
 import { color, radius, shadow, size, space, type } from '../../src/theme/tokens';
 import type { PricingRules } from '../../src/types';
 
 type GameFilter = 'all' | Game;
+const GRID_GAP = space.l;
 
 export default function Search() {
   const insets = useSafeAreaInsets();
   // Con mode opens search with ?con=1: each result also shows what to pay, from the buying rules.
   const con = useLocalSearchParams<{ con?: string }>().con === '1';
   const rules = useRules((s) => s.rules);
+  const { searchLayout: layout, setSearchLayout } = useDisplay();
+  const { width } = useWindowDimensions();
+  const cellW = Math.floor((width - space.gutter * 2 - GRID_GAP) / 2);
   const [f, setF] = useState<Query>(EMPTY_QUERY);
   const set = (patch: Partial<Query>) => setF((prev) => ({ ...prev, ...patch }));
   const [results, setResults] = useState<Found[]>([]);
@@ -143,9 +150,12 @@ export default function Search() {
           <Pressable accessibilityRole="button" accessibilityLabel="Filter" onPress={() => setFilterOpen(true)} hitSlop={8} style={styles.control}>
             <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{nFilters ? `Filter · ${nFilters}` : 'Filter'}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Sort" onPress={() => setSortOpen(true)} hitSlop={8} style={styles.control}>
-            <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{sortLabel} ▾</Text>
-          </Pressable>
+          <View style={styles.controlsRight}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Sort" onPress={() => setSortOpen(true)} hitSlop={8} style={styles.control}>
+              <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{sortLabel} ▾</Text>
+            </Pressable>
+            <ViewSwitch value={layout} onChange={setSearchLayout} modes={SEARCH_MODES} />
+          </View>
         </View>
       ) : null}
 
@@ -153,15 +163,22 @@ export default function Search() {
         <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.xl }]}>{hint}</Text>
       ) : (
         <FlatList
+          key={layout}
           data={results}
+          numColumns={layout === 'grid' ? 2 : 1}
           keyExtractor={(c) => String(c.productId)}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: insets.bottom + space.xl }}
-          ItemSeparatorComponent={() => <Hairline inset={space.gutter + size.thumbW + space.m} />}
-          renderItem={({ item }) => (
-            <ResultRow card={item} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
-          )}
+          contentContainerStyle={{ paddingBottom: insets.bottom + space.xl, paddingTop: layout === 'grid' ? space.m : 0 }}
+          columnWrapperStyle={layout === 'grid' ? styles.gridRow : undefined}
+          ItemSeparatorComponent={layout === 'grid' ? undefined : () => <Hairline inset={space.gutter + size.thumbW + space.m} />}
+          renderItem={({ item }) =>
+            layout === 'grid' ? (
+              <ResultTile card={item} width={cellW} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+            ) : (
+              <ResultRow card={item} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+            )
+          }
         />
       )}
 
@@ -320,6 +337,40 @@ function CheckRow({ label, detail, on, onPress }: { label: string; detail?: stri
   );
 }
 
+type ResultProps = { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number };
+
+const openCard = (card: Found, con: boolean) => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`);
+
+/** Grid tile: the card photo, then name, set · number and price, like home's grid. */
+function ResultTile({ card, width, con, rules, change, days }: ResultProps & { width: number }) {
+  const no = cardNumber(card.number);
+  const buy = con ? buyPrices(card.marketCents, rules) : null;
+  return (
+    <Pressable accessibilityRole="button" onPress={() => openCard(card, con)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
+      <View style={[styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
+        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}
+      </View>
+      <View style={{ gap: 2, paddingTop: space.m }}>
+        <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
+          {displayName(card.name)}
+        </Text>
+        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+          {[no && `#${no}`, card.language === 'ja' ? 'JP' : null, card.setName].filter(Boolean).join(' · ')}
+        </Text>
+        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+          raw <Text style={{ color: color.ink }}>{card.marketCents != null ? money(card.marketCents) : '—'}</Text>
+          {change != null ? <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{`  ${pct(change)} ${days}d`}</Text> : null}
+        </Text>
+        {buy ? (
+          <Text numberOfLines={1} style={[type.secondary, { color: color.ink }]}>
+            pay {money(buy.target)}–{money(buy.max).replace('$', '')}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
 function ResultRow({ card, con, rules, change, days }: { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number }) {
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
@@ -422,5 +473,8 @@ const styles = StyleSheet.create({
   },
   sheetSection: { paddingTop: space.m, paddingBottom: space.s },
   sectionTitle: { color: color.ink, fontWeight: '600', paddingHorizontal: space.gutter, paddingBottom: space.s },
+  controlsRight: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginRight: -10 },
+  gridRow: { gap: GRID_GAP, paddingHorizontal: space.gutter, paddingBottom: space.xxl },
+  tileArt: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
   thumb: { width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, backgroundColor: color.well, overflow: 'hidden' },
 });
