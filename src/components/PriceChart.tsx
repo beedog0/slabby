@@ -19,8 +19,11 @@ type Props = {
   tint?: string;
   /** Date of the last value (YYYY-MM-DD). Values are one per day ending there. */
   asOf?: string;
-  /** Smaller type, no paid label, no scrubbing: for the home value line. */
+  /** Smaller type, no paid label: for the home value line. */
   compact?: boolean;
+  /** Hand the pressed price and date to the parent (home shows them in its big number) instead of
+   * drawing the readout above the plot. Called with null on release. */
+  onScrub?: (point: { cents: number; date?: string } | null) => void;
 };
 
 const PAD = 8;
@@ -52,7 +55,7 @@ export function gridPrices(lo: number, hi: number): number[] {
 /** Space for a high/low price label between its point and the plot edge. */
 const POINT_ROOM = 20;
 
-export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false }: Props) {
+export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false, onScrub }: Props) {
   const values = downsample(raw, compact ? 24 : 32);
   const [scrub, setScrub] = useState<number | null>(null); // index into raw
   const plotW = width - LABEL_W;
@@ -73,17 +76,26 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
 
   const pan = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !compact,
-      onMoveShouldSetPanResponder: () => !compact,
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
       onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: (e) => setScrub(indexAt(e.nativeEvent.locationX)),
-      onPanResponderMove: (e) => setScrub(indexAt(e.nativeEvent.locationX)),
-      onPanResponderRelease: () => setScrub(null),
-      onPanResponderTerminate: () => setScrub(null),
+      onPanResponderGrant: (e) => scrubTo(indexAt(e.nativeEvent.locationX)),
+      onPanResponderMove: (e) => scrubTo(indexAt(e.nativeEvent.locationX)),
+      onPanResponderRelease: () => scrubTo(null),
+      onPanResponderTerminate: () => scrubTo(null),
     }),
   ).current;
   const rawRef = useRef(raw);
   rawRef.current = raw;
+  const outRef = useRef({ onScrub, asOf });
+  outRef.current = { onScrub, asOf };
+  function scrubTo(i: number | null) {
+    setScrub(i);
+    const { onScrub: out, asOf: end } = outRef.current;
+    if (!out) return;
+    const vals = rawRef.current;
+    out(i == null ? null : { cents: vals[i], date: end ? shortDate(dayBefore(end, vals.length - 1 - i)) : undefined });
+  }
   function indexAt(px: number) {
     const n = rawRef.current.length;
     return Math.max(0, Math.min(n - 1, Math.round(((px - PAD) / Math.max(1, plotW - PAD * 2)) * (n - 1))));
@@ -146,8 +158,8 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
         <Circle cx={rx(raw.length - 1)} cy={y(last)} r={compact ? 3.5 : 6} fill={tint} />
         {s != null ? (
           <>
-            <Line x1={rx(s)} x2={rx(s)} y1={READOUT_H} y2={plotH} stroke={color.secondary} strokeWidth={1} />
-            <Circle cx={rx(s)} cy={y(raw[s])} r={5} fill={color.canvas} stroke={tint} strokeWidth={2} />
+            <Line x1={rx(s)} x2={rx(s)} y1={onScrub ? 0 : READOUT_H} y2={plotH} stroke={color.secondary} strokeWidth={1} />
+            <Circle cx={rx(s)} cy={y(raw[s])} r={compact ? 4 : 5} fill={color.canvas} stroke={tint} strokeWidth={2} />
           </>
         ) : null}
       </Svg>
@@ -168,7 +180,7 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
       ) : null}
 
       {/* Scrub readout: price and date on one line above the plot, so they can't stack into each other. */}
-      {s != null ? (
+      {s != null && !onScrub ? (
         <View style={{ position: 'absolute', top: 0, height: READOUT_H, left: Math.max(0, Math.min(plotW - 160, rx(s) - 80)), width: 160, flexDirection: 'row', justifyContent: 'center', alignItems: 'baseline', gap: 6 }}>
           <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>{money(raw[s])}</Text>
           {asOf ? <Text numberOfLines={1} style={labelStyle}>{shortDate(dayBefore(asOf, raw.length - 1 - s))}</Text> : null}
