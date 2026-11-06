@@ -5,7 +5,7 @@
 // the cap is hit with nothing cached) answer with tonight's TCGplayer market from `catalog`.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { hasAllGrades, isFresh, SEARCH_GRADES, summarize, type Summary } from '../_shared/catalog-math.ts';
+import { hasAllGrades, isFresh, realDays, SEARCH_GRADES, summarize, withPoints, type Summary } from '../_shared/catalog-math.ts';
 import { gradedDaily, rawDaily, type DailySales } from '../_shared/comps-math.ts';
 import { fetchComps } from '../_shared/ppt.ts';
 
@@ -51,6 +51,9 @@ Deno.serve(async (req) => {
             sales30d: 0,
             asOf: card.updated_on,
             series90: [card.market_cents],
+            points: 1,
+            since: card.updated_on,
+            lastReal: card.updated_on,
           }
         : null,
     grades: Object.fromEntries(SEARCH_GRADES.map((g) => [g, null])),
@@ -71,9 +74,22 @@ Deno.serve(async (req) => {
   try {
     const comps = await fetchComps(String(productId), card.language);
     const today = new Date().toISOString().slice(0, 10);
-    const raw = summarize(rawDaily(comps?.priceHistory?.conditions?.['Near Mint']?.history ?? [], today));
+    const history = comps?.priceHistory?.conditions?.['Near Mint']?.history ?? [];
+    let raw = withPoints(
+      summarize(rawDaily(history, today)),
+      realDays(history.filter((h) => h.market != null && h.market > 0).map((h) => h.date), today),
+    );
+    // rawDaily carries the last price forward to today. When tonight's TCGplayer market in our
+    // catalog is newer than PPT's last real point, the catalog is the truer "now".
+    if (raw && card.market_cents != null && card.updated_on && (!raw.lastReal || raw.lastReal < card.updated_on)) {
+      raw = { ...raw, marketCents: card.market_cents, series90: [...raw.series90.slice(0, -1), card.market_cents], asOf: card.updated_on };
+    }
     const grades = Object.fromEntries(
-      SEARCH_GRADES.map((g) => [g, summarize(gradedDaily((comps?.ebay?.priceHistory?.[g] ?? {}) as DailySales, today))]),
+      SEARCH_GRADES.map((g) => {
+        const sales = (comps?.ebay?.priceHistory?.[g] ?? {}) as DailySales;
+        const days = realDays(Object.keys(sales).filter((d) => sales[d]?.count > 0 && sales[d]?.average > 0), today);
+        return [g, withPoints(summarize(gradedDaily(sales, today)), days)];
+      }),
     );
     const answer: Answer = { productId, raw: raw ?? fallback().raw, grades, fetchedAt: new Date().toISOString(), source: 'ppt' };
     await admin.from('search_cache').upsert({ product_id: productId, payload: answer, fetched_at: answer.fetchedAt });

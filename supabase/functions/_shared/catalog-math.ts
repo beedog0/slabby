@@ -107,7 +107,27 @@ export type Summary = {
   sales30d: number;
   asOf: string;
   series90: number[];
+  /** Real data points behind series90 (days with a sale or a TCGplayer price; the rest are
+   *  carried forward). Missing on answers cached before 2026-11-06. */
+  points?: number;
+  /** First and last real data point in the window. */
+  since?: string;
+  lastReal?: string;
 };
+
+/** Days in the last `days` that have real data, oldest first. */
+export function realDays(dates: string[], today: string, days = 90): string[] {
+  const start = new Date(`${today}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  const from = start.toISOString().slice(0, 10);
+  return [...new Set(dates.map((d) => d.slice(0, 10)))].filter((d) => d >= from && d <= today).sort();
+}
+
+/** Adds points/since/lastReal to a summary. */
+export function withPoints(s: Summary | null, days: string[]): Summary | null {
+  if (!s) return s;
+  return { ...s, points: days.length, since: days[0], lastReal: days[days.length - 1] };
+}
 
 export function summarize(rows: Daily[]): Summary | null {
   if (!rows.length) return null;
