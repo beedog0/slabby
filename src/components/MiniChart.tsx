@@ -23,7 +23,19 @@ export function MiniChart({ values, width, height = 40 }: { values: number[]; wi
 }
 
 /** The home value line with light reference points: gridline prices on the right, start and end dates. */
-export function ValueChart({ values, width, asOf }: { values: number[]; width: number; asOf?: string }) {
+export function ValueChart({
+  values,
+  width,
+  asOf,
+  onScrub,
+}: {
+  values: number[];
+  width: number;
+  asOf?: string;
+  onScrub?: (point: { cents: number; date?: string } | null) => void;
+}) {
   if (values.length < 2) return null;
-  return <PriceChart values={values} paidCents={null} width={width} height={size.homeChart} tint={trendTint(values)} asOf={asOf} compact />;
+  return (
+    <PriceChart values={values} paidCents={null} width={width} height={size.homeChart} tint={trendTint(values)} asOf={asOf} compact onScrub={onScrub} />
+  );
 }

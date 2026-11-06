@@ -94,6 +94,8 @@ export default function Home() {
   const all = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   const base = useMemo(() => collection(all, filter), [all, filter]);
   const [query, setQuery] = useState('');
+  // Holding the value chart: the big number and the line under it show that day instead.
+  const [scrubbed, setScrubbed] = useState<{ cents: number; date?: string } | null>(null);
   // Arranging: tap one slab, then another, to swap them. Saves as "My order".
   const [arranging, setArranging] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -224,6 +226,7 @@ export default function Home() {
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
       <ScrollView
+        scrollEnabled={!scrubbed}
         contentContainerStyle={{
           paddingTop: insets.top + space.l,
           // The dock only shows on an empty vault; a full vault scrolls to the bottom edge.
@@ -261,14 +264,20 @@ export default function Home() {
                 {VALUE_LABEL[filter]}
               </Text>
               <Text numberOfLines={1} style={[type.displayS, { color: total ? color.ink : color.secondary }]}>
-                {money(stats.totalCents)}
+                {money(scrubbed ? scrubbed.cents : stats.totalCents)}
               </Text>
               <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
-                {subline}
+                {scrubbed ? (scrubbed.date ?? ' ') : subline}
               </Text>
               <View style={styles.chart}>
                 {valueLine.length > 1 ? (
-                  <ValueChart values={valueLine} width={contentW} asOf={filter === 'sold' ? undefined : asOf} />
+                  <ValueChart
+                    values={valueLine}
+                    width={contentW}
+                    // The sold line runs one point per day up to today.
+                    asOf={filter === 'sold' ? new Date().toISOString().slice(0, 10) : asOf}
+                    onScrub={setScrubbed}
+                  />
                 ) : (
                   <ChartPlaceholder text={total ? 'Prices are loading.' : empty.chart} />
                 )}
