@@ -1,4 +1,4 @@
-// Search with filters and sorts (0009_search_filters.sql). Filtering and sorting run in the
+// Search with filters and sorts (0010_search_filters.sql). Filtering and sorting run in the
 // database over the whole catalog, so "Japanese" or "Biggest rise" look at every card, not just
 // the first page of matches. Without Supabase configured, everything runs on the mock catalog.
 
