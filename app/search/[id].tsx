@@ -227,7 +227,12 @@ export default function SearchedCard() {
       </ScrollView>
       {back}
       <View style={[styles.gutter, { paddingBottom: Math.max(insets.bottom, space.l), paddingTop: space.m }]}>
-        <PrimaryButton title="Add to vault" onPress={() => router.push({ pathname: '/add', params: addParams(ready, pick) })} />
+        {buying ? (
+          // Buying at a con: the next step is the seller's price, rated against your rules.
+          <PrimaryButton title="They're asking…" onPress={() => router.push({ pathname: '/con/buy/[id]', params: { id: String(ready.productId), grade: pick } })} />
+        ) : (
+          <PrimaryButton title="Add to vault" onPress={() => router.push({ pathname: '/add', params: addParams(ready, pick) })} />
+        )}
       </View>
     </View>
   );

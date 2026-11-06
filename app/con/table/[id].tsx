@@ -3,7 +3,6 @@
 // A sold card shows the sale with undo instead. Reference: 07-before-the-table.png.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardThumb } from '../../../src/components/CardThumb';
@@ -14,11 +13,12 @@ import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, St
 import { gradeLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
 import { minFloorOverride } from '../../../src/pricing/rules';
 import { useCardRow } from '../../../src/pricing/useCardRow';
+import { useCon, type ConMode } from '../../../src/store/con';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
 import { color, size, space, type } from '../../../src/theme/tokens';
 
-type Mode = 'sell' | 'buy';
+type Mode = ConMode;
 
 export default function BeforeTheTable() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,7 +26,9 @@ export default function BeforeTheTable() {
   const row = useCardRow(id);
   const rules = useRules((s) => s.rules);
   const update = useVault((s) => s.update);
-  const [mode, setMode] = useState<Mode>('sell');
+  // Same switch as con mode's Selling / Buying, so flipping here flips there too.
+  const mode = useCon((s) => s.mode);
+  const setMode = useCon((s) => s.setMode);
 
   if (!row) return null;
   const { card, price } = row;

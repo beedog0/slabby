@@ -198,3 +198,25 @@ export function soldSeries(rows: CardRow[], days = 30, now = new Date()): number
   let run = before;
   return out.map((v) => (run += v));
 }
+
+export type ConBuySummary = { spentCents: number; count: number; underMarketCents: number };
+
+/** Buying side of a con: slabs added since the session started with a price paid. */
+export function conBuySummary(rows: CardRow[], startedAt: string): ConBuySummary {
+  let spentCents = 0, count = 0, underMarketCents = 0;
+  for (const r of rows) {
+    const c = r.card;
+    if (c.createdAt < startedAt || c.paidCents == null) continue;
+    spentCents += c.paidCents;
+    count++;
+    if (r.price) underMarketCents += r.price.marketCents - c.paidCents;
+  }
+  return { spentCents, count, underMarketCents };
+}
+
+/** The rows conBuySummary counts, newest first. */
+export function boughtSince(rows: CardRow[], startedAt: string): CardRow[] {
+  return rows
+    .filter((r) => r.card.createdAt >= startedAt && r.card.paidCents != null)
+    .sort((a, b) => b.card.createdAt.localeCompare(a.card.createdAt));
+}
