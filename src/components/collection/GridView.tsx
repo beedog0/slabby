@@ -3,7 +3,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
-import type { CardRow } from '../../pricing/portfolio';
+import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
 import { PinMark } from './PinMark';
 import { SelectOutline } from './SelectOutline';
@@ -48,9 +48,11 @@ export function GridView({ rows, width, actions }: { rows: CardRow[]; width: num
 }
 
 export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
-  const { card, price, gain } = row;
+  const { card, price } = row;
   const sold = card.status === 'sold';
   const value = sold ? card.soldCents : price?.marketCents;
+  // Last 7 days of market movement, like the search grid's "+3% 7d". What you paid is on the card.
+  const week = weekChange(row);
   const align = center ? 'center' : 'flex-start';
   return (
     <View style={{ gap: 2, alignItems: align }}>
@@ -61,10 +63,17 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
         {gradeLabel(card.grader, card.grade, card.condition)}
         {' · '}
         <Text style={{ color: color.ink }}>{value != null ? money(value) : '—'}</Text>
-        {!sold && gain != null ? (
-          <Text style={{ color: gain >= 0 ? color.gain : color.loss }}>{`  ${pct(gain)}`}</Text>
-        ) : null}
         {sold ? ' sold' : ''}
+      </Text>
+      {/* Its own line so it never truncates; a blank line when there's nothing to say, so rows line up. */}
+      <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+        {week ? (
+          <>
+            <Text style={{ color: week.cents >= 0 ? color.gain : color.loss }}>{pct(week.fraction)}</Text> 7d
+          </>
+        ) : (
+          ' '
+        )}
       </Text>
     </View>
   );

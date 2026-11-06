@@ -230,3 +230,21 @@ export function conBuySummary(rows: CardRow[], conId: string): ConBuySummary {
   }
   return { spentCents, count, underMarketCents };
 }
+
+export type WeekChange = { cents: number; fraction: number };
+
+/**
+ * How a slab's market price moved over the last 7 days, for the small colored figure in the grid
+ * and swipe views. Null when there's under a week of history, when the slab is sold, or when the
+ * move rounds to nothing (under $1 and under 1%), so a quiet week shows no number at all.
+ */
+export function weekChange(row: CardRow, days = 7): WeekChange | null {
+  const p = row.price;
+  if (!p || row.card.status === 'sold' || p.series90.length <= days) return null;
+  const from = p.series90[p.series90.length - 1 - days];
+  if (!from) return null;
+  const cents = p.marketCents - from;
+  const fraction = cents / from;
+  if (Math.abs(cents) < 100 && Math.abs(fraction) < 0.005) return null;
+  return { cents, fraction };
+}

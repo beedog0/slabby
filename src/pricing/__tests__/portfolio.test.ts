@@ -1,7 +1,7 @@
 import cards from '../../mocks/cards.json';
 import { DEFAULT_RULES, type Card } from '../../types';
 import { cardKey } from '../cardKey';
-import { filterStats, rowFor, soldSeries, summarize } from '../portfolio';
+import { filterStats, rowFor, soldSeries, summarize, weekChange } from '../portfolio';
 import { money, pct } from '../../lib/format';
 
 const all = cards as Card[];
@@ -179,5 +179,25 @@ describe('ordinal', () => {
   it('names counts', () => {
     const { ordinal } = require('../../lib/format');
     expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '101st']);
+  });
+});
+
+describe('weekChange', () => {
+  const mew = byName('Mew ex');
+  const price = (series90: number[]) => ({ ...rowFor(mew, DEFAULT_RULES).price!, series90, marketCents: series90[series90.length - 1] });
+  const row = (series90: number[], card = mew) => rowFor(card, DEFAULT_RULES, price(series90));
+
+  it('is today vs 7 days ago, in dollars and percent', () => {
+    const w = weekChange(row([100000, 100000, 100000, 100000, 100000, 100000, 100000, 102000]))!;
+    expect(w.cents).toBe(2000);
+    expect(pct(w.fraction)).toBe('+2%');
+  });
+  it('goes negative on a drop', () => {
+    expect(weekChange(row([50000, 1, 1, 1, 1, 1, 1, 45000]))!.cents).toBe(-5000);
+  });
+  it('hides with under a week of history, a flat week, or a sold slab', () => {
+    expect(weekChange(row([100000, 103000]))).toBeNull();
+    expect(weekChange(row(Array(8).fill(100000)))).toBeNull();
+    expect(weekChange(row([100000, 0, 0, 0, 0, 0, 0, 105000], { ...mew, status: 'sold' }))).toBeNull();
   });
 });

@@ -9,10 +9,10 @@ import { router } from 'expo-router';
 import type React from 'react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { CardRow } from '../../pricing/portfolio';
+import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { color, size, space, type } from '../../theme/tokens';
 import { prefetchArt } from '../ArtImage';
-import { gradeLabel, money, rowTitle } from '../../lib/format';
+import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
 import { SlabView } from '../SlabView';
 import { PinMark } from './PinMark';
 
@@ -234,6 +234,8 @@ export function ScrollDisplay({
  * Name, value, then one line that depends on the slab: gain vs paid for holds, ask and floor for
  * slabs for sale, the sale vs paid for sold ones. The 30-day chart lives on the detail screen.
  */
+const signedMoney = (cents: number) => `${cents >= 0 ? '+' : '−'}${money(Math.abs(cents))}`;
+
 function SwipeCaption({ row }: { row: CardRow }) {
   const { card, price } = row;
   const sold = card.status === 'sold';
@@ -241,6 +243,8 @@ function SwipeCaption({ row }: { row: CardRow }) {
   const value = sold ? card.soldCents : price?.marketCents;
   const muted = { color: color.secondary };
   const ink = { color: color.ink };
+  // Last 7 days of market movement, beside the price: "+$25 (+2%) 7d".
+  const week = weekChange(row);
   const signed = (cents: number) => (
     <Text style={{ color: cents >= 0 ? color.gain : color.loss }}>{`${cents >= 0 ? '+' : ''}${money(cents)}`}</Text>
   );
@@ -282,7 +286,15 @@ function SwipeCaption({ row }: { row: CardRow }) {
           <Text style={muted}>{` · ${gradeLabel(card.grader, card.grade, card.condition)}`}</Text>
         ) : null}
       </Text>
-      <Text style={[type.rowPrice, ink, { paddingTop: space.xs }]}>{value != null ? money(value) : '—'}</Text>
+      <Text numberOfLines={1} style={[type.rowPrice, ink, { paddingTop: space.xs }]}>
+        {value != null ? money(value) : '—'}
+        {week ? (
+          <Text style={[type.secondary, muted]}>
+            {'  '}
+            <Text style={{ color: week.cents >= 0 ? color.gain : color.loss }}>{`${signedMoney(week.cents)} (${pct(week.fraction)})`}</Text> 7d
+          </Text>
+        ) : null}
+      </Text>
       <Text numberOfLines={1} style={[type.secondary, muted, { paddingTop: 2 }]}>
         {line}
       </Text>
