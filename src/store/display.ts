@@ -16,6 +16,9 @@ type DisplayState = {
   order: string[];
   /** One favorite that shows first in every view. */
   pinnedId: string | null;
+  /** Slabs per shelf in the shelf view, 1 to 5. */
+  perShelf: number;
+  setPerShelf: (n: number) => void;
   setMode: (m: DisplayMode) => void;
   setFilter: (f: CollectionFilter) => void;
   setSort: (s: SortKey) => void;
@@ -31,6 +34,8 @@ export const useDisplay = create<DisplayState>()(
       sort: 'value',
       order: [],
       pinnedId: null,
+      perShelf: 3,
+      setPerShelf: (n) => set({ perShelf: Math.max(1, Math.min(5, Math.round(n))) }),
       setMode: (mode) => set({ mode }),
       setFilter: (filter) => set({ filter }),
       setSort: (sort) => set({ sort }),

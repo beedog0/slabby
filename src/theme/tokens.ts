@@ -72,6 +72,8 @@ export const size = {
   menuRow: 52,
   /** The slab in a menu sheet's header. */
   menuSlabW: 44,
+  /** Arrange shelf's 1–5 slabs-per-shelf control. */
+  perShelfW: 180,
   grabberW: 36,
   grabberH: 5,
   /** Home … dropdown width. */
