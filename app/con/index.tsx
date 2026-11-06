@@ -130,19 +130,24 @@ export default function ConMode() {
         </Pressable>
       </View>
 
-      <Segmented<'sell' | 'buy'>
-        style={{ marginHorizontal: space.gutter, marginTop: space.l }}
-        value={mode}
-        onChange={(m) => {
-          if (m === mode) return;
-          Haptics.selectionAsync().catch(() => {});
-          setMode(m);
-        }}
-        options={[
-          { value: 'sell', label: 'Selling' },
-          { value: 'buy', label: 'Buying' },
-        ]}
-      />
+      <View accessibilityRole="tablist" style={styles.modes}>
+        {(['sell', 'buy'] as const).map((m) => (
+          <Pressable
+            key={m}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: mode === m }}
+            hitSlop={8}
+            onPress={() => {
+              if (m === mode) return;
+              Haptics.selectionAsync().catch(() => {});
+              setMode(m);
+            }}
+          >
+            <Text style={[type.section, { color: mode === m ? color.ink : color.secondary }]}>{m === 'sell' ? 'Selling' : 'Buying'}</Text>
+            <View style={[styles.modeBar, { backgroundColor: mode === m ? color.ink : 'transparent' }]} />
+          </Pressable>
+        ))}
+      </View>
 
       {selling ? (
         <>
@@ -188,7 +193,7 @@ export default function ConMode() {
                 <Flash on={flash.ids.includes(r.card.id)} at={flash.at} />
                 <ConRow
                   row={r}
-                  onPress={() => r.card.status === 'owned' && router.push(`/con/table/${r.card.id}`)}
+                  onPress={() => router.push(r.card.status === 'owned' ? `/con/table/${r.card.id}` : `/con/offer/${r.card.id}`)}
                   onLongPress={
                     r.card.status === 'owned'
                       ? () =>
@@ -230,7 +235,7 @@ export default function ConMode() {
       ) : (
         <BuyingPane
           rows={rows}
-          startedAt={session.startedAt}
+          conId={session.id}
           bottomInset={insets.bottom}
           flash={(id) => <Flash on={flash.ids.includes(id)} at={flash.at} />}
         />
@@ -269,6 +274,8 @@ function Flash({ on, at }: { on: boolean; at: number }) {
 }
 
 const styles = StyleSheet.create({
+  modes: { flexDirection: 'row', gap: space.xl, paddingHorizontal: space.gutter, paddingTop: space.l },
+  modeBar: { height: 2, borderRadius: 1, marginTop: space.xs },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

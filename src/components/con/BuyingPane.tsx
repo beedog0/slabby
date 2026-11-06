@@ -6,23 +6,23 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { gradeLabel, money, rowTitle } from '../../lib/format';
-import { boughtSince, conBuySummary, type CardRow } from '../../pricing/portfolio';
+import { boughtIn, buyMarket, conBuySummary, type CardRow } from '../../pricing/portfolio';
 import { color, radius, size, space, type } from '../../theme/tokens';
 import { CardThumb } from '../CardThumb';
 import { Hairline, PrimaryButton, ScanIcon } from '../ui';
 
 type Props = {
   rows: CardRow[];
-  startedAt: string;
+  conId: string;
   bottomInset: number;
   flash: (id: string) => React.ReactNode;
 };
 
 const lookUp = () => router.push('/search?con=1');
 
-export function BuyingPane({ rows, startedAt, bottomInset, flash }: Props) {
-  const sum = conBuySummary(rows, startedAt);
-  const bought = boughtSince(rows, startedAt);
+export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
+  const sum = conBuySummary(rows, conId);
+  const bought = boughtIn(rows, conId);
 
   return (
     <View style={{ flex: 1 }}>
@@ -45,7 +45,15 @@ export function BuyingPane({ rows, startedAt, bottomInset, flash }: Props) {
         onPress={lookUp}
         style={({ pressed }) => [styles.search, pressed && { opacity: 0.6 }]}
       >
-        <Svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke={color.secondary} strokeWidth={1.6} strokeLinecap="round">
+        <Svg
+          width={16}
+          height={16}
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke={color.secondary}
+          strokeWidth={1.6}
+          strokeLinecap="round"
+        >
           <Circle cx={7} cy={7} r={5} />
           <Path d="M11 11l3.5 3.5" />
         </Svg>
@@ -53,10 +61,13 @@ export function BuyingPane({ rows, startedAt, bottomInset, flash }: Props) {
       </Pressable>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.l, paddingBottom: space.xxl }}>
-        {bought.length ? <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.xs }]}>Bought today</Text> : null}
+        {bought.length ? (
+          <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.xs }]}>Bought today</Text>
+        ) : null}
         {bought.map((r) => {
           const c = r.card;
-          const under = r.price && c.paidCents != null ? r.price.marketCents - c.paidCents : null;
+          const m = buyMarket(r);
+          const under = m != null && c.paidCents != null ? m - c.paidCents : null;
           return (
             <View key={c.id}>
               {flash(c.id)}
@@ -73,7 +84,9 @@ export function BuyingPane({ rows, startedAt, bottomInset, flash }: Props) {
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>
                   <Text style={[type.rowPrice, { color: color.ink }]}>{money(c.paidCents ?? 0)}</Text>
                   <Text style={[type.secondary, { color: color.secondary }]}>
-                    {under == null ? 'paid' : (
+                    {under == null ? (
+                      'paid'
+                    ) : (
                       <>
                         <Text style={{ color: under >= 0 ? color.gain : color.loss }}>{money(Math.abs(under))}</Text>
                         {under >= 0 ? ' under' : ' over'}
@@ -95,7 +108,12 @@ export function BuyingPane({ rows, startedAt, bottomInset, flash }: Props) {
 
       <View style={[styles.footer, { paddingBottom: bottomInset + space.l }]}>
         <PrimaryButton style={{ flex: 1 }} title="Look up a card" onPress={lookUp} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Scan a slab" onPress={() => router.push('/scan')} style={({ pressed }) => [styles.icon, pressed && { opacity: 0.6 }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Scan a slab"
+          onPress={() => router.push('/scan')}
+          style={({ pressed }) => [styles.icon, pressed && { opacity: 0.6 }]}
+        >
           <ScanIcon />
         </Pressable>
       </View>

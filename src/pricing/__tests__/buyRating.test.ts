@@ -24,3 +24,18 @@ describe('buyRating', () => {
     expect(buyRating(6_000, p).suspicious).toBe(false);
   });
 });
+
+import cards from '../../mocks/cards.json';
+import { DEFAULT_RULES, type Card } from '../../types';
+import { boughtIn, conBuySummary, rowFor } from '../portfolio';
+
+describe('conBuySummary', () => {
+  it('counts only this con\'s buys, against the market when you paid', () => {
+    const all = (cards as Card[]).map((c, i) =>
+      i === 0 ? { ...c, paidCents: 10_000, boughtConId: 'con-1', boughtMarketCents: 14_000 } : i === 1 ? { ...c, paidCents: 5_000, boughtConId: 'con-0' } : c,
+    );
+    const rows = all.map((c) => rowFor(c, DEFAULT_RULES));
+    expect(boughtIn(rows, 'con-1').map((r) => r.card.id)).toEqual([all[0].id]);
+    expect(conBuySummary(rows, 'con-1')).toEqual({ spentCents: 10_000, count: 1, underMarketCents: 4_000 });
+  });
+});

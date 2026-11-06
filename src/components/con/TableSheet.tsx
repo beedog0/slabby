@@ -419,7 +419,17 @@ function PriceStep({
             {keeps != null ? (
               <>
                 {keeps >= 0 ? 'Keeps ' : 'Loses '}
-                <Text style={{ color: keeps >= 0 ? color.gain : color.loss }}>{money(Math.abs(keeps))}</Text>
+                <Text style={{ color: keeps > 0 ? color.gain : keeps < 0 ? color.loss : color.secondary }}>{money(Math.abs(keeps))}</Text>
+                {row.floor != null && cents < row.floor ? (
+                  <>
+                    {' · '}
+                    <Text style={{ color: color.loss }}>{money(row.floor - cents)}</Text> under floor
+                  </>
+                ) : null}
+              </>
+            ) : has && row.floor != null && cents < row.floor ? (
+              <>
+                <Text style={{ color: color.loss }}>{money(row.floor - cents)}</Text> under floor
               </>
             ) : null}
           </Text>

@@ -201,22 +201,27 @@ export function soldSeries(rows: CardRow[], days = 30, now = new Date()): number
 
 export type ConBuySummary = { spentCents: number; count: number; underMarketCents: number };
 
-/** Buying side of a con: slabs added since the session started with a price paid. */
-export function conBuySummary(rows: CardRow[], startedAt: string): ConBuySummary {
-  let spentCents = 0, count = 0, underMarketCents = 0;
-  for (const r of rows) {
-    const c = r.card;
-    if (c.createdAt < startedAt || c.paidCents == null) continue;
-    spentCents += c.paidCents;
-    count++;
-    if (r.price) underMarketCents += r.price.marketCents - c.paidCents;
-  }
-  return { spentCents, count, underMarketCents };
+/** The market a buy is measured against: what it was when you paid, else today's. */
+export function buyMarket(r: CardRow): number | null {
+  return r.card.boughtMarketCents ?? r.price?.marketCents ?? null;
 }
 
-/** The rows conBuySummary counts, newest first. */
-export function boughtSince(rows: CardRow[], startedAt: string): CardRow[] {
+/** Slabs bought in Buying during this con session, newest first. Slabs added while selling don't count. */
+export function boughtIn(rows: CardRow[], conId: string): CardRow[] {
   return rows
-    .filter((r) => r.card.createdAt >= startedAt && r.card.paidCents != null)
+    .filter((r) => r.card.boughtConId === conId && r.card.paidCents != null)
     .sort((a, b) => b.card.createdAt.localeCompare(a.card.createdAt));
+}
+
+/** Buying side of a con: what you spent and how far under market, per the market when you paid. */
+export function conBuySummary(rows: CardRow[], conId: string): ConBuySummary {
+  let spentCents = 0, count = 0, underMarketCents = 0;
+  for (const r of boughtIn(rows, conId)) {
+    const paid = r.card.paidCents ?? 0;
+    spentCents += paid;
+    count++;
+    const m = buyMarket(r);
+    if (m != null) underMarketCents += m - paid;
+  }
+  return { spentCents, count, underMarketCents };
 }

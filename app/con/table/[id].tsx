@@ -3,6 +3,7 @@
 // A sold card shows the sale with undo instead. Reference: 07-before-the-table.png.
 
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardThumb } from '../../../src/components/CardThumb';
@@ -26,9 +27,8 @@ export default function BeforeTheTable() {
   const row = useCardRow(id);
   const rules = useRules((s) => s.rules);
   const update = useVault((s) => s.update);
-  // Same switch as con mode's Selling / Buying, so flipping here flips there too.
-  const mode = useCon((s) => s.mode);
-  const setMode = useCon((s) => s.setMode);
+  // Starts on con mode's side; flipping here is a quick look and never changes con mode.
+  const [mode, setMode] = useState<Mode>(useCon.getState().mode);
 
   if (!row) return null;
   const { card, price } = row;

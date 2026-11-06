@@ -12,7 +12,7 @@ import { Keypad } from '../../../src/components/Keypad';
 import { PriceLine, type Tick } from '../../../src/components/PriceLine';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../../src/components/ui';
 import { money } from '../../../src/lib/format';
-import { BUY_RATING_LABEL, buyRating, looksLikeTypo } from '../../../src/pricing/rules';
+import { BUY_RATING_LABEL, SUSPICIOUS_FRACTION, buyRating, looksLikeTypo } from '../../../src/pricing/rules';
 import { matchNewCard, refreshPrices } from '../../../src/services/comps';
 import { cardFromDetails } from '../../../src/services/psa';
 import {
@@ -25,6 +25,7 @@ import {
   type SearchGrade,
   type SearchPrices,
 } from '../../../src/services/search';
+import { useCon } from '../../../src/store/con';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
 import { color, size, space, type } from '../../../src/theme/tokens';
@@ -37,6 +38,7 @@ export default function TheyreAsking() {
   const insets = useSafeAreaInsets();
   const rules = useRules((s) => s.rules);
   const add = useVault((s) => s.add);
+  const conId = useCon((s) => s.session?.id);
   const [card, setCard] = useState<CatalogCard | null>(null);
   const [prices, setPrices] = useState<SearchPrices | null | undefined>(undefined);
   const [digits, setDigits] = useState('');
@@ -50,8 +52,12 @@ export default function TheyreAsking() {
   useEffect(() => {
     let live = true;
     const productId = Number(id);
-    catalogCard(productId).then((c) => live && setCard(c)).catch(() => {});
-    openPrices(productId).then((p) => live && setPrices(p)).catch(() => live && setPrices(null));
+    catalogCard(productId)
+      .then((c) => live && setCard(c))
+      .catch(() => {});
+    openPrices(productId)
+      .then((p) => live && setPrices(p))
+      .catch(() => live && setPrices(null));
     return () => {
       live = false;
       if (timer.current) clearTimeout(timer.current);
@@ -63,9 +69,10 @@ export default function TheyreAsking() {
   const buy = buyPrices(market, rules);
   const ask = (parseInt(digits || '0', 10) || 0) * 100;
   const has = digits.length > 0;
-  const rating = buy && market && has ? buyRating(ask, { targetCents: buy.target, maxCents: buy.max, marketCents: market }) : null;
+  const rating =
+    buy && market && has ? buyRating(ask, { targetCents: buy.target, maxCents: buy.max, marketCents: market }) : null;
   const typo = has && market != null && looksLikeTypo(ask, market);
-  const title = card ? `${card.name.replace(/\s+-\s+[\w/-]*\d[\w/-]*$/, '')} · ${gradeLabel(grade)}` : gradeLabel(grade);
+  const title = card ? card.name.replace(/\s+-\s+[\w/-]*\d[\w/-]*$/, '') : '';
 
   const clearConfirm = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -74,7 +81,7 @@ export default function TheyreAsking() {
 
   const setAsk = (next: string) => {
     const cents = (parseInt(next || '0', 10) || 0) * 100;
-    const crossed = (line: number | undefined) => line != null && (prev.current <= line) !== (cents <= line);
+    const crossed = (line: number | undefined) => line != null && prev.current <= line !== cents <= line;
     if (crossed(buy?.target)) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     else if (crossed(buy?.max)) Haptics.selectionAsync().catch(() => {});
     prev.current = cents;
@@ -98,11 +105,12 @@ export default function TheyreAsking() {
     setAwaitingAnswer(true);
   };
 
-  /** Add the card to the vault at this price. Over your max (or a likely typo) takes a second tap. */
+  /** Add the card to the vault at this price. Over your max, a likely typo, or a too-good price takes a second tap. */
   const buyAt = (cents: number, alwaysConfirm = false) => {
     if (!card) return;
-    if ((alwaysConfirm || typo) && !confirm) {
-      setConfirm(`Tap again to pay ${money(cents)}`);
+    const tooGood = market != null && cents < market * SUSPICIOUS_FRACTION;
+    if ((alwaysConfirm || typo || tooGood) && !confirm) {
+      setConfirm(tooGood ? `Under half of market. Tap again to pay ${money(cents)}` : `Tap again to pay ${money(cents)}`);
       timer.current = setTimeout(() => setConfirm(null), 4000);
       return;
     }
@@ -122,7 +130,7 @@ export default function TheyreAsking() {
       imageFrontUrl: p.image || null,
       game: card.game,
     });
-    const saved = grade === 'raw' ? { ...c, grade: null } : c;
+    const saved = { ...c, ...(grade === 'raw' ? { grade: null } : {}), boughtConId: conId, boughtMarketCents: market };
     add(saved);
     matchNewCard(saved, p.productId)
       .then(() => refreshPrices([saved]))
@@ -186,7 +194,7 @@ export default function TheyreAsking() {
   let word = '';
   let why: React.ReactNode = null;
   if (awaitingAnswer) {
-    word = 'You countered';
+    word = 'Waiting on them';
     why = <Text style={{ color: color.secondary }}>Type their answer</Text>;
   } else if (typo && market) {
     word = 'Check the number';
@@ -196,13 +204,19 @@ export default function TheyreAsking() {
     const d = money(Math.abs(rating.deltaToMax));
     why =
       rating.kind === 'over' ? (
-        <Text style={{ color: color.loss }}>{money(rating.deltaToMarket)} over market</Text>
+        <Text style={{ color: color.secondary }}>
+          <Text style={{ color: color.loss }}>{money(rating.deltaToMarket)}</Text> over market
+        </Text>
       ) : rating.kind === 'fair' ? (
-        <Text style={{ color: color.conText }}>{d} over your max</Text>
+        <Text style={{ color: color.secondary }}>
+          <Text style={{ color: color.conText }}>{d}</Text> over your max
+        </Text>
       ) : rating.deltaToMax === 0 ? (
-        <Text style={{ color: color.gain }}>At your max</Text>
+        <Text style={{ color: color.secondary }}>At your max</Text>
       ) : (
-        <Text style={{ color: color.gain }}>{d} under your max</Text>
+        <Text style={{ color: color.secondary }}>
+          <Text style={{ color: color.gain }}>{d}</Text> under your max
+        </Text>
       );
   }
 
@@ -218,9 +232,10 @@ export default function TheyreAsking() {
       quiet = { title: `Buy at ${money(ask)} anyway`, onPress: () => buyAt(ask, true) };
     } else {
       primary = { title: 'Walk away', onPress: () => router.back() };
-      quiet = counter == null
-        ? { title: `Counter ${money(rating.counterAt)}`, onPress: () => makeCounter(rating.counterAt) }
-        : { title: `Buy at ${money(ask)} anyway`, onPress: () => buyAt(ask, true) };
+      quiet =
+        counter == null
+          ? { title: `Counter ${money(rating.counterAt)}`, onPress: () => makeCounter(rating.counterAt) }
+          : { title: `Buy at ${money(ask)} anyway`, onPress: () => buyAt(ask, true) };
     }
   }
   const quietText = confirm ?? quiet?.title;
@@ -228,7 +243,8 @@ export default function TheyreAsking() {
 
   const ticks: Tick[] = [];
   if (buy) {
-    if (buy.target === buy.max) ticks.push({ value: buy.target, label: 'Target · Max', color: color.loss, labelColor: color.loss, height: 14 });
+    if (buy.target === buy.max)
+      ticks.push({ value: buy.target, label: 'Target · Max', color: color.loss, labelColor: color.loss, height: 14 });
     else {
       ticks.push({ value: buy.target, label: 'Target', color: color.ink });
       ticks.push({ value: buy.max, label: 'Max', color: color.loss, labelColor: color.loss, height: 14 });
@@ -241,28 +257,32 @@ export default function TheyreAsking() {
       {nav}
       <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: 'space-evenly' }}>
         <View style={{ alignItems: 'center' }}>
-          <Text style={[type.text, { color: color.secondary }]}>{awaitingAnswer ? 'You countered' : "They're asking"}</Text>
+          <Text style={[type.text, { color: color.secondary }]}>
+            {awaitingAnswer ? 'You countered' : "They're asking"} · {gradeLabel(grade)}
+          </Text>
           <Text adjustsFontSizeToFit numberOfLines={1} style={[type.displayL, { color: has ? color.ink : color.hairline }]}>
             {money(ask)}
           </Text>
           <Text style={[type.title, { color: color.ink, minHeight: 34 }]}>{has || awaitingAnswer ? word : ''}</Text>
           <Text style={[type.text, { minHeight: 20 }]}>{why}</Text>
           <Text style={[type.secondary, { color: color.secondary, minHeight: 18, paddingTop: 2 }]}>
-            {rating && !awaitingAnswer
-              ? rating.suspicious
-                ? `${Math.round(rating.pctOfMarket * 100)}% of market. Check the slab`
-                : `${Math.round(rating.pctOfMarket * 100)}% of market`
-              : prices === undefined
-                ? 'Loading prices…'
-                : !market
-                  ? `No ${gradeLabel(grade)} market price yet`
-                  : price?.sales30d
-                    ? `${price.sales30d} ${price.sales30d === 1 ? 'sale' : 'sales'} in 30 days`
-                    : ''}
+            {counter != null && !awaitingAnswer
+              ? `You said ${money(counter)}`
+              : rating && !awaitingAnswer && !typo
+                ? rating.suspicious
+                  ? `${Math.round(rating.pctOfMarket * 100)}% of market. Check the slab`
+                  : `${Math.round(rating.pctOfMarket * 100)}% of market`
+                : prices === undefined
+                  ? 'Loading prices…'
+                  : !market
+                    ? `No ${gradeLabel(grade)} market price yet`
+                    : price?.sales30d
+                      ? `${price.sales30d} ${price.sales30d === 1 ? 'sale' : 'sales'} in 30 days`
+                      : ''}
           </Text>
         </View>
 
-        {ticks.length ? (
+        {ticks.length && !typo ? (
           <PriceLine
             ticks={ticks}
             dot={has ? { value: ask, color: color.conFill } : undefined}
