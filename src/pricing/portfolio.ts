@@ -2,7 +2,7 @@
 
 import { changeOver, priceFor, valueAgo, type CardPrice } from '../services/comps';
 import type { Card, PricingRules } from '../types';
-import { quote, type Inputs } from './rules';
+import { quote, type FloorBasis, type Inputs } from './rules';
 
 export function inputsFor(card: Card, price: CardPrice, rules: PricingRules): Inputs {
   return {
@@ -23,13 +23,15 @@ export type CardRow = {
   trend30: number;
   ask: number | null;
   floor: number | null;
+  /** Why the floor is what it is. Null without comps. */
+  floorBasis: FloorBasis | null;
   buyTarget: number | null;
   buyMax: number | null;
 };
 
 export function rowFor(card: Card, rules: PricingRules, price = priceFor(card)): CardRow {
   if (!price) {
-    return { card, price, gain: null, trend30: 0, ask: null, floor: null, buyTarget: null, buyMax: null };
+    return { card, price, gain: null, trend30: 0, ask: null, floor: null, floorBasis: null, buyTarget: null, buyMax: null };
   }
   const q = quote(inputsFor(card, price, rules));
   const gain = card.paidCents ? (price.marketCents - card.paidCents) / card.paidCents : null;

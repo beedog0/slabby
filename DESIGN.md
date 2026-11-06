@@ -55,7 +55,8 @@ A 2 px rule with ticks. Used on Slab detail, Before the table, and Offer at the 
 - Rule: hairline color; the filled portion (paid → current) is ink.
 - Ticks: paid (ink, 2×10), floor (loss color, 2×14), market (secondary, 2×10), high comp (hairline, 2×10).
 - Current/offer: a 12–14 px filled dot.
-- Labels: caption size, secondary color, positioned under their ticks; the floor label uses loss color.
+- Labels: caption size, name in secondary over its price in ink 600, under their ticks; the floor (and buying max) label uses loss color. Every marker shows its price. When two labels would touch, one moves above the line rather than being dropped; markers at the same price share one label ("Paid · Floor"). The dot's own label (Ask, Target, Sold) always stays under the line.
+- High comp is not on Before the table; it lives on Slab detail.
 
 ## Sparklines
 

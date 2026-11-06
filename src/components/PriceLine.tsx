@@ -2,8 +2,9 @@
 // Slab detail, Before the table, and Offer. See DESIGN.md "The price line".
 //
 // Every marker carries its name and its price ("Floor" over "$130"). Labels sit under the
-// line; when two would touch, the later one moves above the line instead of being dropped,
-// and markers at the same price share one label ("Paid · Floor").
+// line; when two would touch, one moves above the line instead of being dropped, and
+// markers at the same price share one label ("Paid · Floor"). The dot's label is pinned
+// under the line.
 
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -20,6 +21,8 @@ export type Tick = {
   color: string;
   labelColor?: string;
   height?: number;
+  /** Keep this label under the line, placed before the others (the dot's own label). */
+  pin?: boolean;
 };
 
 type Props = {
@@ -27,6 +30,8 @@ type Props = {
   /** Filled span [from, to]. */
   fill?: { from: number; to: number; color: string };
   dot?: { value: number; color: string };
+  /** Always keep room above the line, so the line doesn't jump when the markers change. */
+  reserveAbove?: boolean;
 };
 
 const RULE = 2;
@@ -60,13 +65,12 @@ export type Placed = {
 
 /**
  * Lay out marker labels on a line `w` wide. Pure, so it can be tested.
- * Left to right: merge markers at the same spot, then put each label under the line if it
- * clears the previous one there, else above the line, else under it nudged right.
+ * Markers at the same spot share a label. Pinned labels go under the line first; the rest,
+ * left to right, go under the line if they fit, else above it, else to the nearest free spot.
  */
 export function layoutLabels(ticks: Tick[], x: (v: number) => number, w: number): Placed[] {
   const labelled = ticks.filter((t) => t.label).sort((a, b) => a.value - b.value);
 
-  // Merge markers that land on the same spot.
   const groups: Tick[][] = [];
   for (const t of labelled) {
     const g = groups[groups.length - 1];
@@ -74,40 +78,59 @@ export function layoutLabels(ticks: Tick[], x: (v: number) => number, w: number)
     else groups.push([t]);
   }
 
-  const lastRight = { below: -Infinity, above: -Infinity };
-  return groups.map((g, i) => {
+  const taken: Record<Placed['lane'], { left: number; right: number }[]> = { below: [], above: [] };
+  const free = (lane: Placed['lane'], left: number, width: number) =>
+    taken[lane].every((iv) => left >= iv.right + LABEL_GAP || left + width <= iv.left - LABEL_GAP);
+
+  const place = (g: Tick[], i: number): Placed => {
     const names = g.map((t) => ({ text: t.label!, color: t.labelColor ?? color.secondary }));
+    // Markers on the same spot show one price (they are within a pixel or two).
     const priced = g.find((t) => t.showPrice !== false);
-    // Markers on the same spot show one price (the first; they are within a pixel or two).
     const price = priced ? money(priced.value) : null;
     const priceColor = g.find((t) => t.labelColor && t.labelColor !== color.secondary)?.labelColor ?? color.ink;
     const nameChars = names.reduce((n, s) => n + s.text.length, 0) + (names.length - 1) * 3;
     const width = Math.ceil(Math.max(nameChars, price?.length ?? 0) * CHAR_W);
+    const clamp = (l: number) => Math.max(0, Math.min(w - width, l));
+    const want = clamp(x(g[0].value) - width / 2);
 
-    const cx = x(g[0].value);
-    const want = Math.max(0, Math.min(w - width, cx - width / 2));
-    let lane: 'below' | 'above';
+    let lane: Placed['lane'] = 'below';
     let left = want;
-    if (want >= lastRight.below + LABEL_GAP) lane = 'below';
-    else if (want >= lastRight.above + LABEL_GAP) lane = 'above';
-    else {
-      lane = 'below';
-      left = Math.min(w - width, lastRight.below + LABEL_GAP);
+    if (!free('below', want, width)) {
+      if (free('above', want, width)) lane = 'above';
+      else {
+        // Nearest free spot in either lane, preferring under the line.
+        let best = { lane: 'below' as Placed['lane'], left: want, d: Infinity };
+        for (const ln of ['below', 'above'] as const) {
+          for (const iv of taken[ln]) {
+            for (const c of [clamp(iv.right + LABEL_GAP), clamp(iv.left - LABEL_GAP - width)]) {
+              const d = Math.abs(c - want) + (ln === 'above' ? 0.5 : 0);
+              if (free(ln, c, width) && d < best.d) best = { lane: ln, left: c, d };
+            }
+          }
+        }
+        lane = best.lane;
+        left = best.left;
+      }
     }
-    lastRight[lane] = left + width;
+    taken[lane].push({ left, right: left + width });
     const align = left <= 0 ? 'left' : left >= w - width ? 'right' : 'center';
     return { key: `g${i}`, names, price, priceColor, left, width, align, lane };
-  });
+  };
+
+  const order = groups.map((g, i) => ({ g, i })).sort((a, b) => Number(b.g.some((t) => t.pin)) - Number(a.g.some((t) => t.pin)));
+  const out: Placed[] = [];
+  for (const { g, i } of order) out[i] = place(g, i);
+  return out;
 }
 
-export function PriceLine({ ticks, fill, dot }: Props) {
+export function PriceLine({ ticks, fill, dot, reserveAbove }: Props) {
   const [w, setW] = useState(0);
   const all = [...ticks.map((t) => t.value), ...(dot ? [dot.value] : []), ...(fill ? [fill.from, fill.to] : [])];
   const pos = scale(all);
   const x = (v: number) => pos(v) * w;
 
   const labels = w > 0 ? layoutLabels(ticks, x, w) : [];
-  const above = labels.some((l) => l.lane === 'above');
+  const above = reserveAbove || labels.some((l) => l.lane === 'above');
   const top = above ? LANE_H + LANE_GAP : 0; // where the track starts
 
   return (

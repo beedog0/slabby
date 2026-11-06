@@ -34,3 +34,13 @@ describe('layoutLabels', () => {
     expect(out[0].price).toBe('$95');
   });
 });
+
+describe('pinned label', () => {
+  it('keeps the dot label under the line and others yield', () => {
+    const ask: Tick = { ...t(10000, 'Ask'), pin: true };
+    const out = line([t(6000, 'Paid'), t(8000, 'Floor'), t(9100, 'Market'), t(9900, 'High'), ask]);
+    const a = out.find((l) => l.names[0].text === 'Ask')!;
+    expect(a.lane).toBe('below');
+    expect(out.find((l) => l.names[0].text === 'High')!.lane).toBe('above');
+  });
+});
