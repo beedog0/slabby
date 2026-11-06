@@ -81,7 +81,7 @@ export function labelInk(grader: Grader, grade: number | null): LabelInk {
 export function gradeDescriptor(grader: Grader, grade: number | null): string | undefined {
   if (grade == null) return undefined;
   const table: Record<string, Record<string, string>> = {
-    psa: { '10': 'GEM MT', '9': 'MINT', '8': 'NM-MT', '7': 'NM', '6': 'EX-MT', '5': 'EX' },
+    psa: { '10': 'GEM MT', '9': 'MINT', '8': 'NM-MT', '7': 'NM', '6': 'EX-MT', '5': 'EX', '4': 'VG-EX', '3': 'VG', '2': 'GOOD', '1': 'PR' },
     bgs: { '10': 'PRISTINE', '9.5': 'GEM MINT', '9': 'MINT', '8.5': 'NM-MT+', '8': 'NM-MT', '7': 'NM' },
     cgc: { '10': 'GEM MINT', '9.5': 'MINT+', '9': 'MINT', '8.5': 'NM/MINT+', '8': 'NM/MINT', '7': 'NEAR MINT' },
   };
