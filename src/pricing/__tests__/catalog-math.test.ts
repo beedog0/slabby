@@ -1,4 +1,4 @@
-import { catalogRows, isFresh, primaryPrice, printings, summarize } from '../../../supabase/functions/_shared/catalog-math';
+import { catalogRows, isFresh, packPrice, primaryPrice, printings, summarize } from '../../../supabase/functions/_shared/catalog-math';
 
 describe('primaryPrice', () => {
   it('prefers the base printing over a pricier reverse holo', () => {
@@ -76,5 +76,29 @@ describe('isFresh', () => {
     expect(isFresh('2026-11-06T00:00:00Z', now)).toBe(true);
     expect(isFresh('2026-11-05T11:00:00Z', now)).toBe(false);
     expect(isFresh(null, now)).toBe(false);
+  });
+});
+
+describe('packPrice', () => {
+  const prod = (productId: number, name: string, number?: string) => ({
+    productId,
+    name,
+    groupId: 1,
+    extendedData: number ? [{ name: 'Number', value: number }] : [],
+  });
+  it('picks the plain booster pack, not bundles, boxes or singles', () => {
+    const products = [
+      prod(1, 'Pikachu ex', '238/191'),
+      prod(2, 'Surging Sparks Booster Box'),
+      prod(3, 'Surging Sparks Booster Pack Art Bundle [Set of 4]'),
+      prod(4, 'Surging Sparks Sleeved Booster Pack'),
+      prod(5, 'Surging Sparks Booster Pack'),
+    ];
+    const prices = [1, 2, 3, 4, 5].map((productId) => ({ productId, marketPrice: productId * 10 }));
+    expect(packPrice(products, prices)).toEqual({ name: 'Surging Sparks Booster Pack', cents: 5_000 });
+  });
+  it('is null when a set has no priced pack', () => {
+    expect(packPrice([prod(5, 'Base Set Booster Pack')], [])).toBeNull();
+    expect(packPrice([prod(1, 'Pikachu', '58/102')], [{ productId: 1, marketPrice: 3 }])).toBeNull();
   });
 });

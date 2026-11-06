@@ -4,7 +4,7 @@
 // every set is done for the day. Uses no PokemonPriceTracker credits.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { CATEGORIES, catalogRows, type TcgPrice, type TcgProduct } from '../_shared/catalog-math.ts';
+import { CATEGORIES, catalogRows, packPrice, type TcgPrice, type TcgProduct } from '../_shared/catalog-math.ts';
 
 const TCGCSV = 'https://tcgcsv.com/tcgplayer';
 const UA = { 'User-Agent': 'slabby-catalog-import/0.1 (+https://github.com/beedog0/slabby)' };
@@ -58,6 +58,8 @@ Deno.serve(async (req) => {
   const failed: string[] = [];
   for (const g of todo ?? []) {
     const cat = CATEGORIES.find((c) => c.id === g.category_id)!;
+    // One booster pack's price, for "Pulled it" on the sell page (0012_pack_prices.sql).
+    let pack: { pack_name?: string | null; pack_cents?: number | null } = {};
     try {
       const [products, prices] = await Promise.all([
         results<TcgProduct>(`/${cat.id}/${g.group_id}/products`),
@@ -72,11 +74,16 @@ Deno.serve(async (req) => {
         if (upErr) throw upErr;
       }
       cards += rows.length;
+      const p = packPrice(products, prices);
+      pack = { pack_name: p?.name ?? null, pack_cents: p?.cents ?? null };
     } catch (e) {
       failed.push(`${g.category_id}/${g.group_id}: ${(e as Error).message}`);
     }
     // Done for today even on failure, so one bad set can't stall the queue; it retries tomorrow.
     await admin.from('catalog_groups').update({ imported_on: today }).eq('category_id', g.category_id).eq('group_id', g.group_id);
+    // Its own write, so a missing pack column (0012 not applied yet) can't stall the queue.
+    if ('pack_cents' in pack)
+      await admin.from('catalog_groups').update(pack).eq('category_id', g.category_id).eq('group_id', g.group_id);
   }
 
   const { count: left } = await admin

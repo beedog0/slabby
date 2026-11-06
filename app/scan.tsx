@@ -11,6 +11,11 @@
 // Raw cards scan on the same screen, from the same reads: a frame with a grader label is a slab;
 // a frame with a collector number ("199/165") and no label is a loose card, found in our TCGplayer
 // catalog by number, set code and name (src/services/cardScan.ts) and priced at TCGplayer market.
+//
+// Sell: picking Sell on either sheet asks what you want for it (AskStep), then opens the card's
+// full page in sell mode (app/search/[id].tsx ?sell=1, or app/sell.tsx when the card isn't in our
+// catalog) with where that ask sits against market and a rating against what you paid. "What you
+// paid" also takes "Pulled it" (rated against the set's pack price, else $0) or "Not sure".
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -22,6 +27,11 @@ import Svg, { Path } from 'react-native-svg';
 import { backToCon } from '../src/components/conStatusMenu';
 import { KEYBOARD_DONE, KeyboardDone, useKeyboardHeight } from '../src/components/KeyboardDone';
 import { SlabView } from '../src/components/SlabView';
+import { AskStep } from '../src/components/sell/AskStep';
+import { CostField, EMPTY_COST, paidCentsOf, toCost, type CostInput } from '../src/components/sell/CostField';
+import { ask as ruleAsk } from '../src/pricing/rules';
+import { useRules } from '../src/store/rules';
+import { useSellDraft, type SellDraft } from '../src/store/sellDraft';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
@@ -30,7 +40,7 @@ import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
 import { cardFromCert, cardFromDetails, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
 import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, parseCardText, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
-import { cardNumber, displayName, type CatalogCard } from '../src/services/search';
+import { cardNumber, displayName, mockProductId, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
@@ -56,7 +66,7 @@ export default function Scan() {
   const [result, setResult] = useState<CertResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState('');
-  const [paid, setPaid] = useState('');
+  const [cost, setCost] = useState<CostInput>(EMPTY_COST);
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
   const fromCon = useLocalSearchParams<{ con?: string }>().con === '1';
   const [conStatus, setConStatusChoice] = useState<ConStatus>('sale');
@@ -68,7 +78,10 @@ export default function Scan() {
   const update = useVault((s) => s.update);
   const session = useCon((s) => s.session);
   const startCon = useCon((s) => s.start);
+  // Sell picked: the sheet asks for a price before opening the sell page.
+  const [asking, setAsking] = useState(false);
   const add = useVault((s) => s.add);
+  const rules = useRules((s) => s.rules);
   const existing = useVault((s) => s.cards);
   const lastCert = useRef<string | null>(null);
   const camera = useRef<CameraView>(null);
@@ -115,7 +128,7 @@ export default function Scan() {
   const price = preview && !gradeMissing ? (livePrice ?? priceFor(preview)) : null;
 
   // Match the scanned card right away: photo, then prices. One card-match call per scan; Add reuses it.
-  const [matched, setMatched] = useState<{ key: string; art: string | null } | null>(null);
+  const [matched, setMatched] = useState<{ key: string; art: string | null; productId: number | null } | null>(null);
   const [matching, setMatching] = useState(false);
   const match = useRef<{ key: string; done: Promise<CardRef | null> } | null>(null);
   useEffect(() => {
@@ -135,7 +148,8 @@ export default function Scan() {
     setMatching(true);
     match.current.done.then((ref) => {
       if (!live) return;
-      setMatched({ key: previewKey, art: artFor(ref) });
+      const pid = ref?.tcgplayer_id ? Number(ref.tcgplayer_id) : NaN;
+      setMatched({ key: previewKey, art: artFor(ref), productId: Number.isFinite(pid) ? pid : null });
       setMatching(false);
     });
     return () => {
@@ -152,14 +166,13 @@ export default function Scan() {
   const [confirmAgain, setConfirmAgain] = useState(false);
   useEffect(() => setConfirmAgain(false), [previewKey]);
 
-  const paidDollars = parseInt(paid.replace(/[^0-9]/g, ''), 10);
-  const paidCents = Number.isFinite(paidDollars) ? paidDollars * 100 : (owned?.paidCents ?? null);
+  // Con mode: what you paid from the cost field, else what the vault already has for this cert.
+  const paidCents = paidCentsOf(cost) ?? owned?.paidCents ?? null;
   const soldCents = (parseInt(soldFor || '0', 10) || 0) * 100;
   const soldLoss = conStatus === 'sold' && paidCents != null && soldCents > 0 && soldCents < paidCents ? paidCents - soldCents : 0;
 
-  // The sheet's match is reused (when it lands, matchNewCard puts the photo on this vault card).
-  // Only a call that failed outright (offline, no session) is made again; that costs no credit.
-  const addedMatch = (card: ReturnType<typeof cardFromCert>) => {
+  // The sheet's match is reused once the card is saved (from here or from the sell page).
+  const afterSave = (card: Card) => {
     const pending = match.current?.key === cardKey(card) ? match.current.done : Promise.resolve(null);
     pending
       .then((ref) => ref ?? matchNewCard(card))
@@ -169,11 +182,20 @@ export default function Scan() {
 
   const addToVault = () => {
     if (result?.status !== 'found') return;
-    const card = cardFromCert(result.payload, { paidCents, plan });
+    const card = cardFromCert(result.payload, { paidCents: paidCentsOf(cost), plan });
     if (art) card.imageFrontUrl = art;
     add(card);
-    addedMatch(card);
+    afterSave(card);
     router.replace(`/card/${card.id}`);
+  };
+
+  const startSell = useSellDraft((s) => s.start);
+  const toSell = (askCents: number) => {
+    if (result?.status !== 'found') return;
+    const card = cardFromCert(result.payload, { paidCents: paidCentsOf(cost), plan: 'sell' });
+    if (art) card.imageFrontUrl = art;
+    const productId = (matched?.key === previewKey ? matched.productId : null) ?? mockProductId(card);
+    openSell({ card, productId, marketCents: price?.marketCents ?? null, askCents, cost: toCost(cost), afterSave }, startSell);
   };
 
   const rescan = () => {
@@ -182,9 +204,10 @@ export default function Scan() {
     setSpotted(false);
     match.current = null;
     setConfirmAgain(false);
+    setAsking(false);
     setLabelMiss(false);
     setResult(null);
-    setPaid('');
+    setCost(EMPTY_COST);
     setSoldFor('');
     setLossConfirm(false);
     setRaw(null);
@@ -216,7 +239,7 @@ export default function Scan() {
       const card = cardFromCert(result.payload, { paidCents, plan: conStatus === 'sold' ? 'sell' : planPatch(conStatus).plan });
       if (art) card.imageFrontUrl = art;
       add(card);
-      addedMatch(card);
+      afterSave(card);
       id = card.id;
     } else if (conStatus !== 'sold') {
       update(owned.id, planPatch(conStatus));
@@ -493,11 +516,12 @@ export default function Scan() {
         </View>
       ) : null}
 
-      {result && keyboardH > 0 ? (
+      {(result || raw) && keyboardH > 0 ? (
         // Tap above the sheet to close the number pad.
         <Pressable accessibilityLabel="Close keyboard" style={StyleSheet.absoluteFill} onPress={() => Keyboard.dismiss()} />
       ) : null}
-      {raw ? <RawSheet raw={raw} setRaw={setRaw} rescan={rescan} bottom={insets.bottom} /> : null}
+
+      {raw ? <RawSheet raw={raw} setRaw={setRaw} rescan={rescan} bottom={insets.bottom} keyboardH={keyboardH} /> : null}
 
       {result ? (
         <Animated.View
@@ -558,22 +582,11 @@ export default function Scan() {
                 </Text>
               ) : null}
               <Hairline />
-              <View style={styles.field}>
-                <Text numberOfLines={1} style={[type.body, { color: color.ink, flexShrink: 0 }]}>What you paid</Text>
-                <TextInput
-                  value={paid ? `$${paid}` : ''}
-                  onChangeText={(t) => setPaid(t.replace(/[^0-9]/g, '').slice(0, 6))}
-                  placeholder="$0"
-                  placeholderTextColor={color.secondary}
-                  keyboardType="number-pad"
-                  inputAccessoryViewID={KEYBOARD_DONE}
-                  style={[type.rowPrice, styles.paidInput]}
-                  accessibilityLabel="What you paid"
-                />
-              </View>
-              <Hairline />
-              <View style={styles.field}>
-                {fromCon ? (
+              {fromCon ? (
+                <>
+                  <CostField value={cost} onChange={setCost} />
+                  <Hairline />
+                  <View style={styles.field}>
                   <Segmented<ConStatus>
                     style={{ flex: 1 }}
                     value={conStatus}
@@ -583,22 +596,8 @@ export default function Scan() {
                     }}
                     options={CON_STATUSES.map((v) => ({ value: v, label: CON_STATUS_LABEL[v] }))}
                   />
-                ) : (
-                  <Text style={[type.body, { color: color.ink }]}>Plan</Text>
-                )}
-                {fromCon ? null : (
-                  <Segmented
-                    style={{ width: 150 }}
-                    value={plan}
-                    onChange={setPlan}
-                    options={[
-                      { value: 'hold', label: 'Hold' },
-                      { value: 'sell', label: 'Sell' },
-                    ]}
-                  />
-                )}
-              </View>
-              {fromCon && conStatus === 'sold' ? (
+                  </View>
+              {conStatus === 'sold' ? (
                 <>
                   <Hairline />
                   <View style={styles.field}>
@@ -620,9 +619,7 @@ export default function Scan() {
                   </View>
                 </>
               ) : null}
-              <Hairline />
-              {fromCon ? (
-                <>
+                  <Hairline />
                   <PrimaryButton
                     style={{ marginTop: space.l, opacity: conStatus === 'sold' && !soldCents ? 0.35 : 1 }}
                     title={conButtonTitle(conStatus, soldCents, !!owned)}
@@ -634,23 +631,56 @@ export default function Scan() {
                     </Text>
                   </Pressable>
                 </>
-              ) : confirmAgain ? (
-                <>
-                  <Text style={[type.body, { color: color.ink, paddingTop: space.l }]}>
-                    {result.cert ? `Cert ${result.cert} is already in your vault.` : 'This slab is already in your vault.'} Add it
-                    again?
-                  </Text>
-                  <PrimaryButton style={{ marginTop: space.l }} title="Add again" onPress={addToVault} />
-                  <Pressable accessibilityRole="button" onPress={() => setConfirmAgain(false)} style={styles.quiet}>
-                    <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
-                  </Pressable>
-                </>
+              ) : asking ? (
+                <View style={{ paddingTop: space.l }}>
+                  <AskStep
+                    marketCents={price?.marketCents ?? null}
+                    suggestedCents={price ? ruleAsk({ marketCents: price.marketCents, low30Cents: price.lowCents, rules }) : null}
+                    onContinue={toSell}
+                    onBack={() => setAsking(false)}
+                  />
+                </View>
               ) : (
-                <PrimaryButton
-                  style={{ marginTop: space.l }}
-                  title="Add to vault"
-                  onPress={already ? () => setConfirmAgain(true) : addToVault}
-                />
+                <>
+                  <CostField value={cost} onChange={setCost} />
+                  <Hairline />
+                  <View style={styles.field}>
+                    <Text style={[type.body, { color: color.ink }]}>Plan</Text>
+                    <Segmented
+                      style={{ width: 150 }}
+                      value={plan}
+                      onChange={(v) => {
+                        setPlan(v);
+                        if (v === 'sell') setAsking(true);
+                      }}
+                      options={[
+                        { value: 'hold', label: 'Hold' },
+                        { value: 'sell', label: 'Sell' },
+                      ]}
+                    />
+                  </View>
+                  <Hairline />
+                  {confirmAgain ? (
+                    <>
+                      <Text style={[type.body, { color: color.ink, paddingTop: space.l }]}>
+                        {result.cert ? `Cert ${result.cert} is already in your vault.` : 'This slab is already in your vault.'} Add it
+                        again?
+                      </Text>
+                      <PrimaryButton style={{ marginTop: space.l }} title="Add again" onPress={addToVault} />
+                      <Pressable accessibilityRole="button" onPress={() => setConfirmAgain(false)} style={styles.quiet}>
+                        <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
+                      </Pressable>
+                    </>
+                  ) : plan === 'sell' ? (
+                    <PrimaryButton style={{ marginTop: space.l }} title="Set your price" onPress={() => setAsking(true)} />
+                  ) : (
+                    <PrimaryButton
+                      style={{ marginTop: space.l }}
+                      title="Add to vault"
+                      onPress={already ? () => setConfirmAgain(true) : addToVault}
+                    />
+                  )}
+                </>
               )}
             </>
           ) : (
@@ -719,16 +749,21 @@ function RawSheet({
   setRaw,
   rescan,
   bottom,
+  keyboardH,
 }: {
   raw: RawRead;
   setRaw: (f: (r: RawRead | null) => RawRead | null) => void;
   rescan: () => void;
   bottom: number;
+  keyboardH: number;
 }) {
-  const [paid, setPaid] = useState('');
+  const [cost, setCost] = useState<CostInput>(EMPTY_COST);
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
+  const [asking, setAsking] = useState(false);
   const add = useVault((s) => s.add);
   const owned = useVault((s) => s.cards);
+  const rules = useRules((s) => s.rules);
+  const startSell = useSellDraft((s) => s.start);
   const n = raw.read.numbers[0];
   const printed = n.total ? `${n.num}/${n.total}` : n.num;
   const best = raw.matches?.[raw.pick]?.card ?? null;
@@ -749,16 +784,24 @@ function RawSheet({
   const preview = best ? rawCard(best, null, plan, printSuffix) : null;
   const copies = preview ? owned.filter((c) => c.status === 'owned' && cardKey(c) === cardKey(preview)).length : 0;
 
-  const save = () => {
+  // The product is known, so card-match skips matching and spends no search credit.
+  const afterSave = (card: Card) => {
     if (!best) return;
-    const dollars = parseInt(paid, 10);
-    const card = rawCard(best, Number.isFinite(dollars) ? dollars * 100 : null, plan, printSuffix);
-    add(card);
-    // The product is known, so card-match skips matching and spends no search credit.
     matchNewCard(card, String(best.productId))
       .then(() => refreshPrices([card]))
       .catch(() => {});
+  };
+  const save = () => {
+    if (!best) return;
+    const card = rawCard(best, paidCentsOf(cost), plan, printSuffix);
+    add(card);
+    afterSave(card);
     router.replace(`/card/${card.id}`);
+  };
+  const toSell = (askCents: number) => {
+    if (!best) return;
+    const card = rawCard(best, paidCentsOf(cost), 'sell', printSuffix);
+    openSell({ card, productId: best.productId, marketCents: priceCents, askCents, cost: toCost(cost), afterSave }, startSell);
   };
 
   const choose = (i: number) => setRaw((r) => (r ? { ...r, pick: i, choosing: false } : r));
@@ -769,7 +812,7 @@ function RawSheet({
   );
 
   return (
-    <View style={[styles.sheet, { paddingBottom: bottom + space.l }]}>
+    <View style={[styles.sheet, keyboardH > 0 ? { bottom: keyboardH, paddingBottom: space.l } : { paddingBottom: bottom + space.l }]}>
       <View style={styles.grabber} />
       {raw.matches === null ? (
         <>
@@ -890,38 +933,54 @@ function RawSheet({
             </>
           ) : null}
           <Hairline />
-          <View style={styles.field}>
-            <Text numberOfLines={1} style={[type.body, { color: color.ink, flexShrink: 0 }]}>What you paid</Text>
-            <TextInput
-              value={paid ? `$${paid}` : ''}
-              onChangeText={(t) => setPaid(t.replace(/[^0-9]/g, '').slice(0, 6))}
-              placeholder="$0"
-              placeholderTextColor={color.secondary}
-              keyboardType="number-pad"
-              style={[type.rowPrice, styles.paidInput]}
-              accessibilityLabel="What you paid"
-            />
-          </View>
-          <Hairline />
-          <View style={styles.field}>
-            <Text style={[type.body, { color: color.ink }]}>Plan</Text>
-            <Segmented
-              style={{ width: 150 }}
-              value={plan}
-              onChange={setPlan}
-              options={[
-                { value: 'hold', label: 'Hold' },
-                { value: 'sell', label: 'Sell' },
-              ]}
-            />
-          </View>
-          <Hairline />
-          <PrimaryButton style={{ marginTop: space.l }} title="Add to vault" onPress={save} />
-          {again}
+          {asking ? (
+            <View style={{ paddingTop: space.l }}>
+              <AskStep
+                marketCents={priceCents}
+                suggestedCents={priceCents ? ruleAsk({ marketCents: priceCents, low30Cents: priceCents, rules }) : null}
+                onContinue={toSell}
+                onBack={() => setAsking(false)}
+              />
+            </View>
+          ) : (
+            <>
+              <CostField value={cost} onChange={setCost} />
+              <Hairline />
+              <View style={styles.field}>
+                <Text style={[type.body, { color: color.ink }]}>Plan</Text>
+                <Segmented
+                  style={{ width: 150 }}
+                  value={plan}
+                  onChange={(v) => {
+                    setPlan(v);
+                    if (v === 'sell') setAsking(true);
+                  }}
+                  options={[
+                    { value: 'hold', label: 'Hold' },
+                    { value: 'sell', label: 'Sell' },
+                  ]}
+                />
+              </View>
+              <Hairline />
+              {plan === 'sell' ? (
+                <PrimaryButton style={{ marginTop: space.l }} title="Set your price" onPress={() => setAsking(true)} />
+              ) : (
+                <PrimaryButton style={{ marginTop: space.l }} title="Add to vault" onPress={save} />
+              )}
+              {again}
+            </>
+          )}
         </>
       )}
     </View>
   );
+}
+
+/** Hand the scanned card to the sell page: the full card page when it's in our catalog. */
+function openSell(d: SellDraft, start: (d: SellDraft) => void) {
+  start(d);
+  if (d.productId != null) router.push({ pathname: '/search/[id]', params: { id: String(d.productId), sell: '1' } });
+  else router.push('/sell');
 }
 
 /** 2 → "2nd", 3 → "3rd", 11 → "11th". */

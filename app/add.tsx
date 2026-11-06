@@ -142,7 +142,12 @@ export default function AddByHand() {
     >
       {/* A tilt drag on the preview must not start iOS 26's swipe-back. */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
-      <ScrollView scrollEnabled={!tilting} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
+      <ScrollView
+        scrollEnabled={!tilting}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}
+      >
         <View style={styles.nav}>
           <IconButton label="Back" onPress={() => router.back()}>
             <BackIcon />

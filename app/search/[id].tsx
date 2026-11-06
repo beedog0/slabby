@@ -3,6 +3,11 @@
 // sell those grades rarely. All grades come from the same price call (card-prices, cached a day),
 // so picking a lower grade costs nothing. Drag the slab (or sleeved single) to tilt it; tap a slab
 // to spin it 360°, as on a vault card. In con mode (?con=1) it also shows what to pay.
+//
+// Sell mode (?sell=1, from the scan sheet's Sell): the same page for the card you just scanned, at
+// its grade, with your asking price, where it sits against market and a rating against what you
+// paid at the top (SellSummary), and "Put up for sale" as the one button. The scan's draft lives
+// in src/store/sellDraft.ts.
 
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -18,7 +23,10 @@ import { chartable, gradingLine, gradingRead, history, liquidity, ratio, realPoi
 import { GradeLadder, RangeMeter, SetRow } from '../../src/components/search/CardInsights';
 import type { CardPrice } from '../../src/services/comps';
 import type { Found } from '../../src/services/searchFilters';
-import { setCards } from '../../src/services/setCards';
+import { KeyboardDone } from '../../src/components/KeyboardDone';
+import { SellSummary } from '../../src/components/sell/SellSummary';
+import { packFor, setCards } from '../../src/services/setCards';
+import { saveDraft, useSellDraft } from '../../src/store/sellDraft';
 import {
   addParams,
   buyPrices,
@@ -46,15 +54,20 @@ const isLow = (c: Choice) => (LOW_GRADES as readonly string[]).includes(c);
 const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 export default function SearchedCard() {
-  const { id, con } = useLocalSearchParams<{ id: string; con?: string }>();
+  const { id, con, sell } = useLocalSearchParams<{ id: string; con?: string; sell?: string }>();
   const buying = con === '1';
+  const draft = useSellDraft((s) => (sell === '1' ? s.draft : null));
+  const patchDraft = useSellDraft((s) => s.patch);
+  const selling = !!draft;
+  const [pack, setPack] = useState<{ name: string; cents: number } | null | undefined>(undefined);
   const rules = useRules((s) => s.rules);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [card, setCard] = useState<CatalogCard | null | undefined | 'error'>(undefined);
   const [prices, setPrices] = useState<SearchPrices | null | undefined>(undefined);
   // Opens on the raw single (Bryan, 2026-11-06); every grade is one tap away on the toggle.
-  const [pick, setPick] = useState<Choice>('raw');
+  // Selling opens on the scanned card's own grade.
+  const [pick, setPick] = useState<Choice>(() => (draft ? draftGrade(draft.card) : 'raw'));
   const [tilting, setTilting] = useState(false);
   const wanted = useWishlist((s) => s.items.find((i) => i.key === wishKey(Number(id), pick as WishGrade)));
   const [attempt, setAttempt] = useState(0);
@@ -97,7 +110,20 @@ export default function SearchedCard() {
       live = false;
     };
   }, [ready, buying]);
-  const slab = useMemo<Card | null>(() => (ready ? slabFor(ready, pick) : null), [ready, pick]);
+  // A pull is rated against one pack of its set, when the catalog has that price.
+  const pulled = draft?.cost?.kind === 'pulled';
+  useEffect(() => {
+    let live = true;
+    if (pulled && groupId != null)
+      packFor(groupId)
+        .then((p) => live && setPack(p))
+        .catch(() => live && setPack(null));
+    return () => {
+      live = false;
+    };
+  }, [pulled, groupId]);
+  // Selling shows your own slab (cert and label) rather than a stand-in.
+  const slab = useMemo<Card | null>(() => (draft ? draft.card : ready ? slabFor(ready, pick) : null), [draft, ready, pick]);
 
   // A browsing page, not your own slab: a touch smaller on narrow phones so the numbers fit.
   const slabW = Math.min(size.heroW, Math.round(width * 0.46));
@@ -142,12 +168,21 @@ export default function SearchedCard() {
     router.push({ pathname: '/set/[id]', params: { id: String(groupId), name: ready.setName, language: ready.language, game: ready.game } });
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
   const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
+  // The sheet's market wins: for a raw card it's the print you picked.
+  const sellMarket = draft ? (draft.marketCents ?? (price && !quiet ? price.marketCents : null)) : null;
+  const sellCost = draft?.cost?.kind === 'pulled' ? { kind: 'pulled' as const, packCents: pack?.cents ?? null } : (draft?.cost ?? null);
+  const putUp = () => {
+    if (!draft) return;
+    const saved = saveDraft(draft, { cost: sellCost, marketCents: sellMarket, rules });
+    router.dismissAll();
+    router.push(`/card/${saved.id}`);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
       {/* iOS 26 swipes back from anywhere; keep rightward drags on the price chart. */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
-      <ScrollView scrollEnabled={!tilting} contentContainerStyle={{ paddingTop: insets.top + space.s, paddingBottom: space.xl }}>
+      <ScrollView scrollEnabled={!tilting} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: insets.top + space.s, paddingBottom: space.xl }}>
         <View style={[styles.hero, { height: heroH }]}>
           <SlabView card={slab} width={slabW} interactive onDragChange={setTilting} />
         </View>
@@ -184,7 +219,27 @@ export default function SearchedCard() {
           </View>
         </View>
 
-        <View style={[styles.gutter, { paddingTop: space.xl }]}>
+        {draft ? (
+          <View style={[styles.gutter, { paddingTop: space.xl }]}>
+            <SellSummary
+              askCents={draft.askCents}
+              onAsk={(askCents) => patchDraft({ askCents })}
+              marketCents={sellMarket}
+              lowCents={price && !quiet ? price.lowCents : null}
+              gradeName={gradeLabel(pick)}
+              cost={sellCost}
+              packName={pack?.name}
+              rules={rules}
+            />
+            <View style={{ paddingTop: space.xl }}>
+              <Hairline />
+            </View>
+            <Text style={[type.section, { color: color.ink, paddingTop: space.xl }]}>{gradeLabel(pick)} prices</Text>
+          </View>
+        ) : null}
+
+        <View style={[styles.gutter, { paddingTop: selling ? 0 : space.xl }]}>
+          {selling ? null : (
           <Segmented<Tab>
             value={isLow(pick) ? 'low' : (pick as Tab)}
             onChange={onTab}
@@ -196,7 +251,8 @@ export default function SearchedCard() {
               { value: 'low', label: '7–1' },
             ]}
           />
-          {isLow(pick) ? <LowGrades pick={pick} prices={prices ?? null} onPick={choose} /> : null}
+          )}
+          {isLow(pick) && !selling ? <LowGrades pick={pick} prices={prices ?? null} onPick={choose} /> : null}
 
           {buy ? (
             <View style={styles.buyRow}>
@@ -238,7 +294,8 @@ export default function SearchedCard() {
               <>
                 <KeyStats pick={pick} price={price} prices={prices} />
                 {hist ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
-                <GradeLadder prices={prices} pick={pick} onPick={choose} />
+                {/* Selling stays on your grade; the ladder is there to compare. */}
+                <GradeLadder prices={prices} pick={pick} onPick={selling ? () => {} : choose} />
               </>
             )
           ) : null}
@@ -252,7 +309,9 @@ export default function SearchedCard() {
       </ScrollView>
       {back}
       <View style={[styles.gutter, { paddingBottom: Math.max(insets.bottom, space.l), paddingTop: space.m }]}>
-        {buying ? (
+        {draft ? (
+          <PrimaryButton title={`Put up for sale at ${money(draft.askCents)}`} onPress={putUp} />
+        ) : buying ? (
           // Buying at a con: the next step is the seller's price, rated against your rules.
           // Or save the card to the wishlist with the price you're hunting for.
           <>
@@ -274,6 +333,7 @@ export default function SearchedCard() {
           <PrimaryButton title="Add to vault" onPress={() => router.push({ pathname: '/add', params: addParams(ready, pick) })} />
         )}
       </View>
+      {selling ? <KeyboardDone /> : null}
     </View>
   );
 }
@@ -453,6 +513,12 @@ function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string 
 /** "SWSH07: Evolving Skies" → "Evolving Skies"; the code adds nothing next to the set name. */
 function setTitle(name: string): string {
   return name.replace(/^[A-Z0-9.-]{2,8}:\s+/, '');
+}
+
+/** The search page's grade for a vault card: its PSA grade, else raw. */
+function draftGrade(c: Card): Choice {
+  if (c.grader === 'psa' && c.grade != null && c.grade >= 1 && c.grade <= 10) return `psa${Math.floor(c.grade)}` as SearchGrade;
+  return 'raw';
 }
 
 /** A stand-in card for the slab render: the searched card at the picked grade, no cert. */
