@@ -1,7 +1,8 @@
 // A card opened from search: what it's worth raw and as a PSA 10 to 1, one chart, and one button
 // to add it to the vault. 10/9/8 sit on the toggle; 7 to 1 sit behind "7–1" because most cards
 // sell those grades rarely. All grades come from the same price call (card-prices, cached a day),
-// so picking a lower grade costs nothing. In con mode (?con=1) it also shows what to pay.
+// so picking a lower grade costs nothing. Drag the slab (or sleeved single) to tilt it; tap a slab
+// to spin it 360°, as on a vault card. In con mode (?con=1) it also shows what to pay.
 
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -50,6 +51,7 @@ export default function SearchedCard() {
   const [prices, setPrices] = useState<SearchPrices | null | undefined>(undefined);
   const [pick, setPick] = useState<Choice>('psa10');
   const touched = useRef(false);
+  const [tilting, setTilting] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -128,9 +130,9 @@ export default function SearchedCard() {
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
       {/* iOS 26 swipes back from anywhere; keep rightward drags on the price chart. */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + space.s, paddingBottom: space.xl }}>
+      <ScrollView scrollEnabled={!tilting} contentContainerStyle={{ paddingTop: insets.top + space.s, paddingBottom: space.xl }}>
         <View style={[styles.hero, { height: heroH }]}>
-          <SlabView card={slab} width={slabW} />
+          <SlabView card={slab} width={slabW} interactive onDragChange={setTilting} />
         </View>
 
         <View style={styles.titleRow}>

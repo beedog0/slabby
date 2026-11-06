@@ -1,11 +1,12 @@
 // The slab hero: a PSA-proportion acrylic case with depth, the label in its pocket and the card
 // seated in the clear insert below it (src/components/slab). Static in lists; on the card screen
-// (`interactive`) drag tilts it and a tap opens the full-screen viewer to spin it 360°.
+// (`interactive`) drag tilts it and a tap opens the full-screen viewer to spin it 360°. A raw
+// card in its sleeve tilts the same way.
 // When the Blender render lands (SLAB_ASSET_BRIEF.md), it replaces the drawn faces; the props
 // stay the same.
 
 import { useRef, useState } from 'react';
-import { Animated, PanResponder, StyleSheet, View } from 'react-native';
+import { Animated, PanResponder, StyleSheet, View, type ViewStyle } from 'react-native';
 import { ArtImage } from './ArtImage';
 import { color, shadow, size, slabPose } from '../theme/tokens';
 import { Slab3D } from './slab/Slab3D';
@@ -36,23 +37,10 @@ export function SlabView({ card, width = size.heroW, posed = true, shadow: floor
   const label = `${card.name}, ${card.grader === 'raw' ? 'raw' : `${card.grader.toUpperCase()} ${card.grade}`}`;
   const height = (width * size.heroH) / size.heroW;
 
-  if (card.grader === 'raw') {
-    // Raw cards: penny sleeve at the same card scale, no slab.
-    const w = width * 0.86;
+  if (card.grader === 'raw' && !interactive) {
     return (
       <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel={label}>
-        <View
-          style={[
-            { width: w, height: w * (88 / 63), borderRadius: w * 0.045, backgroundColor: card.artColor ?? color.well },
-            shadow.slabContact,
-            posed && { transform: [{ perspective: slabPose.perspective }, { rotateY: slabPose.rotateY }, { rotateX: slabPose.rotateX }] },
-          ]}
-        >
-          {card.imageFrontUrl ? (
-            <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={[StyleSheet.absoluteFill, { borderRadius: w * 0.045 }]} />
-          ) : null}
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sleeve, { borderRadius: w * 0.045 }]} />
-        </View>
+        <Sleeve card={card} width={width} transform={posed ? [{ perspective: slabPose.perspective }, { rotateY: slabPose.rotateY }, { rotateX: slabPose.rotateX }] : undefined} />
       </View>
     );
   }
@@ -67,12 +55,34 @@ export function SlabView({ card, width = size.heroW, posed = true, shadow: floor
   return <TiltSlab card={card} width={width} height={height} label={label} onDragChange={onDragChange} />;
 }
 
+/** Raw cards: penny sleeve at the same card scale, no slab. */
+function Sleeve({ card, width, transform }: { card: Card; width: number; transform?: ViewStyle['transform'] }) {
+  const w = width * 0.86;
+  return (
+    <Animated.View
+      style={[
+        { width: w, height: w * (88 / 63), borderRadius: w * 0.045, backgroundColor: card.artColor ?? color.well },
+        shadow.slabContact,
+        transform ? { transform } : null,
+      ]}
+    >
+      {card.imageFrontUrl ? (
+        <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={[StyleSheet.absoluteFill, { borderRadius: w * 0.045 }]} />
+      ) : null}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sleeve, { borderRadius: w * 0.045 }]} />
+    </Animated.View>
+  );
+}
+
 function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; width: number; height: number; label: string; onDragChange?: (d: boolean) => void }) {
   const yaw = useRef(new Animated.Value(REST_YAW)).current;
   const pitch = useRef(new Animated.Value(REST_PITCH)).current;
   const [open, setOpen] = useState(false);
   const cb = useRef(onDragChange);
   cb.current = onDragChange;
+  const raw = card.grader === 'raw';
+  const rawRef = useRef(raw); // the pan handlers are made once; the card can change grade under them
+  rawRef.current = raw;
 
   const pan = useRef(
     PanResponder.create({
@@ -95,7 +105,7 @@ function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; wi
         cb.current?.(false);
         const tap = Math.abs(s.dx) < 6 && Math.abs(s.dy) < 6;
         springBack();
-        if (tap) setOpen(true);
+        if (tap && !rawRef.current) setOpen(true);
       },
       onPanResponderTerminate: () => {
         cb.current?.(false);
@@ -116,15 +126,28 @@ function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; wi
     <View
       style={{ width, height, alignItems: 'center', justifyContent: 'center' }}
       accessible
-      accessibilityRole="imagebutton"
+      accessibilityRole={raw ? 'image' : 'imagebutton'}
       accessibilityLabel={label}
-      accessibilityHint="Opens the slab full screen"
-      onAccessibilityTap={() => setOpen(true)}
+      accessibilityHint={raw ? undefined : 'Opens the slab full screen'}
+      onAccessibilityTap={raw ? undefined : () => setOpen(true)}
       {...pan.panHandlers}
     >
-      <Slab3D card={card} width={width} yaw={yaw} pitch={pitch} />
+      {raw ? (
+        // A sleeved single tilts the same way; it has no 360° viewer (there's no case to turn).
+        <Sleeve
+          card={card}
+          width={width}
+          transform={[
+            { perspective: slabPose.perspective },
+            { rotateY: yaw.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) },
+            { rotateX: pitch.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) },
+          ]}
+        />
+      ) : (
+        <Slab3D card={card} width={width} yaw={yaw} pitch={pitch} />
+      )}
     </View>
-    <SlabViewer card={card} visible={open} onClose={() => setOpen(false)} />
+    {raw ? null : <SlabViewer card={card} visible={open} onClose={() => setOpen(false)} />}
     </>
   );
 }
