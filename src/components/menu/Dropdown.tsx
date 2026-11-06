@@ -25,7 +25,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { color, motion, radius, size, space, type } from "../../theme/tokens";
-import { groupsOf, type MenuItem, type MenuSpec } from "./Menu";
+import { Check, groupsOf, type MenuItem, type MenuSpec } from "./Menu";
 
 type Anchor = { x: number; y: number; w: number; h: number };
 type Request = { anchor: Anchor; items: MenuSpec["items"] };
@@ -47,7 +47,7 @@ export function openDropdown(
 const native = Platform.OS !== "web";
 
 export function DropdownHost() {
-  const { width: screenW } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const [req, setReq] = useState<Request | null>(null);
   const progress = useRef(new Animated.Value(0)).current;
   const closing = useRef(false);
@@ -93,7 +93,11 @@ export function DropdownHost() {
   const groups = groupsOf(req.items);
   // Right edge sits on the page gutter (or the button's edge if it's further in).
   const right = Math.max(space.gutter, screenW - (anchor.x + anchor.w));
-  const top = anchor.y + anchor.h + space.xs;
+  // Under the button; flipped above it if it would run off the bottom of the screen.
+  const rows = groups.reduce((n, g) => n + g.length, 0);
+  const panelH = rows * size.touch + (groups.length - 1) * space.s + space.s;
+  const below = anchor.y + anchor.h + space.xs;
+  const top = below + panelH > screenH - space.gutter ? Math.max(space.gutter, anchor.y - space.xs - panelH) : below;
   const scale = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [0.96, 1],
@@ -167,6 +171,7 @@ function Row({
       {first ? null : <View style={styles.hairline} />}
       <Pressable
         accessibilityRole="button"
+        accessibilityState={item.selected ? { selected: true } : undefined}
         onPress={onPress}
         style={({ pressed }) => [
           styles.row,
@@ -184,6 +189,7 @@ function Row({
             {item.detail}
           </Text>
         ) : null}
+        {item.selected ? <Check /> : null}
       </Pressable>
     </View>
   );

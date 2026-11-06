@@ -1,9 +1,10 @@
 // Search field and sort choice under the filter tabs. Always shown, so nothing below jumps.
 
+import { useRef, type ComponentRef } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { SORT_LABEL, type SortKey } from '../../pricing/arrange';
-import { openMenu } from '../menu/Menu';
+import { openDropdown } from '../menu/Dropdown';
 import { color, radius, size, space, type } from '../../theme/tokens';
 
 const SORTS: SortKey[] = ['value', 'gain', 'newest', 'name', 'mine'];
@@ -16,11 +17,13 @@ type Props = {
 };
 
 export function SearchSort({ query, onQuery, sort, onSort }: Props) {
+  // Opens right under the sort button, like the home … menu.
+  const sortRef = useRef<ComponentRef<typeof View>>(null);
   const pickSort = () =>
-    openMenu({
-      title: 'Sort by',
-      items: SORTS.map((s) => ({ label: SORT_LABEL[s], selected: s === sort, onPress: () => onSort(s) })),
-    });
+    openDropdown(
+      sortRef,
+      SORTS.map((s) => ({ label: SORT_LABEL[s], selected: s === sort, onPress: () => onSort(s) })),
+    );
   return (
     <View style={styles.row}>
       <View style={styles.field}>
@@ -40,12 +43,14 @@ export function SearchSort({ query, onQuery, sort, onSort }: Props) {
           style={[type.text, styles.input]}
         />
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Sort by ${SORT_LABEL[sort]}`} onPress={pickSort} style={styles.sort}>
-        <Text style={[type.text, { color: color.ink }]}>{SORT_LABEL[sort]}</Text>
-        <Svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke={color.secondary} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-          <Path d="M2 3.5l3 3 3-3" />
-        </Svg>
-      </Pressable>
+      <View ref={sortRef} collapsable={false}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Sort by ${SORT_LABEL[sort]}`} onPress={pickSort} style={styles.sort}>
+          <Text style={[type.text, { color: color.ink }]}>{SORT_LABEL[sort]}</Text>
+          <Svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke={color.secondary} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <Path d="M2 3.5l3 3 3-3" />
+          </Svg>
+        </Pressable>
+      </View>
     </View>
   );
 }
