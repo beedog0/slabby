@@ -1,7 +1,8 @@
 // Con mode: sold today, floor total, for-sale list with ask and floor. Reference: 05-con-mode.png.
 // The + beside "Got an offer" opens the "Put on the table" sheet: pick slabs from the vault and set
 // Hold, For sale, Trade only or Sold without leaving con mode, or scan a new one. Long-press a row
-// for the same choices. Whatever changed is flashed on the tab it landed on.
+// for the same choices. Whatever changed is flashed on the tab it landed on. Search and sort sit
+// under the tabs, like on home.
 
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -9,12 +10,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
+import { SearchSort } from '../../src/components/collection/SearchSort';
 import { Segmented } from '../../src/components/Segmented';
 import { openConStatusMenu } from '../../src/components/conStatusMenu';
 import { TableSheet, type TableSheetOpen } from '../../src/components/con/TableSheet';
 import { Hairline, PlusIcon, PrimaryButton } from '../../src/components/ui';
 import { conTabFor, type ConStatus } from '../../src/lib/conStatus';
 import { elapsed, money } from '../../src/lib/format';
+import { arrange, type SortKey } from '../../src/pricing/arrange';
 import { conSummary, rowFor } from '../../src/pricing/portfolio';
 import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
 import { usePrices } from '../../src/store/prices';
@@ -24,12 +27,16 @@ import { color, radius, size, space, type } from '../../src/theme/tokens';
 
 type Tab = 'sale' | 'sold' | 'trade';
 
+const CON_SORTS: SortKey[] = ['value', 'gain', 'newest', 'name'];
+
 export default function ConMode() {
   const insets = useSafeAreaInsets();
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
   const { session, start, end } = useCon();
   const [tab, setTab] = useState<Tab>('sale');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('value');
   const [sheet, setSheet] = useState<TableSheetOpen | null>(null);
   const [flash, setFlash] = useState<{ ids: string[]; at: number }>({ ids: [], at: 0 });
   /** Show where changed slabs went: the tab of the last change, with every changed row flashed. */
@@ -65,12 +72,13 @@ export default function ConMode() {
   if (!session) return null;
   const sum = conSummary(rows, session.startedAt);
 
-  const visible = rows.filter((r) => {
+  const onTab = rows.filter((r) => {
     const c = r.card;
     if (tab === 'sold') return c.status === 'sold' && !!c.soldAt && c.soldAt >= session.startedAt;
     if (tab === 'trade') return c.status === 'owned' && c.plan === 'trade';
     return c.status === 'owned' && c.plan === 'sell';
   });
+  const visible = arrange(onTab, { sort, query });
 
   const done = () => {
     end();
@@ -120,7 +128,15 @@ export default function ConMode() {
         ]}
       />
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.m, paddingBottom: space.xxl }}>
+      <View style={{ marginHorizontal: space.gutter, marginTop: space.s }}>
+        <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} sorts={CON_SORTS} />
+      </View>
+
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.xs, paddingBottom: space.xxl }}
+      >
         {visible.map((r) => (
           <View key={r.card.id}>
             <Flash on={flash.ids.includes(r.card.id)} at={flash.at} />
@@ -142,7 +158,13 @@ export default function ConMode() {
         ))}
         {visible.length === 0 ? (
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xl }]}>
-            {tab === 'sold' ? 'Nothing sold yet.' : tab === 'trade' ? 'No cards marked trade only.' : 'No cards marked for sale.'}
+            {query.trim() && onTab.length
+              ? 'Nothing here matches.'
+              : tab === 'sold'
+                ? 'Nothing sold yet.'
+                : tab === 'trade'
+                  ? 'No cards marked trade only.'
+                  : 'No cards marked for sale.'}
           </Text>
         ) : null}
       </ScrollView>
