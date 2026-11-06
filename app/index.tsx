@@ -21,9 +21,10 @@ import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
 import type { SlabActions } from '../src/components/collection/actions';
+import { removeWithUndo } from '../src/components/collection/remove';
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { openSlabMenu } from '../src/components/menu/Menu';
-import { shareSlab } from '../src/components/share/ShareCard';
+import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
 import { arrange, swapOrder } from '../src/pricing/arrange';
 import { shareSellSheet } from '../src/services/sellSheet';
 import { DEFAULT_CON_NAME } from '../src/store/con';
@@ -85,7 +86,15 @@ export default function Home() {
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
   const prices = usePrices((s) => s.byKey);
-  const { mode, filter, sort, order, pinnedId, setMode, setFilter, setSort, setOrder, setPinned } = useDisplay();
+  const { mode, filter, sort, order, pinnedId, setMode, setFilter: saveFilter, setSort, setOrder, setPinned } = useDisplay();
+  // Select mode: tap slabs to pick several, then share or remove them together.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  // A new tab shows other slabs; a selection you can't see shouldn't be acted on.
+  const setFilter = (f: CollectionFilter) => {
+    setSelected(new Set());
+    saveFilter(f);
+  };
 
   useEffect(() => {
     refreshPrices(cards);
@@ -139,6 +148,23 @@ export default function Home() {
     setPicked(null);
     setSort('mine');
   };
+  const startSelecting = (first?: string) => {
+    setArranging(false);
+    setPicked(null);
+    setSelected(new Set(first ? [first] : []));
+    setSelecting(true);
+  };
+  const doneSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   // Grouped by when you'd reach for it: at the con, around the shelf, then settings.
   const moreRef = useRef<ComponentRef<typeof View>>(null);
@@ -153,6 +179,7 @@ export default function Home() {
         },
       ],
       [
+        { label: 'Select', onPress: () => startSelecting() },
         { label: 'Arrange shelf', onPress: startArranging },
         { label: 'Add by hand', onPress: () => router.push('/add') },
       ],
@@ -162,17 +189,31 @@ export default function Home() {
       ],
     ]);
 
-  // Long-press any slab: pin it first, share it, or open it.
+  // Long-press any slab: pin it first, share it, open it, start a selection, or remove it.
   const slabMenu = (row: CardRow) => {
     const pinned = pinnedId === row.card.id;
     openSlabMenu(row.card, [
-      { label: pinned ? 'Unpin' : 'Pin to front', onPress: () => setPinned(pinned ? null : row.card.id) },
-      { label: 'Share card', onPress: () => shareSlab(row.card) },
-      { label: 'Open', onPress: () => router.push(`/card/${row.card.id}`) },
+      [
+        { label: pinned ? 'Unpin' : 'Pin to front', onPress: () => setPinned(pinned ? null : row.card.id) },
+        { label: 'Share card', onPress: () => shareSlab(row.card) },
+        { label: 'Open', onPress: () => router.push(`/card/${row.card.id}`) },
+        { label: 'Select', onPress: () => startSelecting(row.card.id) },
+      ],
+      [{ label: 'Remove from vault', onPress: () => removeWithUndo([row.card]) }],
     ]);
   };
 
-  const actions: SlabActions = arranging
+  const picks = useMemo(() => all.filter((r) => selected.has(r.card.id)).map((r) => r.card), [all, selected]);
+  const allShown = list.rows.length > 0 && list.rows.every((r) => selected.has(r.card.id));
+  const shareSelected = () => {
+    if (picks.length > MAX_SHARE) Alert.alert(`Sharing the first ${MAX_SHARE}`, `One image fits up to ${MAX_SHARE} slabs.`);
+    shareSlabs(picks);
+  };
+  const removeSelected = () => removeWithUndo(picks, doneSelecting);
+
+  const actions: SlabActions = selecting
+    ? { selected, onPress: (r) => toggle(r.card.id), onLongPress: (r) => toggle(r.card.id) }
+    : arranging
     ? {
         selectedId: picked,
         onPress: (r) => {
@@ -254,13 +295,20 @@ export default function Home() {
         contentContainerStyle={{
           paddingTop: insets.top + space.l,
           // The dock only shows on an empty vault; a full vault scrolls to the bottom edge.
-          paddingBottom: insets.bottom + (isEmpty ? size.button + space.xxxl + space.l : space.xxl),
+          paddingBottom:
+            insets.bottom + (isEmpty || selecting ? size.button + space.xxxl + space.l : space.xxl),
         }}
       >
         <View style={styles.header}>
-          <Text style={[type.section, { color: color.ink }]}>Slabby</Text>
+          <Text numberOfLines={1} style={[type.section, { color: color.ink }]}>
+            {selecting ? (selected.size ? `${selected.size} selected` : 'Select slabs') : 'Slabby'}
+          </Text>
           <View style={{ flexDirection: 'row' }}>
-            {arranging ? (
+            {selecting ? (
+              <Pressable accessibilityRole="button" onPress={doneSelecting} style={styles.done}>
+                <Text style={[type.body, { color: color.ink, fontWeight: '600' }]}>Done</Text>
+              </Pressable>
+            ) : arranging ? (
               <Pressable accessibilityRole="button" onPress={doneArranging} style={styles.done}>
                 <Text style={[type.body, { color: color.ink, fontWeight: '600' }]}>Done</Text>
               </Pressable>
@@ -314,7 +362,18 @@ export default function Home() {
             </View>
             {/* Every view gets search and sort; the swipe view sizes its slab to the room left below. */}
             <View style={styles.search}>
-              {arranging ? (
+              {selecting ? (
+                <View style={styles.selectRow}>
+                  <Text style={[type.text, { color: color.secondary }]}>Tap slabs to select them.</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setSelected(allShown ? new Set() : new Set(list.rows.map((r) => r.card.id)))}
+                    style={styles.selectAll}
+                  >
+                    <Text style={[type.text, { color: color.ink }]}>{allShown ? 'Deselect all' : 'Select all'}</Text>
+                  </Pressable>
+                </View>
+              ) : arranging ? (
                 <Text
                   style={[
                     type.text,
@@ -342,7 +401,7 @@ export default function Home() {
               <View style={styles.gutter}>
                 <EmptyFilter mode={mode} width={contentW} title={empty.title} hint={empty.hint} />
               </View>
-            ) : mode === 'scroll' ? (
+            ) : mode === 'scroll' && !selecting ? (
               <View onLayout={(e) => setDisplayY(e.nativeEvent.layout.y)}>
                 <ScrollDisplay
                   key={filter}
@@ -355,6 +414,7 @@ export default function Home() {
               </View>
             ) : (
               <View style={styles.gutter}>
+                {/* Selecting from the swipe view shows the grid, so several slabs are in reach. */}
                 {mode === 'shelf' ? (
                   <ShelfView rows={list.rows} width={contentW} actions={actions} />
                 ) : (
@@ -372,6 +432,13 @@ export default function Home() {
           <PrimaryButton title="Scan a slab" onPress={() => router.push('/scan')} />
           <Pressable accessibilityRole="link" onPress={() => router.push('/add')} style={styles.quiet}>
             <Text style={[type.text, { color: color.secondary }]}>Add by hand</Text>
+          </Pressable>
+        </View>
+      ) : selecting && picks.length ? (
+        <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
+          <PrimaryButton title={`Share ${plural(picks.length, 'slab')}`} onPress={shareSelected} />
+          <Pressable accessibilityRole="button" onPress={removeSelected} style={styles.quiet}>
+            <Text style={[type.text, { color: color.secondary }]}>Remove {plural(picks.length, 'slab')}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -433,6 +500,8 @@ const styles = StyleSheet.create({
     paddingBottom: space.l,
     marginTop: -space.s,
   },
+  selectRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: size.touch },
+  selectAll: { height: size.touch, justifyContent: 'center', paddingLeft: space.m },
   done: { height: size.touch, paddingHorizontal: 10, justifyContent: 'center' },
   quiet: {
     height: size.touch,

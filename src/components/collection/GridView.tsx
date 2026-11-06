@@ -6,6 +6,7 @@ import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
 import type { CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
 import { PinMark } from './PinMark';
+import { SelectOutline } from './SelectOutline';
 import { color, space, type } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
 import { slabLayout } from '../slab/geometry';
@@ -24,6 +25,7 @@ export function GridView({ rows, width, actions }: { rows: CardRow[]; width: num
         <Pressable
           key={r.card.id}
           accessibilityRole="button"
+          accessibilityState={actions?.selected ? { selected: actions.selected.has(r.card.id) } : undefined}
           onPress={() => (actions?.onPress ? actions.onPress(r) : router.push(`/card/${r.card.id}`))}
           onLongPress={actions?.onLongPress ? () => actions.onLongPress!(r) : undefined}
           style={({ pressed }) => [{ width: cellW }, pressed && { opacity: 0.85 }, dimmed(actions, r) && { opacity: 0.35 }]}
@@ -32,6 +34,7 @@ export function GridView({ rows, width, actions }: { rows: CardRow[]; width: num
             <View>
               <SlabView card={r.card} width={slabW} posed={false} />
               {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} /> : null}
+              <SelectOutline on={!!actions?.selected?.has(r.card.id)} slabW={slabW} />
             </View>
           </View>
           {/* Same width as the label, so the text lines up with its left edge. */}

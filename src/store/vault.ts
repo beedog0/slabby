@@ -12,6 +12,11 @@ type VaultState = {
   cards: Card[];
   update: (id: string, patch: Partial<Card>) => void;
   add: (card: Card) => void;
+  /** Take slabs out of the vault. Their ids are kept until the server delete lands (see sync). */
+  remove: (ids: string[]) => void;
+  /** Ids removed on this phone that the server may still have. Cleared once deleted there. */
+  removedIds: string[];
+  clearRemoved: (ids: string[]) => void;
 };
 
 export const useVault = create<VaultState>()(
@@ -22,6 +27,18 @@ export const useVault = create<VaultState>()(
       update: (id, patch) =>
         set((s) => ({ cards: s.cards.map((c) => (c.id === id ? { ...c, ...patch } : c)) })),
       add: (card) => set((s) => ({ cards: [card, ...s.cards] })),
+      removedIds: [],
+      remove: (ids) => {
+        const gone = new Set(ids);
+        set((s) => ({
+          cards: s.cards.filter((c) => !gone.has(c.id)),
+          removedIds: [...new Set([...s.removedIds, ...ids])],
+        }));
+      },
+      clearRemoved: (ids) => {
+        const done = new Set(ids);
+        set((s) => ({ removedIds: s.removedIds.filter((id) => !done.has(id)) }));
+      },
     }),
     {
       name: 'slabby.vault',

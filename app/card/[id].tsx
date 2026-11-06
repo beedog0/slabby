@@ -13,6 +13,7 @@ import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { shareSlab } from '../../src/components/share/ShareCard';
 import { openSlabMenu } from '../../src/components/menu/Menu';
+import { removeWithUndo } from '../../src/components/collection/remove';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
@@ -51,11 +52,15 @@ export default function SlabDetail() {
 
   const menu = () =>
     openSlabMenu(card, [
-      {
-        label: forSale ? 'Move to holds' : 'Add to sell sheet',
-        onPress: () => update(card.id, { plan: forSale ? 'hold' : 'sell' }),
-      },
-      { label: 'Share card', onPress: () => shareSlab(card) },
+      [
+        {
+          label: forSale ? 'Move to holds' : 'Add to sell sheet',
+          onPress: () => update(card.id, { plan: forSale ? 'hold' : 'sell' }),
+        },
+        { label: 'Share card', onPress: () => shareSlab(card) },
+      ],
+      // Leave the page first: it has nothing to show once the slab is gone.
+      [{ label: 'Remove from vault', onPress: () => removeWithUndo([card], () => router.back()) }],
     ]);
 
   // Pokémon is the default, so only other games are named.

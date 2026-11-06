@@ -144,6 +144,17 @@ export async function pushCards(cards: Card[]): Promise<void> {
   await supabase.from('slabs').upsert(cards.filter((c) => isUuid(c.id)).map((c) => toRow(c, uid)));
 }
 
+/** Delete slabs on the server. Returns the ids it confirmed, so failed ones are retried later. */
+export async function deleteCards(ids: string[]): Promise<string[]> {
+  const uid = await userId();
+  // Mock seed cards (non-uuid ids) never reached the server; they're done as soon as they're gone.
+  const local = ids.filter((id) => !isUuid(id));
+  const remote = ids.filter(isUuid);
+  if (!supabase || !uid || !remote.length) return local;
+  const { error } = await supabase.from('slabs').delete().in('id', remote);
+  return error ? local : ids;
+}
+
 export async function pushRules(rules: PricingRules): Promise<void> {
   const uid = await userId();
   if (!supabase || !uid) return;
@@ -168,8 +179,15 @@ export async function pull(): Promise<{ cards: Card[]; rules: PricingRules | nul
 /**
  * Merge after sign-in: server cards win by id; local-only cards (added while signed out) are
  * kept and pushed. Mock seed cards (non-uuid ids) are dropped once a real vault exists.
+ * Slabs removed on this phone whose server delete hasn't landed yet stay removed.
  */
-export function mergeVault(local: Card[], remote: Card[]): { merged: Card[]; toPush: Card[] } {
+export function mergeVault(
+  local: Card[],
+  remoteAll: Card[],
+  removedIds: string[] = [],
+): { merged: Card[]; toPush: Card[] } {
+  const removed = new Set(removedIds);
+  const remote = remoteAll.filter((c) => !removed.has(c.id));
   const remoteIds = new Set(remote.map((c) => c.id));
   const toPush = local.filter((c) => isUuid(c.id) && !remoteIds.has(c.id));
   return { merged: [...toPush, ...remote], toPush };

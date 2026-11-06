@@ -77,6 +77,9 @@ export const size = {
   grabberH: 5,
   /** Home … dropdown width. */
   dropdownW: 224,
+  /** Select mode outline around a picked slab: line weight and its gap from the case. */
+  selectLine: 2,
+  selectGap: 4,
 } as const;
 
 /** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */
@@ -85,6 +88,8 @@ export const motion = {
   sheetOut: 180,
   dropIn: 160,
   dropOut: 120,
+  /** How long "Removed · Undo" stays up. */
+  undoMs: 5000,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };
