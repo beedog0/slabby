@@ -1,4 +1,5 @@
-// Slab detail: slab, value vs paid, price chart, comps row, and "Your price" (ask and lowest),
+// Slab detail: slab, value vs paid, price chart, comps row, and "Asking price" (with the lowest
+// you'll take under it),
 // which opens Before the table. Sell sheet moves live in the … menu.
 // Reference: 03-slab-detail.png. "More stats" (Phase 3) and the 1y range (needs history beyond
 // 90 days) are left out until they have data behind them, so nothing here is a dead tap.
@@ -150,14 +151,18 @@ export default function SlabDetail() {
               <>
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityLabel={`Asking price ${money(row.ask)}, lowest you'll take ${money(row.floor)}`}
                   onPress={() => router.push(`/con/table/${card.id}`)}
                   style={({ pressed }) => [styles.compsRow, pressed && { opacity: 0.5 }]}
                 >
-                  <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>Your price</Text>
-                  <View style={styles.priceLink}>
-                    <Text style={[type.body, { color: color.ink }]}>
-                      ask {money(row.ask)} · lowest {money(row.floor)}
+                  <View style={{ gap: 2, flex: 1 }}>
+                    <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>Asking price</Text>
+                    <Text style={[type.secondary, { color: color.secondary }]}>
+                      Lowest you'll take <Text style={{ color: color.loss }}>{money(row.floor)}</Text>
                     </Text>
+                  </View>
+                  <View style={styles.priceLink}>
+                    <Text style={[type.body, { color: color.ink }]}>{money(row.ask)}</Text>
                     <Chevron />
                   </View>
                 </Pressable>

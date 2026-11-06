@@ -177,6 +177,24 @@ export default function BeforeTheTable() {
           <Hairline />
           {selling ? (
             <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`What you paid, ${card.paidCents != null ? money(card.paidCents) : "don't know"}`}
+                onPress={() => router.push(`/con/paid/${card.id}`)}
+                style={({ pressed }) => [styles.override, pressed && { opacity: 0.5 }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={[type.text, { color: color.ink }]}>What you paid</Text>
+                  {card.paidCents == null && rules.neverBelowPaid ? (
+                    <Text style={[type.secondary, { color: color.secondary }]}>Add it to keep the floor above it</Text>
+                  ) : null}
+                </View>
+                <Text style={[type.body, { color: card.paidCents != null ? color.ink : color.secondary }]}>
+                  {card.paidCents != null ? money(card.paidCents) : "Don't know"}
+                </Text>
+                <Chevron />
+              </Pressable>
+              <Hairline />
               <View style={styles.override}>
                 <View style={{ flex: 1 }}>
                   <Text numberOfLines={1} style={[type.text, { color: color.ink }]}>Override for this card</Text>
