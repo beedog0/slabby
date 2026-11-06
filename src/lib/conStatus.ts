@@ -1,9 +1,13 @@
 // Where a slab stands at a con: kept back (hold), on the table (for sale), trade only, or sold.
-// "Trade only" is the existing plan 'trade'; this just names the four states the con screen uses.
+// "Trade only" is the existing plan 'trade'; this names the four states con mode offers.
 
 import type { Card } from '../types';
 
 export type ConStatus = 'hold' | 'sale' | 'trade' | 'sold';
+
+/** Menu order, and the order the table sheet lists slabs in (holds first). */
+export const CON_STATUSES: ConStatus[] = ['hold', 'sale', 'trade', 'sold'];
+export const CON_STATUS_ORDER: Record<ConStatus, number> = { hold: 0, sale: 1, trade: 2, sold: 3 };
 
 export const CON_STATUS_LABEL: Record<ConStatus, string> = {
   hold: 'Hold',
@@ -19,9 +23,9 @@ export function conStatusOf(card: Pick<Card, 'status' | 'plan'>): ConStatus {
   return 'hold';
 }
 
-/** The vault patch for moving an owned slab to For sale or Trade only. Sold goes through a price. */
-export function planPatch(next: 'sale' | 'trade'): Pick<Card, 'plan'> {
-  return { plan: next === 'sale' ? 'sell' : 'trade' };
+/** The vault patch for Hold, For sale or Trade only. Sold goes through a price. */
+export function planPatch(next: 'hold' | 'sale' | 'trade'): Pick<Card, 'plan'> {
+  return { plan: next === 'sale' ? 'sell' : next };
 }
 
 /** Which con tab a status lives on. Holds aren't on the con screen; they open For sale. */

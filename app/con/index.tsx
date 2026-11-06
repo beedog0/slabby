@@ -1,17 +1,19 @@
 // Con mode: sold today, floor total, for-sale list with ask and floor. Reference: 05-con-mode.png.
-// The + beside "Got an offer" puts a slab on the table: pick one from the vault or scan a new one,
-// then mark it For sale, Trade only or Sold.
+// The + beside "Got an offer" opens the "Put on the table" sheet: pick slabs from the vault and set
+// Hold, For sale, Trade only or Sold without leaving con mode, or scan a new one. Long-press a row
+// for the same choices. Whatever changed is flashed on the tab it landed on.
 
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { Segmented } from '../../src/components/Segmented';
 import { openConStatusMenu } from '../../src/components/conStatusMenu';
-import { openMenu } from '../../src/components/menu/Menu';
+import { TableSheet, type TableSheetOpen } from '../../src/components/con/TableSheet';
 import { Hairline, PlusIcon, PrimaryButton } from '../../src/components/ui';
+import { conTabFor, type ConStatus } from '../../src/lib/conStatus';
 import { elapsed, money } from '../../src/lib/format';
 import { conSummary, rowFor } from '../../src/pricing/portfolio';
 import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
@@ -28,11 +30,21 @@ export default function ConMode() {
   const rules = useRules((s) => s.rules);
   const { session, start, end } = useCon();
   const [tab, setTab] = useState<Tab>('sale');
-  // After a quick add, land on the tab the slab went to. `at` makes a repeat of the same tab count.
-  const params = useLocalSearchParams<{ tab?: Tab; at?: string }>();
+  const [sheet, setSheet] = useState<TableSheetOpen | null>(null);
+  const [flash, setFlash] = useState<{ ids: string[]; at: number }>({ ids: [], at: 0 });
+  /** Show where changed slabs went: the tab of the last change, with every changed row flashed. */
+  const landOn = (changed: { id: string; status: ConStatus }[]) => {
+    const last = changed[changed.length - 1];
+    if (!last) return;
+    setTab(conTabFor(last.status));
+    setFlash({ ids: changed.map((c) => c.id), at: Date.now() });
+  };
+  // Back from the scanner: `at` makes a repeat of the same tab count.
+  const params = useLocalSearchParams<{ tab?: Tab; flash?: string; at?: string }>();
   useEffect(() => {
     if (params.tab === 'sale' || params.tab === 'sold' || params.tab === 'trade') setTab(params.tab);
-  }, [params.tab, params.at]);
+    if (params.flash) setFlash({ ids: [params.flash], at: Date.now() });
+  }, [params.tab, params.flash, params.at]);
   const [, tick] = useState(0);
 
   useEffect(() => {
@@ -59,16 +71,6 @@ export default function ConMode() {
     if (tab === 'trade') return c.status === 'owned' && c.plan === 'trade';
     return c.status === 'owned' && c.plan === 'sell';
   });
-
-  const quickAdd = () =>
-    openMenu({
-      title: 'Add to the table',
-      subtitle: 'Then mark it for sale, trade only, or sold',
-      items: [
-        { label: 'From my collection', onPress: () => router.push('/con/add') },
-        { label: 'Scan a new slab', onPress: () => router.push({ pathname: '/scan', params: { con: '1' } }) },
-      ],
-    });
 
   const done = () => {
     end();
@@ -121,10 +123,19 @@ export default function ConMode() {
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.m, paddingBottom: space.xxl }}>
         {visible.map((r) => (
           <View key={r.card.id}>
+            <Flash on={flash.ids.includes(r.card.id)} at={flash.at} />
             <ConRow
               row={r}
               onPress={() => r.card.status === 'owned' && router.push(`/con/table/${r.card.id}`)}
-              onLongPress={r.card.status === 'owned' ? () => openConStatusMenu(r.card) : undefined}
+              onLongPress={
+                r.card.status === 'owned'
+                  ? () =>
+                      openConStatusMenu(r.card, {
+                        onChanged: (s) => landOn([{ id: r.card.id, status: s }]),
+                        onSold: () => setSheet({ step: 'price', id: r.card.id }),
+                      })
+                  : undefined
+              }
             />
             <Hairline inset={size.thumbW + space.m} />
           </View>
@@ -141,14 +152,34 @@ export default function ConMode() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add a slab to the table"
-          onPress={quickAdd}
+          onPress={() => setSheet({ step: 'list' })}
           style={({ pressed }) => [styles.add, pressed && { opacity: 0.6 }]}
         >
           <PlusIcon />
         </Pressable>
       </View>
+
+      <TableSheet
+        open={sheet}
+        onClose={(changed) => {
+          setSheet(null);
+          landOn(changed);
+        }}
+        onScan={() => router.push({ pathname: '/scan', params: { con: '1' } })}
+      />
     </View>
   );
+}
+
+/** A brief well-colored wash behind a row that just changed, so you can see where it went. */
+function Flash({ on, at }: { on: boolean; at: number }) {
+  const o = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!on) return;
+    o.setValue(1);
+    Animated.timing(o, { toValue: 0, duration: 600, delay: 200, useNativeDriver: true }).start();
+  }, [on, at, o]);
+  return <Animated.View pointerEvents="none" style={[styles.flash, { opacity: o }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -164,6 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   totals: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: space.gutter, paddingTop: space.xl },
+  flash: { position: 'absolute', top: 0, bottom: 0, left: -space.gutter, right: -space.gutter, backgroundColor: color.well },
   footer: { flexDirection: 'row', gap: space.m, paddingHorizontal: space.gutter, paddingTop: space.s },
   add: {
     width: size.button,
