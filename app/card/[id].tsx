@@ -1,17 +1,18 @@
-// Slab detail: slab, value vs paid, price chart, comps row, one action.
+// Slab detail: slab, value vs paid, price chart, comps row, and "Your price" (ask and lowest),
+// which opens Before the table. Sell sheet moves live in the … menu.
 // Reference: 03-slab-detail.png. "More stats" (Phase 3) and the 1y range (needs history beyond
 // 90 days) are left out until they have data behind them, so nothing here is a dead tap.
 
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActionSheetIOS, Alert, Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActionSheetIOS, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
-import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
+import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
 import { gradeLabel, money, pct, rowTitle } from '../../src/lib/format';
 import { detailFor } from '../../src/pricing/portfolio';
 import { useCardRow } from '../../src/pricing/useCardRow';
@@ -144,6 +145,24 @@ export default function SlabDetail() {
                 <Hairline />
               </>
             ) : null}
+            {card.status === 'owned' && row.ask != null && row.floor != null ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push(`/con/table/${card.id}`)}
+                  style={({ pressed }) => [styles.compsRow, pressed && { opacity: 0.5 }]}
+                >
+                  <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>Your price</Text>
+                  <View style={styles.priceLink}>
+                    <Text style={[type.body, { color: color.ink }]}>
+                      ask {money(row.ask)} · lowest {money(row.floor)}
+                    </Text>
+                    <Chevron />
+                  </View>
+                </Pressable>
+                <Hairline />
+              </>
+            ) : null}
           </View>
         ) : (
           <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.xxl }]}>
@@ -152,15 +171,6 @@ export default function SlabDetail() {
         )}
       </ScrollView>
 
-      {card.status === 'owned' ? (
-        <View style={[styles.gutter, { paddingBottom: insets.bottom + space.l, paddingTop: space.m }]}>
-          {forSale ? (
-            <PrimaryButton title="Before the table" onPress={() => router.push(`/con/table/${card.id}`)} />
-          ) : (
-            <PrimaryButton title="Add to sell sheet" onPress={() => update(card.id, { plan: 'sell' })} />
-          )}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -186,5 +196,6 @@ const styles = StyleSheet.create({
   hero: { height: 330, alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.m, paddingHorizontal: space.gutter },
   rangeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.l },
+  priceLink: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   compsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.xl },
 });
