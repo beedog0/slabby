@@ -61,6 +61,9 @@ export const size = {
   heroH: 305, // 190 × PSA's 134.6/83.9
   /** The slab in the scan result sheet. */
   sheetSlabW: 44,
+  /** Scan window: fits a whole slab or a loose card, portrait. */
+  scanFrameW: 260,
+  scanFrameRatio: 0.66,
   sparkW: 56,
   sparkH: 24,
   stepper: 32,
