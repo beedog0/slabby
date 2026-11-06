@@ -19,10 +19,11 @@ create table comps_refresh_calls (
 alter table comps_refresh_calls enable row level security;   -- Edge Functions only (service role)
 
 -- Claim one on-demand refresh of a card_key, in one transaction:
---   1. take the cooldown lock (comps_attempted_at) on a matched card_refs row,
+--   1. take the cooldown lock (comps_attempted_at) on a matched card_refs row; the cooldown runs
+--      from the later of the last claim and the last successful write (nightly included),
 --   2. count the call against the user's and the global daily budget, like claim_psa_call.
 -- Over a budget, the counts and the lock are put back. Returns
--- 'ok' | 'fresh' (attempted within the cooldown) | 'no_match' | 'user_limit' | 'global_limit'.
+-- 'ok' | 'fresh' (attempted or written within the cooldown) | 'no_match' | 'user_limit' | 'global_limit'.
 create or replace function claim_comps_refresh(
   p_user uuid, p_key text, p_cooldown interval, p_user_limit int, p_global_limit int
 ) returns text
@@ -39,7 +40,7 @@ begin
   update card_refs set comps_attempted_at = now()
   where card_key = p_key
     and tcgplayer_id is not null
-    and (comps_attempted_at is null or comps_attempted_at < now() - p_cooldown);
+    and greatest(coalesce(comps_attempted_at, '-infinity'), coalesce(comps_refreshed_at, '-infinity')) < now() - p_cooldown;
   get diagnostics used = row_count;
   locked := used > 0;
   if not locked then return 'fresh'; end if;

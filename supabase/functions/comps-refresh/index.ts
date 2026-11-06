@@ -3,7 +3,8 @@
 // Cooldown 6 h per card_key (1 h with force), budgets per user and overall per day, enforced in
 // claim_comps_refresh (0007_comps_freshness.sql). Every other card_key on the same product is
 // written from the same call.
-// Always answers 200: { status: 'refreshed' | 'fresh' | 'throttled' | 'no_match' | 'error', refreshedAt, lastSaleDay }.
+// Always answers 200: { status: 'refreshed' | 'fresh' | 'throttled' | 'no_match' | 'not_owned' | 'error', refreshedAt, lastSaleDay }.
+// 'not_owned': no slab with that key for this user yet (e.g. not synced); the app treats it as skipped.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { refreshProduct } from '../_shared/comps-write.ts';
@@ -11,10 +12,10 @@ import { refreshProduct } from '../_shared/comps-write.ts';
 const COOLDOWN = '6 hours';
 const FORCE_COOLDOWN = '1 hour';
 const USER_LIMIT = 30;
-const ANON_LIMIT = 10;
+const ANON_LIMIT = 30; // same as signed-in; the global budget caps the total
 const GLOBAL_LIMIT = 1500;
 
-type Status = 'refreshed' | 'fresh' | 'throttled' | 'no_match' | 'error';
+type Status = 'refreshed' | 'fresh' | 'throttled' | 'no_match' | 'not_owned' | 'error';
 const json = (status: Status, refreshedAt: string | null = null, lastSaleDay: string | null = null, message?: string) =>
   new Response(JSON.stringify({ status, refreshedAt, lastSaleDay, ...(message ? { message } : {}) }), {
     status: 200,
@@ -34,7 +35,7 @@ Deno.serve(async (req) => {
 
   const owned = await admin.from('slabs').select('id').eq('user_id', user.id).eq('card_key', cardKey).limit(1);
   if (owned.error) return json('error', null, null, owned.error.message);
-  if (!owned.data?.length) return json('error', null, null, 'Not in your vault');
+  if (!owned.data?.length) return json('not_owned');
 
   const current = async () => {
     const { data } = await admin
@@ -44,6 +45,11 @@ Deno.serve(async (req) => {
       .maybeSingle();
     return { refreshedAt: data?.comps_refreshed_at ?? null, lastSaleDay: data?.last_sale_day ?? null };
   };
+
+  // The lock's previous value, put back if PPT fails for a reason other than its rate limit, so
+  // the next pull retries instead of waiting out the cooldown.
+  const { data: before } = await admin.from('card_refs').select('comps_attempted_at').eq('card_key', cardKey).maybeSingle();
+  const prevAttempt: string | null = before?.comps_attempted_at ?? null;
 
   const { data: claim, error: claimErr } = await admin.rpc('claim_comps_refresh', {
     p_user: user.id,
@@ -76,6 +82,7 @@ Deno.serve(async (req) => {
     const message = (e as Error).message;
     const c = await current();
     if (message === 'ppt_rate_limited') return json('throttled', c.refreshedAt, c.lastSaleDay);
+    await admin.from('card_refs').update({ comps_attempted_at: prevAttempt }).eq('card_key', cardKey);
     console.error(`comps-refresh ${cardKey}: ${message}`);
     return json('error', c.refreshedAt, c.lastSaleDay, message);
   }
