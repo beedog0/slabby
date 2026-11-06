@@ -5,17 +5,21 @@
 
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActionSheetIOS, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActionSheetIOS, Alert, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
+import { TrendSentence } from '../../src/components/TrendSentence';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
-import { gradeLabel, money, pct, rowTitle } from '../../src/lib/format';
+import { ebaySoldUrl } from '../../src/lib/ebay';
+import { gradeLabel, money, rowTitle } from '../../src/lib/format';
 import { detailFor } from '../../src/pricing/portfolio';
+import { freshnessLine, trendSentence, trendVerdict } from '../../src/pricing/trend';
 import { useCardRow } from '../../src/pricing/useCardRow';
+import { useCardRefresh } from '../../src/services/useRefresh';
 import { useVault } from '../../src/store/vault';
 import { color, space, type } from '../../src/theme/tokens';
 
@@ -31,12 +35,16 @@ export default function SlabDetail() {
   const update = useVault((s) => s.update);
   const [range, setRange] = useState<Range>('90');
   const [tilting, setTilting] = useState(false);
+  const refresh = useCardRefresh(row?.card, { auto: true });
 
   if (!row) return null;
   const { card, price } = row;
   const days = range === '90' ? 90 : 30;
   const detail = detailFor(row, days);
   const forSale = card.plan === 'sell';
+  const raw = card.grader === 'raw';
+  const trend = price ? trendSentence(trendVerdict(price, days, { raw }), days, raw) : null;
+  const fresh = price ? freshnessLine(price, { raw, state: refresh.pulling ? 'refreshing' : refresh.state }) : null;
 
   const menu = () => {
     const toggle = forSale ? 'Move to holds' : 'Add to sell sheet';
@@ -59,7 +67,11 @@ export default function SlabDetail() {
       {/* iOS 26 pops a screen on a sideways swipe anywhere; keep that to the left edge here so a
           drag on the slab tilts it instead of going back. */}
       <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
-      <ScrollView scrollEnabled={!tilting} contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
+      <ScrollView
+        scrollEnabled={!tilting}
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}
+        refreshControl={<RefreshControl refreshing={refresh.pulling} onRefresh={refresh.pull} tintColor={color.secondary} />}
+      >
         <View style={styles.nav}>
           <IconButton label="Back" onPress={() => router.back()}>
             <BackIcon />
@@ -117,31 +129,39 @@ export default function SlabDetail() {
                   { value: '90', label: '90d' },
                 ]}
               />
-              <Text style={[type.text, { color: color.secondary }]}>
-                <Text style={{ color: detail.change >= 0 ? color.gain : color.loss }}>{pct(detail.change)}</Text> over {days} days
-              </Text>
+              {trend ? <TrendSentence parts={trend} style={{ flexShrink: 1, textAlign: 'right' }} /> : null}
             </View>
             <Hairline />
-            {price && price.sales30d > 0 ? (
+            {price ? (
               <>
-                <View style={styles.compsRow}>
-                  <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>
-                    {price.sales30d} {card.grader === 'raw' ? 'sales' : 'eBay sales'}, 30 days
+                <Pressable
+                  accessibilityRole={raw ? undefined : 'link'}
+                  accessibilityHint={raw ? undefined : 'Opens eBay sold listings'}
+                  disabled={raw}
+                  onPress={() => Linking.openURL(ebaySoldUrl(card)).catch(() => {})}
+                  style={({ pressed }) => [styles.compsArea, pressed && { opacity: 0.5 }]}
+                >
+                  <View style={styles.compsLine}>
+                    <Text style={[type.body, { color: color.ink, fontWeight: '400', flexShrink: 1 }]}>
+                      {raw
+                        ? 'TCGplayer market, 30 days'
+                        : price.sales30d > 0
+                          ? `${price.sales30d} eBay sales, 30 days`
+                          : 'No eBay sales in 30 days'}
+                    </Text>
+                    <View style={styles.priceLink}>
+                      <Text style={[type.body, { color: color.ink }]}>
+                        {!raw && price.sales30d === 0
+                          ? money(price.marketCents)
+                          : `${money(price.lowCents)}–${money(price.highCents).replace('$', '')}`}
+                      </Text>
+                      {raw ? null : <Chevron />}
+                    </View>
+                  </View>
+                  <Text numberOfLines={1} style={[type.secondary, { color: color.secondary, paddingTop: space.xs }]}>
+                    {fresh}
                   </Text>
-                  <Text style={[type.body, { color: color.ink }]}>
-                    {money(price.lowCents)}–{money(price.highCents).replace('$', '')}
-                  </Text>
-                </View>
-                <Hairline />
-              </>
-            ) : price && card.grader === 'raw' ? (
-              <>
-                <View style={styles.compsRow}>
-                  <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>TCGplayer market, 30 days</Text>
-                  <Text style={[type.body, { color: color.ink }]}>
-                    {money(price.lowCents)}–{money(price.highCents).replace('$', '')}
-                  </Text>
-                </View>
+                </Pressable>
                 <Hairline />
               </>
             ) : null}
@@ -195,7 +215,9 @@ const styles = StyleSheet.create({
   },
   hero: { height: 330, alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.m, paddingHorizontal: space.gutter },
-  rangeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.l },
+  rangeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.m, paddingVertical: space.l },
   priceLink: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  compsArea: { paddingVertical: space.xl },
+  compsLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.m },
   compsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.xl },
 });

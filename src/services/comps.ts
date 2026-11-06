@@ -184,6 +184,11 @@ export async function refreshCards(cards: Card[], opts: { force?: boolean } = {}
   return out;
 }
 
+/** Whether a refresh can be asked for at all (Supabase configured, comps-refresh deployed). */
+export function canRefresh(): boolean {
+  return !!supabase && !refreshUnavailable;
+}
+
 /** Test hook: forget that comps-refresh was missing. */
 export function resetRefreshForTests() {
   refreshUnavailable = false;
