@@ -31,6 +31,7 @@ import {
   type SearchPrices,
 } from '../../src/services/search';
 import { useRules } from '../../src/store/rules';
+import { useWishlist, wishKey, type WishGrade } from '../../src/store/wishlist';
 import { color, size, space, type } from '../../src/theme/tokens';
 import type { Card } from '../../src/types';
 
@@ -49,6 +50,7 @@ export default function SearchedCard() {
   const [card, setCard] = useState<CatalogCard | null | undefined | 'error'>(undefined);
   const [prices, setPrices] = useState<SearchPrices | null | undefined>(undefined);
   const [pick, setPick] = useState<Choice>('psa10');
+  const wanted = useWishlist((s) => s.items.find((i) => i.key === wishKey(Number(id), pick as WishGrade)));
   const touched = useRef(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -73,13 +75,10 @@ export default function SearchedCard() {
     if (prices && !touched.current) setPick(firstGrade(prices));
   }, [prices]);
 
-  const choose = useCallback(
-    (c: Choice) => {
-      touched.current = true;
-      setPick(c);
-    },
-    [],
-  );
+  const choose = useCallback((c: Choice) => {
+    touched.current = true;
+    setPick(c);
+  }, []);
   const onTab = (t: Tab) => choose(t === 'low' ? (isLow(pick) ? pick : firstLowGrade(prices ?? null)) : t);
 
   const ready = card && card !== 'error' ? card : null;
@@ -113,7 +112,8 @@ export default function SearchedCard() {
     );
   }
 
-  const price: CardPrice | null | undefined = prices === undefined ? undefined : pick === 'raw' ? prices?.raw : prices?.grades[pick];
+  const price: CardPrice | null | undefined =
+    prices === undefined ? undefined : pick === 'raw' ? prices?.raw : prices?.grades[pick];
   const quiet = pick !== 'raw' && !!prices && isQuiet(price, prices.fetchedAt);
   const series = price?.series90 ?? [];
   const charted = series.length > 1;
@@ -190,10 +190,19 @@ export default function SearchedCard() {
             {prices === undefined ? (
               <Text style={[type.text, { color: color.secondary }]}>Loading prices…</Text>
             ) : charted && !quiet ? (
-              <PriceChart values={series} paidCents={null} width={width - space.gutter * 2} height={140} tint={trendTint(series)} asOf={price?.asOf} />
+              <PriceChart
+                values={series}
+                paidCents={null}
+                width={width - space.gutter * 2}
+                height={140}
+                tint={trendTint(series)}
+                asOf={price?.asOf}
+              />
             ) : (
               <>
-                <Text style={[type.text, { color: color.secondary }]}>{emptyLine(pick, prices, otherGame, quiet ? price : null)}</Text>
+                <Text style={[type.text, { color: color.secondary }]}>
+                  {emptyLine(pick, prices, otherGame, quiet ? price : null)}
+                </Text>
                 {prices === null ? <TryAgain onPress={() => setAttempt((n) => n + 1)} /> : null}
               </>
             )}
@@ -204,11 +213,17 @@ export default function SearchedCard() {
               <Hairline />
               <View style={styles.row}>
                 <Text style={[type.body, styles.label]}>
-                  {pick === 'raw' ? (catalogOnly ? 'TCGplayer low–market' : 'TCGplayer market, 30 days') : `${price.sales30d} eBay ${price.sales30d === 1 ? 'sale' : 'sales'}, 30 days`}
+                  {pick === 'raw'
+                    ? catalogOnly
+                      ? 'TCGplayer low–market'
+                      : 'TCGplayer market, 30 days'
+                    : `${price.sales30d} eBay ${price.sales30d === 1 ? 'sale' : 'sales'}, 30 days`}
                 </Text>
                 <Text
                   style={[type.body, { color: color.ink }]}
-                  accessibilityLabel={price.lowCents === price.highCents ? undefined : `from ${money(price.lowCents)} to ${money(price.highCents)}`}
+                  accessibilityLabel={
+                    price.lowCents === price.highCents ? undefined : `from ${money(price.lowCents)} to ${money(price.highCents)}`
+                  }
                 >
                   {price.lowCents === price.highCents
                     ? money(price.marketCents)
@@ -229,7 +244,22 @@ export default function SearchedCard() {
       <View style={[styles.gutter, { paddingBottom: Math.max(insets.bottom, space.l), paddingTop: space.m }]}>
         {buying ? (
           // Buying at a con: the next step is the seller's price, rated against your rules.
-          <PrimaryButton title="They're asking…" onPress={() => router.push({ pathname: '/con/buy/[id]', params: { id: String(ready.productId), grade: pick } })} />
+          // Or save the card to the wishlist with the price you're hunting for.
+          <>
+            <PrimaryButton
+              title="They're asking…"
+              onPress={() => router.push({ pathname: '/con/buy/[id]', params: { id: String(ready.productId), grade: pick } })}
+            />
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/con/want/[id]', params: { id: String(ready.productId), grade: pick } })}
+              style={{ minHeight: size.touch, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={[type.body, { color: color.ink }]}>
+                {wanted ? `On your wishlist at ${money(wanted.targetCents)}` : 'Add to wishlist'}
+              </Text>
+            </Pressable>
+          </>
         ) : (
           <PrimaryButton title="Add to vault" onPress={() => router.push({ pathname: '/add', params: addParams(ready, pick) })} />
         )}
@@ -255,7 +285,9 @@ function LowGrades({ pick, prices, onPick }: { pick: Choice; prices: SearchPrice
             onPress={() => onPick(g)}
             style={styles.lowCell}
           >
-            <Text style={[type.body, { color: on || sold ? color.ink : color.secondary, fontWeight: on ? '600' : '400' }]}>{g.slice(3)}</Text>
+            <Text style={[type.body, { color: on || sold ? color.ink : color.secondary, fontWeight: on ? '600' : '400' }]}>
+              {g.slice(3)}
+            </Text>
             <View style={[styles.lowMark, on && { backgroundColor: color.ink }]} />
           </Pressable>
         );
@@ -272,14 +304,20 @@ function TryAgain({ onPress }: { onPress: () => void }) {
   );
 }
 
-function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string | null, quiet: CardPrice | null | undefined): string {
+function emptyLine(
+  pick: Choice,
+  prices: SearchPrices | null,
+  otherGame: string | null,
+  quiet: CardPrice | null | undefined,
+): string {
   if (!prices) return 'Prices aren’t reachable right now.';
   if (pick === 'raw') return prices.raw ? 'Price history starts once more days come in.' : 'No TCGplayer price for this card.';
   if (otherGame) return `Graded prices for ${GAME_NAME[otherGame] ?? otherGame} aren’t available yet.`;
   if (prices.capped && prices.source === 'catalog') return 'Graded prices load again tomorrow.';
   if (prices.source === 'catalog') return 'Graded prices aren’t reachable right now.';
   // The price shown in the header for a quiet grade is the last 30-day median before it went quiet.
-  if (quiet) return `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
+  if (quiet)
+    return `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
   return `No ${gradeLabel(pick)} sales in the last 90 days.`;
 }
 

@@ -26,6 +26,7 @@ import {
   type SearchPrices,
 } from '../../../src/services/search';
 import { useCon } from '../../../src/store/con';
+import { useWishlist, wishKey, type WishGrade } from '../../../src/store/wishlist';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
 import { color, size, space, type } from '../../../src/theme/tokens';
@@ -39,6 +40,8 @@ export default function TheyreAsking() {
   const rules = useRules((s) => s.rules);
   const add = useVault((s) => s.add);
   const conId = useCon((s) => s.session?.id);
+  const wish = useWishlist((s) => s.items.find((i) => i.key === wishKey(Number(id), grade as WishGrade)));
+  const seeMarket = useWishlist((s) => s.seeMarket);
   const [card, setCard] = useState<CatalogCard | null>(null);
   const [prices, setPrices] = useState<SearchPrices | null | undefined>(undefined);
   const [digits, setDigits] = useState('');
@@ -65,6 +68,11 @@ export default function TheyreAsking() {
   }, [id]);
 
   const price = prices === undefined ? undefined : grade === 'raw' ? prices?.raw : prices?.grades[grade];
+  // A wishlist card keeps the latest market it was seen at, so the wishlist rating stays current.
+  useEffect(() => {
+    if (wish && price) seeMarket(wish.key, price.marketCents, price.asOf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [price?.marketCents, wish?.key]);
   const market = price?.marketCents ?? null;
   const buy = buyPrices(market, rules);
   const ask = (parseInt(digits || '0', 10) || 0) * 100;

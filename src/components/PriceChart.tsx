@@ -21,6 +21,8 @@ type Props = {
   asOf?: string;
   /** Smaller type, no paid label, no scrubbing: for the home value line. */
   compact?: boolean;
+  /** Label for the dashed line; "paid" unless the line is something else, like a wishlist price. */
+  lineLabel?: string;
 };
 
 const PAD = 8;
@@ -52,7 +54,7 @@ export function gridPrices(lo: number, hi: number): number[] {
 /** Space for a high/low price label between its point and the plot edge. */
 const POINT_ROOM = 20;
 
-export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false }: Props) {
+export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false, lineLabel = 'paid' }: Props) {
   const values = downsample(raw, compact ? 24 : 32);
   const [scrub, setScrub] = useState<number | null>(null); // index into raw
   const plotW = width - LABEL_W;
@@ -164,7 +166,7 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
       {!compact && s == null && markLow ? point(loI, money(raw[loI]), false) : null}
 
       {paidY != null && s == null ? (
-        <Text style={[labelStyle, { position: 'absolute', right: 0, width: LABEL_W - 6, textAlign: 'right', top: paidY - 8 }]}>paid</Text>
+        <Text style={[labelStyle, { position: 'absolute', right: 0, width: LABEL_W - 6, textAlign: 'right', top: paidY - 8 }]}>{lineLabel}</Text>
       ) : null}
 
       {/* Scrub readout: price and date on one line above the plot, so they can't stack into each other. */}
