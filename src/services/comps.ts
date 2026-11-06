@@ -69,7 +69,7 @@ export async function refreshPrices(cards: Card[]): Promise<void> {
   usePrices.getState().merge(next);
 }
 
-type CardRef = { card_key: string; tcgplayer_id: string | null; image_url: string | null };
+export type CardRef = { card_key: string; tcgplayer_id: string | null; image_url: string | null };
 
 /** The card photo for a matched product: PPT's CDN copy, else TCGplayer's own image server. */
 export function artFor(ref: Pick<CardRef, 'tcgplayer_id' | 'image_url'> | null | undefined): string | null {
@@ -85,8 +85,11 @@ function saveArt(key: string, url: string | null) {
   for (const c of vault.cards) if (!c.imageFrontUrl && cardKey(c) === key) vault.update(c.id, { imageFrontUrl: url });
 }
 
+/** card_keys card-match has answered for this app run. A miss costs a search credit, so ask once. */
+const retried = new Set<string>();
+
 /**
- * Ask the server to match a newly added card to its price source and photo, then save the photo.
+ * Ask the server to match a newly scanned or added card to its price source and photo, then save the photo.
  * Resolves to the server's answer, or null when the call itself failed (signed out, offline).
  */
 export async function matchNewCard(card: Card): Promise<CardRef | null> {
@@ -102,11 +105,10 @@ export async function matchNewCard(card: Card): Promise<CardRef | null> {
     },
   });
   if (error || !data) return null;
+  retried.add(cardKey(card));
   saveArt(cardKey(card), artFor(data));
   return data;
 }
-
-const retried = new Set<string>();
 
 /**
  * Fill in photos for cards that don't have one: from card_refs when the card is already matched,

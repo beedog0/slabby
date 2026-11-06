@@ -1,7 +1,9 @@
 // Scan: point at the front label and tap "Read label". The photo is read on device (Apple Vision)
 // → sheet → "Add to vault". No PSA call on this path: PSA's API is closed to us for now, so label
 // reading is the default. The QR → PSA lookup only runs where the label reader isn't built in
-// (web, Expo Go). Reference: 02-scan.png. Comps never run on this path.
+// (web, Expo Go). Reference: 02-scan.png. As soon as a scan resolves, card-match runs for the card
+// (photo + first comps), so a quick scan at a table shows art and market without adding anything.
+// Add to vault then saves what the sheet already fetched; card-match isn't asked twice.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -15,7 +17,10 @@ import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
-import { matchNewCard, priceFor, refreshPrices } from '../src/services/comps';
+import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
+import { supabase } from '../src/services/supabase';
+import { cardKey } from '../src/pricing/cardKey';
+import { usePrices } from '../src/store/prices';
 import { parseLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
 import { LabelReader } from '../modules/label-reader';
@@ -56,15 +61,54 @@ export default function Scan() {
   };
 
   const preview = result?.status === 'found' ? cardFromCert(result.payload, { paidCents: null, plan }) : null;
-  const price = preview ? priceFor(preview) : null;
+  const previewKey = preview ? cardKey(preview) : null;
+  // Re-render when this card's comps land in the store.
+  const livePrice = usePrices((s) => (previewKey ? s.byKey[previewKey] : undefined));
+  const price = preview ? (livePrice ?? priceFor(preview)) : null;
+
+  // Match the scanned card right away: photo, then prices. One card-match call per scan; Add reuses it.
+  const [matched, setMatched] = useState<{ key: string; art: string | null } | null>(null);
+  const [matching, setMatching] = useState(false);
+  const match = useRef<{ key: string; done: Promise<CardRef | null> } | null>(null);
+  useEffect(() => {
+    if (!preview || !previewKey || !supabase) return;
+    // A second read of the same card reuses the call already made.
+    if (match.current?.key !== previewKey) {
+      const card = preview;
+      const done = matchNewCard(card)
+        .catch(() => null)
+        .then(async (ref) => {
+          if (ref) await refreshPrices([card]).catch(() => {});
+          return ref;
+        });
+      match.current = { key: previewKey, done };
+    }
+    let live = true;
+    setMatching(true);
+    match.current.done.then((ref) => {
+      if (!live) return;
+      setMatched({ key: previewKey, art: artFor(ref) });
+      setMatching(false);
+    });
+    return () => {
+      live = false;
+    };
+  }, [previewKey]);
+  const art = matched && matched.key === previewKey ? matched.art : null;
+  const shown = preview && art ? { ...preview, imageFrontUrl: art } : preview;
   const already = preview?.certNumber ? existing.some((c) => c.certNumber === preview.certNumber && c.status === 'owned') : false;
 
   const addToVault = () => {
     if (result?.status !== 'found') return;
     const dollars = parseInt(paid.replace(/[^0-9]/g, ''), 10);
     const card = cardFromCert(result.payload, { paidCents: Number.isFinite(dollars) ? dollars * 100 : null, plan });
+    if (art) card.imageFrontUrl = art;
     add(card);
-    matchNewCard(card)
+    const pending = match.current?.key === cardKey(card) ? match.current.done : Promise.resolve(null);
+    // The sheet's match is reused (when it lands, matchNewCard puts the photo on this vault card).
+    // Only a call that failed outright (offline, no session) is made again; that costs no credit.
+    pending
+      .then((ref) => ref ?? matchNewCard(card))
       .then(() => refreshPrices([card]))
       .catch(() => {});
     router.replace(`/card/${card.id}`);
@@ -72,6 +116,7 @@ export default function Scan() {
 
   const rescan = () => {
     lastCert.current = null;
+    match.current = null;
     setLabelMiss(false);
     setResult(null);
   };
@@ -216,7 +261,7 @@ export default function Scan() {
                     : `✓ Cert ${result.cert} verified with PSA`}
               </Text>
               <View style={styles.cardRow}>
-                <CardThumb card={preview} />
+                <CardThumb card={shown ?? preview} />
                 <View style={{ flex: 1 }}>
                   <Text numberOfLines={1} style={[type.title, { color: color.ink }]}>
                     {rowTitle(preview)}
@@ -227,7 +272,9 @@ export default function Scan() {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{price ? money(price.marketCents) : '—'}</Text>
-                  <Text style={[type.secondary, { color: color.secondary }]}>{price ? 'market' : 'comps pending'}</Text>
+                  <Text style={[type.secondary, { color: color.secondary }]}>
+                    {price ? 'market' : matching ? 'finding comps' : 'no comps yet'}
+                  </Text>
                 </View>
               </View>
               <Hairline />
