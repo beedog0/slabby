@@ -189,7 +189,7 @@ export default function Home() {
           setPicked(null);
         },
       }
-    : { onLongPress: slabMenu };
+    : { onLongPress: slabMenu, pinnedId };
 
   const count = list.rows.length;
   // The header counts the whole filter; a search only narrows the slabs below it.
@@ -336,6 +336,7 @@ export default function Home() {
                   rows={list.rows}
                   screenW={screenW}
                   onLongPress={slabMenu}
+                  pinnedId={pinnedId}
                   fitHeight={displayY ? screenH - displayY - insets.bottom - space.s : undefined}
                 />
               </View>
