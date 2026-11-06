@@ -135,7 +135,10 @@ export function MenuHost() {
   // Pull the sheet down to dismiss it, like any iOS sheet.
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      // Capture, not bubble: a drag that starts on a row, the keypad or a button must still pull
+      // the sheet down. Bubbling only fired on the bare header, so most of the sheet ignored it.
+      onMoveShouldSetPanResponderCapture: (_, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
       onPanResponderRelease: (_, g) => {
         if (g.dy > 80 || g.vy > 0.8) closeRef.current();
