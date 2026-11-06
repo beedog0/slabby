@@ -2,11 +2,12 @@
 // the vault. Results show tonight's raw market; open a card for PSA prices with charts.
 // Typing, filtering and sorting only query our own catalog table, never a paid API.
 // Quiet controls under the field: "Filter" (language, rarity, set), the sort dropdown, and
-// List / Grid (remembered, like home's view switch).
+// List / Grid (remembered, like home's view switch). Scrolling down slides the title, field and
+// game tabs away and keeps that control row pinned; scrolling up brings them back.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { Animated, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
@@ -53,6 +54,27 @@ export default function Search() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuTop, setMenuTop] = useState(0);
+  const [topH, setTopH] = useState(0); // the part that slides away
+  const [headerH, setHeaderH] = useState(0); // all of it, pinned row included
+  const controlsRef = useRef<ComponentRef<typeof View>>(null);
+  const listRef = useRef<FlatList<Found>>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  // Follows scroll direction: down hides up to topH, any scroll up reveals again.
+  const slide = useMemo(
+    () =>
+      Animated.diffClamp(scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' }), 0, Math.max(topH, 1)).interpolate({
+        inputRange: [0, Math.max(topH, 1)],
+        outputRange: [0, -Math.max(topH, 1)],
+      }),
+    [scrollY, topH],
+  );
+  const openSort = () => {
+    // The row moves with the header, so measure where it is now.
+    controlsRef.current?.measureInWindow((_x, y, _w, h) => {
+      setMenuTop(y + h);
+      setSortOpen(true);
+    });
+  };
   const latest = useRef(0);
 
   useEffect(() => {
@@ -68,6 +90,7 @@ export default function Search() {
     }
     const id = ++latest.current;
     setState('loading');
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
     const t = setTimeout(() => {
       findCards(f)
         .then((r) => {
@@ -100,76 +123,97 @@ export default function Search() {
   const sortLabel = SORTS.find((s) => s.value === f.sort)!.label;
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
-      <View style={styles.nav}>
-        <IconButton label="Back" onPress={() => router.back()}>
-          <BackIcon />
-        </IconButton>
-      </View>
-      <View style={styles.gutter}>
-        <Text style={[type.title, { color: color.ink, paddingBottom: space.l }]}>{con ? 'Search to buy' : 'Search'}</Text>
-        <View style={styles.field}>
-          <SearchIcon s={18} tint={color.secondary} />
-          <TextInput
-            value={f.q}
-            onChangeText={(q) => set({ q })}
-            autoFocus
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-            placeholder={f.set ? `Search ${f.set.name}` : 'Umbreon VMAX 215'}
-            placeholderTextColor={color.secondary}
-            style={[type.body, styles.input]}
-            accessibilityLabel="Search cards"
-          />
-        </View>
-        <Segmented<GameFilter>
-          style={{ marginTop: space.m }}
-          value={f.game ?? 'all'}
-          onChange={(g) =>
-            // Sets and rarities belong to one game; Japanese only exists for Pokémon.
-            set({
-              game: g === 'all' ? null : g,
-              set: null,
-              rarities: [],
-              language: g === 'all' || g === 'pokemon' ? f.language : null,
-            })
-          }
-          options={[
-            { value: 'all', label: 'All' },
-            { value: 'pokemon', label: 'Pokémon' },
-            { value: 'onepiece', label: 'One Piece' },
-            { value: 'riftbound', label: 'Riftbound' },
-          ]}
-        />
-      </View>
-
-      {runnable(f) ? (
-        <View style={styles.controls} onLayout={(e) => setMenuTop(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Filter" onPress={() => setFilterOpen(true)} hitSlop={8} style={styles.control}>
-            <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{nFilters ? `Filter · ${nFilters}` : 'Filter'}</Text>
-          </Pressable>
-          <View style={styles.controlsRight}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Sort" onPress={() => setSortOpen(true)} hitSlop={8} style={styles.control}>
-              <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{sortLabel} ▾</Text>
-            </Pressable>
-            <ViewSwitch value={layout} onChange={setSearchLayout} modes={SEARCH_MODES} />
+    <View style={{ flex: 1, backgroundColor: color.canvas }}>
+      <Animated.View
+        style={[styles.header, { top: insets.top, transform: [{ translateY: slide }] }]}
+        onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
+      >
+        <View onLayout={(e) => setTopH(e.nativeEvent.layout.height)}>
+          <View style={styles.nav}>
+            <IconButton label="Back" onPress={() => router.back()}>
+              <BackIcon />
+            </IconButton>
+          </View>
+          <View style={styles.gutter}>
+            <Text style={[type.title, { color: color.ink, paddingBottom: space.l }]}>{con ? 'Search to buy' : 'Search'}</Text>
+            <View style={styles.field}>
+              <SearchIcon s={18} tint={color.secondary} />
+              <TextInput
+                value={f.q}
+                onChangeText={(q) => set({ q })}
+                autoFocus
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+                placeholder={f.set ? `Search ${f.set.name}` : 'Umbreon VMAX 215'}
+                placeholderTextColor={color.secondary}
+                style={[type.body, styles.input]}
+                accessibilityLabel="Search cards"
+              />
+            </View>
+            <Segmented<GameFilter>
+              style={{ marginTop: space.m }}
+              value={f.game ?? 'all'}
+              onChange={(g) =>
+                // Sets and rarities belong to one game; Japanese only exists for Pokémon.
+                set({
+                  game: g === 'all' ? null : g,
+                  set: null,
+                  rarities: [],
+                  language: g === 'all' || g === 'pokemon' ? f.language : null,
+                })
+              }
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'pokemon', label: 'Pokémon' },
+                { value: 'onepiece', label: 'One Piece' },
+                { value: 'riftbound', label: 'Riftbound' },
+              ]}
+            />
           </View>
         </View>
-      ) : null}
 
-      {hint ? (
-        <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.xl }]}>{hint}</Text>
-      ) : (
-        <FlatList
+        {runnable(f) ? (
+          <View ref={controlsRef} style={styles.controls}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Filter" onPress={() => setFilterOpen(true)} hitSlop={8} style={styles.control}>
+              <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{nFilters ? `Filter · ${nFilters}` : 'Filter'}</Text>
+            </Pressable>
+            <View style={styles.controlsRight}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Sort" onPress={openSort} hitSlop={8} style={styles.control}>
+                <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{sortLabel} ▾</Text>
+              </Pressable>
+              <ViewSwitch value={layout} onChange={setSearchLayout} modes={SEARCH_MODES} />
+            </View>
+          </View>
+        ) : null}
+        {/* A hairline under the pinned row once results scroll beneath it. */}
+        <Animated.View
+          style={{
+            height: StyleSheet.hairlineWidth * 2,
+            backgroundColor: color.hairline,
+            opacity: scrollY.interpolate({ inputRange: [0, 8], outputRange: [0, 1], extrapolate: 'clamp' }),
+          }}
+        />
+      </Animated.View>
+      {/* Covers the status bar so the header slides under it. */}
+      <View style={[styles.statusCover, { height: insets.top }]} />
+
+      {headerH ? (
+        <Animated.FlatList
+          ref={listRef}
           key={layout}
-          data={results}
+          data={hint ? [] : results}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          scrollEventThrottle={16}
+          scrollIndicatorInsets={{ top: headerH }}
+          style={{ paddingTop: insets.top }}
+          ListEmptyComponent={hint ? <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text> : undefined}
           numColumns={layout === 'grid' ? 2 : 1}
           keyExtractor={(c) => String(c.productId)}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: insets.bottom + space.xl, paddingTop: layout === 'grid' ? space.m : 0 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + space.xl, paddingTop: headerH + (layout === 'grid' ? space.m : 0) }}
           columnWrapperStyle={layout === 'grid' ? styles.gridRow : undefined}
           ItemSeparatorComponent={layout === 'grid' ? undefined : () => <Hairline inset={space.gutter + size.thumbW + space.m} />}
           renderItem={({ item }) =>
@@ -180,7 +224,7 @@ export default function Search() {
             )
           }
         />
-      )}
+      ) : null}
 
       <SortMenu open={sortOpen} top={menuTop} sort={f.sort} onSort={(sort) => set({ sort })} onClose={() => setSortOpen(false)} />
       <FilterSheet
@@ -439,6 +483,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter,
     paddingTop: space.m,
     paddingBottom: space.xs,
+    backgroundColor: color.canvas,
   },
   control: { minHeight: size.touch - 12, justifyContent: 'center' },
   menu: {
@@ -473,6 +518,8 @@ const styles = StyleSheet.create({
   },
   sheetSection: { paddingTop: space.m, paddingBottom: space.s },
   sectionTitle: { color: color.ink, fontWeight: '600', paddingHorizontal: space.gutter, paddingBottom: space.s },
+  header: { position: 'absolute', left: 0, right: 0, zIndex: 1, backgroundColor: color.canvas },
+  statusCover: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, backgroundColor: color.canvas },
   controlsRight: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginRight: -10 },
   gridRow: { gap: GRID_GAP, paddingHorizontal: space.gutter, paddingBottom: space.xxl },
   tileArt: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },

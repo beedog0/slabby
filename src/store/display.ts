@@ -40,7 +40,7 @@ export const useDisplay = create<DisplayState>()(
       setSort: (sort) => set({ sort }),
       setOrder: (order) => set({ order }),
       setPinned: (pinnedId) => set({ pinnedId }),
-      searchLayout: 'list',
+      searchLayout: 'grid',
       setSearchLayout: (searchLayout) => set({ searchLayout }),
     }),
     // New fields fall back to the defaults above when an older saved state is loaded.
