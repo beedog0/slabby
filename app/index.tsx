@@ -67,6 +67,14 @@ const EMPTY: Record<CollectionFilter, { title: string; hint: string; chart: stri
   },
 };
 
+/** What the big number is, per tab. Market value for owned slabs; what they sold for on Sold. */
+const VALUE_LABEL: Record<CollectionFilter, string> = {
+  all: 'Collection value',
+  hold: 'Holds value',
+  sell: 'For sale value',
+  sold: 'Sold total',
+};
+
 export default function Home() {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -249,6 +257,9 @@ export default function Home() {
         ) : (
           <>
             <View style={styles.value}>
+              <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+                {VALUE_LABEL[filter]}
+              </Text>
               <Text numberOfLines={1} style={[type.displayS, { color: total ? color.ink : color.secondary }]}>
                 {money(stats.totalCents)}
               </Text>
