@@ -53,7 +53,9 @@ export function ShareCardHost() {
     <View pointerEvents="none" style={styles.offscreen}>
       <View ref={ref} collapsable={false} style={styles.canvas}>
         <View style={styles.slab}>
-          <SlabView card={card} width={190} />
+          {/* Straight on: the hero pose's turn (rotateY −7°, rotateX 3°) reads as a lean in a
+              still photo, so the export faces the camera square and keeps only the shadow. */}
+          <SlabView card={card} width={190} posed={false} shadow />
         </View>
         <Text numberOfLines={1} style={[type.section, { color: color.ink }]}>
           {rowTitle(card)}
