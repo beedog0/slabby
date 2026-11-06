@@ -177,11 +177,6 @@ function mockPrices(productId: number): SearchPrices | null {
   };
 }
 
-/** The grade a card page opens on: the first of 10/9/8 with sales, else raw. */
-export function firstGrade(p: SearchPrices | null): SearchGrade | 'raw' {
-  return TOP_GRADES.find((g) => p?.grades[g]) ?? 'raw';
-}
-
 /** The lower grade picked on "7–1": the highest one with sales, else 7. */
 export function firstLowGrade(p: SearchPrices | null): SearchGrade {
   return LOW_GRADES.find((g) => p?.grades[g] && !isQuiet(p.grades[g], p.fetchedAt)) ?? 'psa7';

@@ -1,14 +1,15 @@
 // The slab hero: a PSA-proportion acrylic case with depth, the label in its pocket and the card
 // seated in the clear insert below it (src/components/slab). Static in lists; on the card screen
-// (`interactive`) drag tilts it and a tap opens the full-screen viewer to spin it 360°.
+// (`interactive`) drag tilts it and a tap opens the full-screen viewer to spin it 360°. A raw
+// card in its sleeve tilts the same way, and a tap opens it full screen to tilt and zoom.
 // When the Blender render lands (SLAB_ASSET_BRIEF.md), it replaces the drawn faces; the props
 // stay the same.
 
 import { useRef, useState } from 'react';
-import { Animated, PanResponder, StyleSheet, View } from 'react-native';
-import { ArtImage } from './ArtImage';
-import { color, shadow, size, slabPose } from '../theme/tokens';
+import { Animated, PanResponder, View } from 'react-native';
+import { size, slabPose } from '../theme/tokens';
 import { Slab3D } from './slab/Slab3D';
+import { Sleeve } from './slab/Sleeve';
 import { SlabViewer } from './slab/SlabViewer';
 import type { Card } from '../types';
 
@@ -34,23 +35,10 @@ export function SlabView({ card, width = size.heroW, posed = true, interactive =
   const label = `${card.name}, ${card.grader === 'raw' ? 'raw' : `${card.grader.toUpperCase()} ${card.grade}`}`;
   const height = (width * size.heroH) / size.heroW;
 
-  if (card.grader === 'raw') {
-    // Raw cards: penny sleeve at the same card scale, no slab.
-    const w = width * 0.86;
+  if (card.grader === 'raw' && !interactive) {
     return (
       <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel={label}>
-        <View
-          style={[
-            { width: w, height: w * (88 / 63), borderRadius: w * 0.045, backgroundColor: card.artColor ?? color.well },
-            shadow.slabContact,
-            posed && { transform: [{ perspective: slabPose.perspective }, { rotateY: slabPose.rotateY }, { rotateX: slabPose.rotateX }] },
-          ]}
-        >
-          {card.imageFrontUrl ? (
-            <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={[StyleSheet.absoluteFill, { borderRadius: w * 0.045 }]} />
-          ) : null}
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sleeve, { borderRadius: w * 0.045 }]} />
-        </View>
+        <Sleeve card={card} width={width} transform={posed ? [{ perspective: slabPose.perspective }, { rotateY: slabPose.rotateY }, { rotateX: slabPose.rotateX }] : undefined} />
       </View>
     );
   }
@@ -65,12 +53,14 @@ export function SlabView({ card, width = size.heroW, posed = true, interactive =
   return <TiltSlab card={card} width={width} height={height} label={label} onDragChange={onDragChange} />;
 }
 
+
 function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; width: number; height: number; label: string; onDragChange?: (d: boolean) => void }) {
   const yaw = useRef(new Animated.Value(REST_YAW)).current;
   const pitch = useRef(new Animated.Value(REST_PITCH)).current;
   const [open, setOpen] = useState(false);
   const cb = useRef(onDragChange);
   cb.current = onDragChange;
+  const raw = card.grader === 'raw';
 
   const pan = useRef(
     PanResponder.create({
@@ -116,17 +106,25 @@ function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; wi
       accessible
       accessibilityRole="imagebutton"
       accessibilityLabel={label}
-      accessibilityHint="Opens the slab full screen"
+      accessibilityHint={raw ? 'Opens the card full screen' : 'Opens the slab full screen'}
       onAccessibilityTap={() => setOpen(true)}
       {...pan.panHandlers}
     >
-      <Slab3D card={card} width={width} yaw={yaw} pitch={pitch} />
+      {raw ? (
+        <Sleeve
+          card={card}
+          width={width}
+          transform={[
+            { perspective: slabPose.perspective },
+            { rotateY: yaw.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) },
+            { rotateX: pitch.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) },
+          ]}
+        />
+      ) : (
+        <Slab3D card={card} width={width} yaw={yaw} pitch={pitch} />
+      )}
     </View>
     <SlabViewer card={card} visible={open} onClose={() => setOpen(false)} />
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  sleeve: { borderWidth: StyleSheet.hairlineWidth * 2, borderColor: 'rgba(0,0,0,0.10)', backgroundColor: 'rgba(255,255,255,0.06)' },
-});
