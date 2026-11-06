@@ -201,7 +201,7 @@ export function MenuHost() {
   );
 }
 
-function Check() {
+export function Check() {
   return (
     <Svg width={18} height={18} viewBox="0 0 18 18" fill="none" stroke={color.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M3.5 9.5l3.5 3.5 7.5-8" />

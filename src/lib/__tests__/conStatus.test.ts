@@ -10,6 +10,7 @@ describe('conStatus', () => {
   it('maps choices to plans and tabs', () => {
     expect(planPatch('sale')).toEqual({ plan: 'sell' });
     expect(planPatch('trade')).toEqual({ plan: 'trade' });
+    expect(planPatch('hold')).toEqual({ plan: 'hold' });
     expect(conTabFor('hold')).toBe('sale');
     expect(conTabFor('trade')).toBe('trade');
     expect(conTabFor('sold')).toBe('sold');

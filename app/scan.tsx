@@ -1,7 +1,8 @@
 // Scan: point at the front label and tap "Read label". The photo is read on device (Apple Vision)
 // → sheet → "Add to vault". No PSA call on this path: PSA's API is closed to us for now, so label
-// reading is the default. Opened from con mode's + (con=1), the sheet asks For sale / Trade only /
-// Sold instead of Hold / Sell and goes back to the con screen. The QR → PSA lookup only runs where the label reader isn't built in
+// reading is the default. Opened from con mode (con=1), the sheet asks Hold / For sale / Trade only /
+// Sold instead of Hold / Sell; Sold takes the sale price right here. "Add and scan another" keeps the
+// camera up for a batch; closing goes back to con mode on the tab of the last slab added. The QR → PSA lookup only runs where the label reader isn't built in
 // (web, Expo Go). Reference: 02-scan.png. Comps never run on this path.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -12,11 +13,12 @@ import { Keyboard, Linking, Platform, Pressable, StyleSheet, Text, TextInput, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { CardThumb } from '../src/components/CardThumb';
-import { setConStatus } from '../src/components/conStatusMenu';
+import { backToCon } from '../src/components/conStatusMenu';
 import { KEYBOARD_DONE, KeyboardDone, useKeyboardHeight } from '../src/components/KeyboardDone';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
-import { CON_STATUS_LABEL, type ConStatus } from '../src/lib/conStatus';
+import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
+import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
 import { matchNewCard, priceFor, refreshPrices } from '../src/services/comps';
@@ -38,7 +40,15 @@ export default function Scan() {
   const [paid, setPaid] = useState('');
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
   const fromCon = useLocalSearchParams<{ con?: string }>().con === '1';
-  const [conStatus, setConStatusChoice] = useState<Exclude<ConStatus, 'hold'>>('sale');
+  const [conStatus, setConStatusChoice] = useState<ConStatus>('sale');
+  const [soldFor, setSoldFor] = useState('');
+  const [lossConfirm, setLossConfirm] = useState(false);
+  /** Con batch: the last slab added, so closing lands on its tab; and a short "Added" line. */
+  const [lastAdded, setLastAdded] = useState<{ id: string; status: ConStatus } | null>(null);
+  const [addedNote, setAddedNote] = useState('');
+  const update = useVault((s) => s.update);
+  const session = useCon((s) => s.session);
+  const startCon = useCon((s) => s.start);
   const add = useVault((s) => s.add);
   const existing = useVault((s) => s.cards);
   const lastCert = useRef<string | null>(null);
@@ -68,25 +78,71 @@ export default function Scan() {
   const owned = preview?.certNumber ? existing.find((c) => c.certNumber === preview.certNumber && c.status === 'owned') : undefined;
   const already = !!owned;
 
+  const paidDollars = parseInt(paid.replace(/[^0-9]/g, ''), 10);
+  const paidCents = Number.isFinite(paidDollars) ? paidDollars * 100 : (owned?.paidCents ?? null);
+  const soldCents = (parseInt(soldFor || '0', 10) || 0) * 100;
+  const soldLoss = conStatus === 'sold' && paidCents != null && soldCents > 0 && soldCents < paidCents ? paidCents - soldCents : 0;
+
   const addToVault = () => {
     if (result?.status !== 'found') return;
-    const dollars = parseInt(paid.replace(/[^0-9]/g, ''), 10);
-    // From con mode, a sold slab is added on the table first; the Sold screen then takes its price.
-    const cardPlan = fromCon ? (conStatus === 'trade' ? 'trade' : 'sell') : plan;
-    const card = cardFromCert(result.payload, { paidCents: Number.isFinite(dollars) ? dollars * 100 : null, plan: cardPlan });
+    const card = cardFromCert(result.payload, { paidCents, plan });
     add(card);
     matchNewCard(card)
       .then(() => refreshPrices([card]))
       .catch(() => {});
-    if (fromCon) setConStatus(card, conStatus, { replace: true });
-    else router.replace(`/card/${card.id}`);
+    router.replace(`/card/${card.id}`);
   };
 
   const rescan = () => {
     lastCert.current = null;
     setLabelMiss(false);
     setResult(null);
+    setPaid('');
+    setSoldFor('');
+    setLossConfirm(false);
   };
+
+  /** Con mode: add (or re-mark) the slab with the chosen status. `again` keeps the camera up. */
+  const addForCon = (again: boolean) => {
+    if (result?.status !== 'found') return;
+    if (conStatus === 'sold' && !soldCents) return;
+    if (soldLoss > 0 && !lossConfirm) {
+      setLossConfirm(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      return;
+    }
+    Keyboard.dismiss();
+    let id = owned?.id;
+    if (!owned) {
+      const card = cardFromCert(result.payload, { paidCents, plan: conStatus === 'sold' ? 'sell' : planPatch(conStatus).plan });
+      add(card);
+      matchNewCard(card)
+        .then(() => refreshPrices([card]))
+        .catch(() => {});
+      id = card.id;
+    } else if (conStatus !== 'sold') {
+      update(owned.id, planPatch(conStatus));
+    }
+    if (!id) return;
+    if (conStatus === 'sold') {
+      let where = session?.name ?? null;
+      if (!session) {
+        startCon(DEFAULT_CON_NAME);
+        where = DEFAULT_CON_NAME;
+      }
+      update(id, { status: 'sold', soldCents, soldAt: new Date().toISOString(), soldWhere: where });
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (again) {
+      setLastAdded({ id, status: conStatus });
+      setAddedNote(`Added · ${CON_STATUS_LABEL[conStatus]}`);
+      rescan();
+    } else {
+      backToCon(conStatus, id);
+    }
+  };
+
+  const close = () => (fromCon && lastAdded ? backToCon(lastAdded.status, lastAdded.id) : router.back());
 
   // Photograph the front label and read it on device. A cert from the back's code wins over OCR.
   const readLabel = async () => {
@@ -143,7 +199,7 @@ export default function Scan() {
       ) : null}
 
       <View style={[styles.nav, { paddingTop: insets.top + space.s }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={styles.navBtn}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={styles.navBtn}>
           <Svg width={22} height={22} viewBox="0 0 24 24" stroke={color.onInk} strokeWidth={2} strokeLinecap="round">
             <Path d="M5 5l14 14M19 5L5 19" />
           </Svg>
@@ -171,7 +227,9 @@ export default function Scan() {
                 ? seen
                   ? `Couldn’t find a PSA label in “${seen.slice(0, 80)}”. Fill the frame with the label and hold steady.`
                   : 'Couldn’t read any text. Move closer so the label fills the frame, and hold steady.'
-                : labelMode
+                : addedNote
+                  ? `${addedNote}. Scan the next slab`
+                  : labelMode
                   ? 'Fill the frame with the front label, then tap Read label'
                   : 'Line up the QR or barcode on the back of the slab'}
         </Text>
@@ -264,15 +322,20 @@ export default function Scan() {
               </View>
               <Hairline />
               <View style={styles.field}>
-                <Text style={[type.body, { color: color.ink }]}>{fromCon ? 'Mark as' : 'Plan'}</Text>
                 {fromCon ? (
-                  <Segmented<Exclude<ConStatus, 'hold'>>
-                    style={{ width: 230 }}
+                  <Segmented<ConStatus>
+                    style={{ flex: 1 }}
                     value={conStatus}
-                    onChange={setConStatusChoice}
-                    options={(['sale', 'trade', 'sold'] as const).map((v) => ({ value: v, label: CON_STATUS_LABEL[v] }))}
+                    onChange={(v) => {
+                      setLossConfirm(false);
+                      setConStatusChoice(v);
+                    }}
+                    options={CON_STATUSES.map((v) => ({ value: v, label: CON_STATUS_LABEL[v] }))}
                   />
                 ) : (
+                  <Text style={[type.body, { color: color.ink }]}>Plan</Text>
+                )}
+                {fromCon ? null : (
                   <Segmented
                     style={{ width: 150 }}
                     value={plan}
@@ -284,20 +347,49 @@ export default function Scan() {
                   />
                 )}
               </View>
+              {fromCon && conStatus === 'sold' ? (
+                <>
+                  <Hairline />
+                  <View style={styles.field}>
+                    <Text numberOfLines={1} style={[type.body, { color: color.ink, flexShrink: 0 }]}>Sold for</Text>
+                    <TextInput
+                      value={soldFor ? `$${soldFor}` : ''}
+                      onChangeText={(t) => {
+                        setLossConfirm(false);
+                        setSoldFor(t.replace(/[^0-9]/g, '').replace(/^0+/, '').slice(0, 6));
+                      }}
+                      placeholder="$0"
+                      placeholderTextColor={color.secondary}
+                      keyboardType="number-pad"
+                      inputAccessoryViewID={KEYBOARD_DONE}
+                      autoFocus
+                      style={[type.rowPrice, styles.paidInput]}
+                      accessibilityLabel="Sold for"
+                    />
+                  </View>
+                </>
+              ) : null}
               <Hairline />
-              <PrimaryButton
-                style={{ marginTop: space.l }}
-                title={
-                  owned && fromCon
-                    ? `Already yours · mark ${CON_STATUS_LABEL[conStatus].toLowerCase()}`
-                    : already
-                      ? 'Already in your vault'
-                      : fromCon
-                        ? 'Add to the table'
-                        : 'Add to vault'
-                }
-                onPress={owned && fromCon ? () => setConStatus(owned, conStatus, { replace: true }) : already ? () => router.back() : addToVault}
-              />
+              {fromCon ? (
+                <>
+                  <PrimaryButton
+                    style={{ marginTop: space.l, opacity: conStatus === 'sold' && !soldCents ? 0.35 : 1 }}
+                    title={conButtonTitle(conStatus, soldCents, !!owned)}
+                    onPress={() => addForCon(false)}
+                  />
+                  <Pressable accessibilityRole="button" onPress={() => addForCon(true)} style={styles.quiet}>
+                    <Text style={[type.body, { color: color.ink }]}>
+                      {lossConfirm ? `Tap again to sell at a ${money(soldLoss)} loss` : owned ? 'Save and scan another' : 'Add and scan another'}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : (
+                <PrimaryButton
+                  style={{ marginTop: space.l }}
+                  title={already ? 'Already in your vault' : 'Add to vault'}
+                  onPress={already ? () => router.back() : addToVault}
+                />
+              )}
             </>
           ) : (
             <>
@@ -346,6 +438,12 @@ const corner = (c: string) => ({
   borderLeftWidth: c[1] === 'l' ? C : 0,
   borderRightWidth: c[1] === 'r' ? C : 0,
 });
+
+function conButtonTitle(s: ConStatus, soldCents: number, owned: boolean): string {
+  if (s === 'sold') return soldCents ? `Sold for ${money(soldCents)}` : 'Type the sale price';
+  if (owned) return s === 'hold' ? 'Already yours · move to holds' : `Already yours · mark ${CON_STATUS_LABEL[s].toLowerCase()}`;
+  return s === 'hold' ? 'Add to holds' : s === 'sale' ? 'Add for sale' : 'Add as trade only';
+}
 
 const styles = StyleSheet.create({
   lightButton: {
