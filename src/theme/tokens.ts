@@ -69,7 +69,7 @@ export const size = {
   /** Home value chart; its slot keeps this height on every filter so the tabs never move. */
   homeChart: 84,
   /** Menu sheet rows: taller than a vault row's text line, shorter than a con row. */
-  menuRow: 56,
+  menuRow: 52,
   grabberW: 36,
   grabberH: 5,
   /** Home … dropdown width. */
