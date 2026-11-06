@@ -10,7 +10,7 @@
 // in src/store/sellDraft.ts.
 
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { trendTint } from '../../src/components/MiniChart';
@@ -19,8 +19,8 @@ import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
-import { chartable, gradingLine, gradingRead, history, liquidity, ratio, realPoints, spread, spreadWord, trend } from '../../src/pricing/cardStats';
-import { GradeLadder, RangeMeter, SetRow } from '../../src/components/search/CardInsights';
+import { chartable, history, realPoints } from '../../src/pricing/cardStats';
+import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
 import type { Found } from '../../src/services/searchFilters';
 import { KeyboardDone } from '../../src/components/KeyboardDone';
@@ -38,6 +38,7 @@ import {
   isQuiet,
   LOW_GRADES,
   openPrices,
+  SEARCH_GRADES,
   type CatalogCard,
   type SearchGrade,
   type SearchPrices,
@@ -54,7 +55,7 @@ const isLow = (c: Choice) => (LOW_GRADES as readonly string[]).includes(c);
 const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 export default function SearchedCard() {
-  const { id, con, sell } = useLocalSearchParams<{ id: string; con?: string; sell?: string }>();
+  const { id, con, sell, grade } = useLocalSearchParams<{ id: string; con?: string; sell?: string; grade?: string }>();
   const buying = con === '1';
   const draft = useSellDraft((s) => (sell === '1' ? s.draft : null));
   const patchDraft = useSellDraft((s) => s.patch);
@@ -66,8 +67,11 @@ export default function SearchedCard() {
   const [card, setCard] = useState<CatalogCard | null | undefined | 'error'>(undefined);
   const [prices, setPrices] = useState<SearchPrices | null | undefined>(undefined);
   // Opens on the raw single (Bryan, 2026-11-06); every grade is one tap away on the toggle.
-  // Selling opens on the scanned card's own grade.
-  const [pick, setPick] = useState<Choice>(() => (draft ? draftGrade(draft.card) : 'raw'));
+  // Selling opens on the scanned card's own grade; a card's analytics elsewhere (vault, con mode)
+  // open this page at the grade tapped; otherwise Raw.
+  const [pick, setPick] = useState<Choice>(() =>
+    draft ? draftGrade(draft.card) : (SEARCH_GRADES as readonly string[]).includes(grade ?? '') ? (grade as SearchGrade) : 'raw',
+  );
   const [tilting, setTilting] = useState(false);
   const wanted = useWishlist((s) => s.items.find((i) => i.key === wishKey(Number(id), pick as WishGrade)));
   const [attempt, setAttempt] = useState(0);
@@ -103,7 +107,7 @@ export default function SearchedCard() {
         .then((m) => {
           if (!live) return;
           setGroupId(m.groupId);
-          if (!buying) setMore(m.cards);
+          setMore(m.cards);
         })
         .catch(() => {});
     return () => {
@@ -163,9 +167,7 @@ export default function SearchedCard() {
   const change = hist && !quiet ? hist.change : null;
   const no = cardNumber(ready.number);
   const detail = [no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
-  const openSet = () =>
-    groupId != null &&
-    router.push({ pathname: '/set/[id]', params: { id: String(groupId), name: ready.setName, language: ready.language, game: ready.game } });
+  const openSet = () => openSetPage(ready, groupId);
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
   const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
   // The sheet's market wins: for a raw card it's the print you picked.
@@ -287,19 +289,7 @@ export default function SearchedCard() {
             )}
           </View>
 
-          {price && !quiet && prices ? (
-            buying ? (
-              <CompsRow pick={pick} price={price} />
-            ) : (
-              <>
-                <KeyStats pick={pick} price={price} prices={prices} />
-                {hist ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
-                {/* Selling stays on your grade; the ladder is there to compare. */}
-                <GradeLadder prices={prices} pick={pick} onPick={selling ? () => {} : choose} />
-              </>
-            )
-          ) : null}
-          {!buying ? <SetRow setName={setTitle(ready.setName)} cards={more} onAll={openSet} /> : null}
+          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} />
           {prices?.capped ? (
             <Text style={[type.secondary, { color: color.secondary, paddingTop: space.m }]}>
               Graded prices for new cards are paused until tomorrow to save credits for your scans.
@@ -334,123 +324,6 @@ export default function SearchedCard() {
         )}
       </View>
       {selling ? <KeyboardDone /> : null}
-    </View>
-  );
-}
-
-/** Con mode keeps one row of comps under the buying numbers. */
-function CompsRow({ pick, price }: { pick: Choice; price: CardPrice }) {
-  return (
-    <>
-      <Hairline />
-      <View style={styles.row}>
-        <Text style={[type.body, styles.label]}>
-          {pick === 'raw' ? 'TCGplayer market' : `${price.sales30d} eBay ${price.sales30d === 1 ? 'sale' : 'sales'}, 30 days`}
-        </Text>
-        <Text style={[type.body, { color: color.ink }]}>{rangeText(price)}</Text>
-      </View>
-      <Hairline />
-    </>
-  );
-}
-
-const rangeText = (p: CardPrice) =>
-  p.lowCents === p.highCents ? money(p.marketCents) : `${money(p.lowCents)}–${money(p.highCents).replace('$', '')}`;
-const times = (r: number | null) => (r == null ? null : `${r >= 10 ? Math.round(r) : r.toFixed(1)}×`);
-
-/**
- * Key stats for the picked grade, stock-app style: a one-line read, then label-over-number cells
- * two to a row. A stat with too little behind it is left out, never shown as a dash. Math lives
- * in src/pricing/cardStats.ts.
- */
-function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPrice; prices: SearchPrices }) {
-  const hist = history(price);
-  const cells: { label: string; value: string | null }[] = [];
-  const read: ReactNode[] = [];
-  let grading: string | null = null;
-
-  if (pick === 'raw') {
-    const p10 = prices.grades.psa10;
-    const p9 = prices.grades.psa9;
-    cells.push(
-      { label: 'TCGplayer market', value: money(price.marketCents) },
-      { label: 'TCGplayer low', value: price.lowCents < price.marketCents ? money(price.lowCents) : null },
-      { label: 'PSA 10 vs raw', value: times(ratio(p10, price, true, false)) },
-      { label: 'PSA 9 vs raw', value: times(ratio(p9, price, true, false)) },
-    );
-    const g = gradingRead(price, p10, p9);
-    grading = g && gradingLine(g);
-  } else {
-    const n = Number(pick.slice(3));
-    const below = n > 1 ? prices.grades[`psa${n - 1}` as SearchGrade] : null;
-    const sp = spread(price);
-    cells.push(
-      { label: 'Sales, 30 days', value: String(price.sales30d) },
-      { label: '30-day range', value: price.sales30d >= 2 && price.lowCents !== price.highCents ? rangeText(price) : null },
-      { label: 'vs raw', value: times(ratio(price, prices.raw, true, false)) },
-      { label: `vs PSA ${n - 1}`, value: n > 1 ? times(ratio(price, below)) : null },
-    );
-    read.push(liquidity(price.sales30d));
-    const word = sp != null ? spreadWord(sp) : null;
-    if (word) read.push(word);
-  }
-  if (hist) {
-    const t = trend(hist.change);
-    read.splice(
-      pick === 'raw' ? 0 : 1,
-      0,
-      t === 'Flat' ? (
-        `Flat over ${hist.days} days`
-      ) : (
-        <Text key="t">
-          {t} <Text style={{ color: t === 'Rising' ? color.gain : color.loss }}>{pct(hist.change)}</Text> over {hist.days} days
-        </Text>
-      ),
-    );
-  } else if (pick === 'raw') read.push('Not enough price history for a trend yet');
-
-  const shown = cells.filter((c): c is { label: string; value: string } => !!c.value);
-  const rows: (typeof shown)[] = [];
-  for (let i = 0; i < shown.length; i += 2) rows.push(shown.slice(i, i + 2));
-
-  return (
-    <View style={{ paddingTop: space.xl }}>
-      <Text style={[type.section, { color: color.ink }]}>Key stats</Text>
-      {read.length ? (
-        <Text style={[type.text, { color: color.secondary, paddingTop: space.xs }]}>
-          {read.map((r, i) => (
-            <Text key={i}>
-              {i ? ' · ' : ''}
-              {r}
-            </Text>
-          ))}
-        </Text>
-      ) : null}
-      <View style={{ paddingTop: space.m }}>
-        {rows.map((row, i) => (
-          <View key={i}>
-            <Hairline />
-            <View style={styles.statRow}>
-              {row.map((c) => (
-                <View key={c.label} style={styles.stat} accessible accessibilityLabel={`${c.label}, ${c.value}`}>
-                  <Text style={[type.secondary, { color: color.secondary }]}>{c.label}</Text>
-                  <Text style={[type.numberM, { color: color.ink }]}>{c.value}</Text>
-                </View>
-              ))}
-              {row.length === 1 ? <View style={styles.stat} /> : null}
-            </View>
-          </View>
-        ))}
-        <Hairline />
-      </View>
-      {grading ? <Text style={[type.text, { color: color.ink, paddingTop: space.l }]}>{grading}</Text> : null}
-      <Text style={[type.caption, { color: color.secondary, paddingTop: grading ? space.xs : space.m }]}>
-        {pick === 'raw'
-          ? grading
-            ? 'TCGplayer market. Grading math assumes $25 to grade, $8 shipping, eBay fees, and a PSA 9 when it misses.'
-            : 'TCGplayer market price, near mint.'
-          : 'eBay sold, 30-day median. Ratios need 5 sales on each side.'}
-      </Text>
     </View>
   );
 }
@@ -510,11 +383,6 @@ function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string 
   return `No ${gradeLabel(pick)} sales in the last 90 days.`;
 }
 
-/** "SWSH07: Evolving Skies" → "Evolving Skies"; the code adds nothing next to the set name. */
-function setTitle(name: string): string {
-  return name.replace(/^[A-Z0-9.-]{2,8}:\s+/, '');
-}
-
 /** The search page's grade for a vault card: its PSA grade, else raw. */
 function draftGrade(c: Card): Choice {
   if (c.grader === 'psa' && c.grade != null && c.grade >= 1 && c.grade <= 10) return `psa${Math.floor(c.grade)}` as SearchGrade;
@@ -558,8 +426,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.l },
   buyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: space.l },
   label: { color: color.ink, fontWeight: '400' },
-  statRow: { flexDirection: 'row', gap: space.xl, paddingVertical: space.m },
-  stat: { flex: 1, gap: 2 },
   lowRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: space.s },
   lowCell: { minWidth: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
   lowMark: { width: 16, height: 2, borderRadius: 1, marginTop: 4, backgroundColor: 'transparent' },

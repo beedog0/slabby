@@ -17,6 +17,7 @@ import { statusItems } from '../../src/components/collection/statusSheets';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
+import { CardAnalytics } from '../../src/components/search/CardAnalytics';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../../src/lib/games';
@@ -196,6 +197,10 @@ export default function SlabDetail() {
             No comps yet for this card. Prices fill in when sales come in.
           </Text>
         )}
+        {/* The search page's analytics, at this card's grade (raw for raw). */}
+        <View style={styles.gutter}>
+          <CardAnalytics card={card} />
+        </View>
       </ScrollView>
 
     </View>

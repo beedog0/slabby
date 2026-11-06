@@ -163,6 +163,7 @@ function WishRow({ item }: { item: WishItem }) {
           items: [
             { label: "They're asking…", onPress: () => router.push({ pathname: '/con/buy/[id]', params }) },
             { label: 'Change my price', onPress: () => router.push({ pathname: '/con/want/[id]', params }) },
+            { label: 'See card', onPress: () => router.push({ pathname: '/search/[id]', params: { ...params, con: '1' } }) },
             { label: 'Remove from wishlist', onPress: () => remove(item.key) },
           ],
         })
