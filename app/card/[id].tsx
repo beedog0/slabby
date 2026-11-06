@@ -5,11 +5,13 @@
 
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActionSheetIOS, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
+import { shareSlab } from '../../src/components/share/ShareCard';
+import { openSlabMenu } from '../../src/components/menu/Menu';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
@@ -38,17 +40,14 @@ export default function SlabDetail() {
   const detail = detailFor(row, days);
   const forSale = card.plan === 'sell';
 
-  const menu = () => {
-    const toggle = forSale ? 'Move to holds' : 'Add to sell sheet';
-    const run = (i: number) => {
-      if (i === 0) update(card.id, { plan: forSale ? 'hold' : 'sell' });
-    };
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions({ options: [toggle, 'Cancel'], cancelButtonIndex: 1 }, run);
-    } else {
-      Alert.alert(rowTitle(card), undefined, [{ text: toggle, onPress: () => run(0) }, { text: 'Cancel', style: 'cancel' }]);
-    }
-  };
+  const menu = () =>
+    openSlabMenu(card, [
+      {
+        label: forSale ? 'Move to holds' : 'Add to sell sheet',
+        onPress: () => update(card.id, { plan: forSale ? 'hold' : 'sell' }),
+      },
+      { label: 'Share card', onPress: () => shareSlab(card) },
+    ]);
 
   const subtitle = [card.grader === 'raw' ? null : LANGUAGE[card.language] ?? card.language, gradeLabel(card.grader, card.grade, card.condition)]
     .filter(Boolean)

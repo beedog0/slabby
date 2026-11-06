@@ -4,29 +4,34 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
 import type { CardRow } from '../../pricing/portfolio';
+import { dimmed, type SlabActions } from './actions';
 import { color, space, type } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
+import { slabLayout } from '../slab/geometry';
 
 const COLS = 2;
 const GAP = space.l;
 
-export function GridView({ rows, width }: { rows: CardRow[]; width: number }) {
+export function GridView({ rows, width, actions }: { rows: CardRow[]; width: number; actions?: SlabActions }) {
   const cellW = Math.floor((width - GAP * (COLS - 1)) / COLS);
   const slabW = Math.floor(cellW * 0.82);
+  // The clear case edge barely reads on white; the label is the edge the eye sees.
+  const textW = slabW - slabLayout(slabW).frame * 2;
   return (
     <View style={styles.grid}>
       {rows.map((r) => (
         <Pressable
           key={r.card.id}
           accessibilityRole="button"
-          onPress={() => router.push(`/card/${r.card.id}`)}
-          style={({ pressed }) => [{ width: cellW }, pressed && { opacity: 0.85 }]}
+          onPress={() => (actions?.onPress ? actions.onPress(r) : router.push(`/card/${r.card.id}`))}
+          onLongPress={actions?.onLongPress ? () => actions.onLongPress!(r) : undefined}
+          style={({ pressed }) => [{ width: cellW }, pressed && { opacity: 0.85 }, dimmed(actions, r) && { opacity: 0.35 }]}
         >
           <View style={styles.slab}>
             <SlabView card={r.card} width={slabW} posed={false} />
           </View>
-          {/* Same width as the slab, so the text lines up with its left edge. */}
-          <View style={{ width: slabW, alignSelf: 'center' }}>
+          {/* Same width as the label, so the text lines up with its left edge. */}
+          <View style={{ width: textW, alignSelf: 'center' }}>
             <Caption row={r} />
           </View>
         </Pressable>

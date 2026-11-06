@@ -3,6 +3,7 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { CardRow } from '../../pricing/portfolio';
+import { dimmed, type SlabActions } from './actions';
 import { color, shadow, size, space } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
 
@@ -10,7 +11,7 @@ const PER_ROW = 3;
 const INSET = space.m; // slabs sit this far in from the ledge ends
 const GAP = space.l;
 
-export function ShelfView({ rows, width }: { rows: CardRow[]; width: number }) {
+export function ShelfView({ rows, width, actions }: { rows: CardRow[]; width: number; actions?: SlabActions }) {
   const slabW = Math.floor((width - INSET * 2 - GAP * (PER_ROW - 1)) / PER_ROW);
   const shelves: CardRow[][] = [];
   for (let i = 0; i < rows.length; i += PER_ROW) shelves.push(rows.slice(i, i + PER_ROW));
@@ -24,8 +25,9 @@ export function ShelfView({ rows, width }: { rows: CardRow[]; width: number }) {
               <Pressable
                 key={r.card.id}
                 accessibilityRole="button"
-                onPress={() => router.push(`/card/${r.card.id}`)}
-                style={({ pressed }) => pressed && { opacity: 0.85 }}
+                onPress={() => (actions?.onPress ? actions.onPress(r) : router.push(`/card/${r.card.id}`))}
+                onLongPress={actions?.onLongPress ? () => actions.onLongPress!(r) : undefined}
+                style={({ pressed }) => [pressed && { opacity: 0.85 }, dimmed(actions, r) && { opacity: 0.35 }]}
               >
                 <SlabView card={r.card} width={slabW} posed={false} />
               </Pressable>
