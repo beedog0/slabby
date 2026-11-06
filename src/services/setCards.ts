@@ -88,12 +88,15 @@ export async function cardsInSet(groupId: number, limit = 600): Promise<Found[]>
 
 // ── set sorting and filtering (pure) ────────────────────────────────────────────────────────
 
-export type SetSort = 'price' | 'number' | 'rising' | 'falling';
+export type SetSort = 'price_high' | 'price_low' | 'number' | 'name' | 'rarity' | 'rising' | 'falling';
 export const SET_SORTS: { value: SetSort; label: string }[] = [
-  { value: 'price', label: 'Price' },
+  { value: 'price_high', label: 'Price high' },
+  { value: 'price_low', label: 'Price low' },
   { value: 'number', label: 'Number' },
-  { value: 'rising', label: 'Rising' },
-  { value: 'falling', label: 'Falling' },
+  { value: 'name', label: 'Name' },
+  { value: 'rarity', label: 'Rarity' },
+  { value: 'rising', label: 'Rising, 7 days' },
+  { value: 'falling', label: 'Falling, 7 days' },
 ];
 
 /** "205/165" → 205, "SV-P 045" → 45, "TG12" → 12. Letters-only sort last. */
@@ -102,16 +105,32 @@ export function numberKey(n: string | null): number {
   return m ? Number(m[0]) : Number.MAX_SAFE_INTEGER;
 }
 
-export function arrangeSet(cards: Found[], sort: SetSort, rarity: string | null): Found[] {
-  const kept = rarity ? cards.filter((c) => c.rarity === rarity) : [...cards];
-  if (sort === 'number') return kept.sort((a, b) => numberKey(a.number) - numberKey(b.number) || (a.number ?? '').localeCompare(b.number ?? ''));
-  if (sort === 'rising' || sort === 'falling') {
-    const dir = sort === 'rising' ? -1 : 1;
-    return kept
-      .filter((c) => c.change7d != null)
-      .sort((a, b) => dir * ((a.change7d ?? 0) - (b.change7d ?? 0)));
+const byNumber = (a: Found, b: Found) => numberKey(a.number) - numberKey(b.number) || (a.number ?? '').localeCompare(b.number ?? '');
+
+/** Sort the set, then keep only the picked rarities (none picked = all). The two work together. */
+export function arrangeSet(cards: Found[], sort: SetSort, picked: string[] = []): Found[] {
+  const kept = picked.length ? cards.filter((c) => c.rarity != null && picked.includes(c.rarity)) : [...cards];
+  switch (sort) {
+    case 'number':
+      return kept.sort(byNumber);
+    case 'name':
+      return kept.sort((a, b) => a.name.localeCompare(b.name) || byNumber(a, b));
+    case 'rarity': {
+      // Rarest first: rarities with the fewest cards in the set lead, priciest first within.
+      const n = new Map(rarities(cards).map((r) => [r.rarity, r.n]));
+      const rank = (c: Found) => (c.rarity ? n.get(c.rarity) ?? 0 : Number.MAX_SAFE_INTEGER);
+      return kept.sort((a, b) => rank(a) - rank(b) || (a.rarity ?? '').localeCompare(b.rarity ?? '') || (b.marketCents ?? -1) - (a.marketCents ?? -1));
+    }
+    case 'rising':
+    case 'falling': {
+      const dir = sort === 'rising' ? -1 : 1;
+      return kept.filter((c) => c.change7d != null).sort((a, b) => dir * ((a.change7d ?? 0) - (b.change7d ?? 0)));
+    }
+    case 'price_low':
+      return kept.filter((c) => c.marketCents != null).sort((a, b) => (a.marketCents ?? 0) - (b.marketCents ?? 0));
+    default:
+      return kept.sort((a, b) => (b.marketCents ?? -1) - (a.marketCents ?? -1));
   }
-  return kept.sort((a, b) => (b.marketCents ?? -1) - (a.marketCents ?? -1));
 }
 
 /** Rarities in the set, most cards first. */
