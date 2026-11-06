@@ -64,6 +64,15 @@ export const size = {
   viewIcon: 40,
   /** Home value chart; its slot keeps this height on every filter so the tabs never move. */
   homeChart: 84,
+  // Sales screen.
+  saleRow: 72,
+  dayRow: 56,
+  dotStrip: 32,
+  dot: 6,
+  medianTick: 16,
+  floorTick: 10,
+  rangeControl: 132,
+  skeletonBar: 14,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };

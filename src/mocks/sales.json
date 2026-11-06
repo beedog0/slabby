@@ -193,15 +193,6 @@
    },
    {
     "source": "ebay",
-    "listingId": "m21",
-    "soldDay": "2026-10-07",
-    "soldAt": null,
-    "priceCents": 102000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
     "listingId": "m22",
     "soldDay": "2026-10-06",
     "soldAt": null,

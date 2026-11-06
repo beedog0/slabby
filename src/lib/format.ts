@@ -58,3 +58,24 @@ export function elapsed(sinceIso: string, now = Date.now()): string {
 export function shortDay(day: string): string {
   return new Date(`${day.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
+
+/** Sale date: "Nov 5", with the year when it isn't this year ("Nov 5, 2025"). */
+export function saleDay(day: string, now = Date.now()): string {
+  const d = new Date(`${day.slice(0, 10)}T12:00:00Z`);
+  const thisYear = new Date(now).getUTCFullYear() === d.getUTCFullYear();
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: thisYear ? undefined : 'numeric', timeZone: 'UTC' });
+}
+
+const SOURCES: Record<string, string> = { ebay: 'eBay', fanatics: 'Fanatics' };
+const KINDS: Record<string, string> = { auction: 'Auction', bin: 'Buy It Now', offer: 'Best Offer · accepted offer' };
+
+/** "eBay · Auction", "Fanatics · Buy It Now", "eBay · Best Offer · accepted offer". */
+export function saleLine(s: { source: string; kind: string | null }): string {
+  const source = SOURCES[s.source] ?? s.source.charAt(0).toUpperCase() + s.source.slice(1);
+  return s.kind && KINDS[s.kind] ? `${source} · ${KINDS[s.kind]}` : source;
+}
+
+/** "1 sale" / "3 sales". */
+export function salesWord(n: number): string {
+  return `${n} ${n === 1 ? 'sale' : 'sales'}`;
+}
