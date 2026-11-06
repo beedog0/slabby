@@ -53,6 +53,14 @@ export function ScanIcon({ s = 24 }: { s?: number }) {
   );
 }
 
+export function PlusIcon({ s = 24 }: { s?: number }) {
+  return (
+    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={1.75} strokeLinecap="round">
+      <Path d="M12 5v14M5 12h14" />
+    </Svg>
+  );
+}
+
 export function BackIcon() {
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

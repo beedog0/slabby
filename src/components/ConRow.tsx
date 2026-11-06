@@ -7,11 +7,11 @@ import { color, size, space, type } from '../theme/tokens';
 import { CardThumb } from './CardThumb';
 import { Sparkline } from './Sparkline';
 
-export function ConRow({ row, onPress }: { row: CardRow; onPress: () => void }) {
+export function ConRow({ row, onPress, onLongPress }: { row: CardRow; onPress: () => void; onLongPress?: () => void }) {
   const { card, price } = row;
   const sold = card.status === 'sold';
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.row}>
+    <Pressable accessibilityRole="button" onPress={onPress} onLongPress={onLongPress} style={styles.row}>
       <CardThumb card={card} />
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
