@@ -15,7 +15,10 @@ import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
 import { chartable, gradingLine, gradingRead, history, liquidity, ratio, realPoints, spread, spreadWord, trend } from '../../src/pricing/cardStats';
+import { GradeLadder, RangeMeter, SetRow } from '../../src/components/search/CardInsights';
 import type { CardPrice } from '../../src/services/comps';
+import type { Found } from '../../src/services/searchFilters';
+import { setCards } from '../../src/services/setCards';
 import {
   addParams,
   buyPrices,
@@ -53,6 +56,7 @@ export default function SearchedCard() {
   const [pick, setPick] = useState<Choice>('raw');
   const [tilting, setTilting] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [more, setMore] = useState<Found[]>([]);
 
   useEffect(() => {
     let live = true;
@@ -74,6 +78,15 @@ export default function SearchedCard() {
   const onTab = (t: Tab) => choose(t === 'low' ? (isLow(pick) ? pick : firstLowGrade(prices ?? null)) : t);
 
   const ready = card && card !== 'error' ? card : null;
+
+  useEffect(() => {
+    let live = true;
+    setMore([]);
+    if (ready && !buying) setCards(ready).then((m) => live && setMore(m)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [ready, buying]);
   const slab = useMemo<Card | null>(() => (ready ? slabFor(ready, pick) : null), [ready, pick]);
 
   // A browsing page, not your own slab: a touch smaller on narrow phones so the numbers fit.
@@ -197,9 +210,14 @@ export default function SearchedCard() {
             buying ? (
               <CompsRow pick={pick} price={price} />
             ) : (
-              <KeyStats pick={pick} price={price} prices={prices} />
+              <>
+                <KeyStats pick={pick} price={price} prices={prices} />
+                {hist ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
+                <GradeLadder prices={prices} pick={pick} onPick={choose} />
+              </>
             )
           ) : null}
+          {!buying ? <SetRow setName={setTitle(ready.setName)} cards={more} /> : null}
           {prices?.capped ? (
             <Text style={[type.secondary, { color: color.secondary, paddingTop: space.m }]}>
               Graded prices for new cards are paused until tomorrow to save credits for your scans.
@@ -257,8 +275,6 @@ function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPrice; pri
     cells.push(
       { label: 'TCGplayer market', value: money(price.marketCents) },
       { label: 'TCGplayer low', value: price.lowCents < price.marketCents ? money(price.lowCents) : null },
-      { label: '90-day high', value: hist && money(hist.high) },
-      { label: '90-day low', value: hist && money(hist.low) },
       { label: 'PSA 10 vs raw', value: times(ratio(p10, price, true, false)) },
       { label: 'PSA 9 vs raw', value: times(ratio(p9, price, true, false)) },
     );
@@ -271,8 +287,6 @@ function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPrice; pri
     cells.push(
       { label: 'Sales, 30 days', value: String(price.sales30d) },
       { label: '30-day range', value: price.sales30d >= 2 && price.lowCents !== price.highCents ? rangeText(price) : null },
-      { label: '90-day high', value: hist && money(hist.high) },
-      { label: '90-day low', value: hist && money(hist.low) },
       { label: 'vs raw', value: times(ratio(price, prices.raw, true, false)) },
       { label: `vs PSA ${n - 1}`, value: n > 1 ? times(ratio(price, below)) : null },
     );
