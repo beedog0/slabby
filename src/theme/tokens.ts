@@ -21,6 +21,8 @@ export const color = {
   shelfFront: '#8C6239',
   /** Empty-state slab outline. */
   ghost: '#D8D8DE',
+  /** Behind a bottom sheet. */
+  scrim: 'rgba(0,0,0,0.25)',
 } as const;
 
 export const space = {
