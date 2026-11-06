@@ -143,3 +143,14 @@ describe('filterStats and soldSeries', () => {
     expect(s).toEqual([1000, 1000, 3000, 3000, 3500]);
   });
 });
+
+describe('changeText', () => {
+  const { changeText } = require('../../lib/format');
+  it('shows dollars and percent against the start value', () => {
+    expect(changeText(-1000, 47000)).toBe('−$10 (−2.1%)');
+    expect(changeText(8600, 496500)).toBe('+$86 (+1.8%)');
+  });
+  it('says nothing under a dollar', () => {
+    expect(changeText(50, 10000)).toBeNull();
+  });
+});

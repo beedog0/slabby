@@ -30,7 +30,7 @@ import { DEFAULT_CON_NAME } from '../src/store/con';
 import { ShelfView } from '../src/components/collection/ShelfView';
 import { ViewSwitch } from '../src/components/collection/ViewSwitch';
 import { IconButton, PrimaryButton, ScanIcon } from '../src/components/ui';
-import { money, monthLine, rowTitle } from '../src/lib/format';
+import { changeText, money, rowTitle } from '../src/lib/format';
 import {
   collection,
   collectionSeries,
@@ -208,13 +208,28 @@ export default function Home() {
   // The header counts the whole filter; a search only narrows the slabs below it.
   const total = base.rows.length;
   const empty = EMPTY[filter];
-  const month = Math.abs(stats.monthDeltaCents) >= 100 ? monthLine(stats.monthDeltaCents) : null;
+  // "−$10 (−2.1%) this month", the numbers in gain or loss color, words in secondary.
+  const change = changeText(stats.monthDeltaCents, stats.totalCents);
+  const month = change ? (
+    <>
+      <Text style={{ color: stats.monthDeltaCents > 0 ? color.gain : color.loss }}>{change}</Text>
+      {' this month'}
+    </>
+  ) : null;
   const subline: ReactNode =
     filter === 'all' ? (
-      [plural(total, 'slab'), month].filter(Boolean).join(' · ')
+      <>
+        {plural(total, 'slab')}
+        {month ? ' · ' : null}
+        {month}
+      </>
     ) : filter === 'hold' ? (
       total ? (
-        [plural(total, 'hold'), month].filter(Boolean).join(' · ')
+        <>
+          {plural(total, 'hold')}
+          {month ? ' · ' : null}
+          {month}
+        </>
       ) : (
         'No holds'
       )
