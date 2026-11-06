@@ -1,697 +1,3530 @@
 {
- "psa:10:SV2a:205:ja": {
-  "kind": "sales",
-  "rows": [
-   {
-    "source": "ebay",
-    "listingId": "m1",
-    "soldDay": "2026-11-04",
-    "soldAt": null,
-    "priceCents": 111000,
-    "kind": "auction",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m2",
-    "soldDay": "2026-11-04",
-    "soldAt": null,
-    "priceCents": 106000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m3",
-    "soldDay": "2026-11-03",
-    "soldAt": null,
-    "priceCents": 103500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m4",
-    "soldDay": "2026-11-03",
-    "soldAt": null,
-    "priceCents": 106000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m5",
-    "soldDay": "2026-11-03",
-    "soldAt": null,
-    "priceCents": 106500,
-    "kind": "auction",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m6",
-    "soldDay": "2026-11-02",
-    "soldAt": null,
-    "priceCents": 106000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m7",
-    "soldDay": "2026-11-01",
-    "soldAt": null,
-    "priceCents": 105000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m8",
-    "soldDay": "2026-10-30",
-    "soldAt": null,
-    "priceCents": 102000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m9",
-    "soldDay": "2026-10-27",
-    "soldAt": null,
-    "priceCents": 99500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m-out",
-    "soldDay": "2026-10-27",
-    "soldAt": null,
-    "priceCents": 139900,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m10",
-    "soldDay": "2026-10-26",
-    "soldAt": null,
-    "priceCents": 101500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m11",
-    "soldDay": "2026-10-25",
-    "soldAt": null,
-    "priceCents": 100500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m12",
-    "soldDay": "2026-10-24",
-    "soldAt": null,
-    "priceCents": 107500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m13",
-    "soldDay": "2026-10-23",
-    "soldAt": null,
-    "priceCents": 105000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m14",
-    "soldDay": "2026-10-21",
-    "soldAt": null,
-    "priceCents": 104500,
-    "kind": "auction",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m15",
-    "soldDay": "2026-10-20",
-    "soldAt": null,
-    "priceCents": 105500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m16",
-    "soldDay": "2026-10-19",
-    "soldAt": null,
-    "priceCents": 109500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m17",
-    "soldDay": "2026-10-18",
-    "soldAt": null,
-    "priceCents": 101000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m18",
-    "soldDay": "2026-10-17",
-    "soldAt": null,
-    "priceCents": 105500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m19",
-    "soldDay": "2026-10-12",
-    "soldAt": null,
-    "priceCents": 100500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m20",
-    "soldDay": "2026-10-08",
-    "soldAt": null,
-    "priceCents": 102000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m22",
-    "soldDay": "2026-10-06",
-    "soldAt": null,
-    "priceCents": 109500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m23",
-    "soldDay": "2026-10-02",
-    "soldAt": null,
-    "priceCents": 102500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m24",
-    "soldDay": "2026-09-29",
-    "soldAt": null,
-    "priceCents": 98500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m25",
-    "soldDay": "2026-09-28",
-    "soldAt": null,
-    "priceCents": 99000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m26",
-    "soldDay": "2026-09-28",
-    "soldAt": null,
-    "priceCents": 104500,
-    "kind": "auction",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m27",
-    "soldDay": "2026-09-27",
-    "soldAt": null,
-    "priceCents": 100000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m28",
-    "soldDay": "2026-09-27",
-    "soldAt": null,
-    "priceCents": 102500,
-    "kind": "auction",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m29",
-    "soldDay": "2026-09-26",
-    "soldAt": null,
-    "priceCents": 93000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m30",
-    "soldDay": "2026-09-23",
-    "soldAt": null,
-    "priceCents": 99000,
-    "kind": "auction",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m31",
-    "soldDay": "2026-09-23",
-    "soldAt": null,
-    "priceCents": 102500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m32",
-    "soldDay": "2026-09-20",
-    "soldAt": null,
-    "priceCents": 102500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m33",
-    "soldDay": "2026-09-20",
-    "soldAt": null,
-    "priceCents": 106500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m34",
-    "soldDay": "2026-09-19",
-    "soldAt": null,
-    "priceCents": 91000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m35",
-    "soldDay": "2026-09-17",
-    "soldAt": null,
-    "priceCents": 102000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m36",
-    "soldDay": "2026-09-16",
-    "soldAt": null,
-    "priceCents": 101000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m37",
-    "soldDay": "2026-09-15",
-    "soldAt": null,
-    "priceCents": 107500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m38",
-    "soldDay": "2026-09-14",
-    "soldAt": null,
-    "priceCents": 100000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m39",
-    "soldDay": "2026-09-13",
-    "soldAt": null,
-    "priceCents": 102500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m40",
-    "soldDay": "2026-09-12",
-    "soldAt": null,
-    "priceCents": 99000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m41",
-    "soldDay": "2026-09-11",
-    "soldAt": null,
-    "priceCents": 90500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m42",
-    "soldDay": "2026-09-07",
-    "soldAt": null,
-    "priceCents": 96000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m43",
-    "soldDay": "2026-09-07",
-    "soldAt": null,
-    "priceCents": 92000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m44",
-    "soldDay": "2026-09-04",
-    "soldAt": null,
-    "priceCents": 96500,
-    "kind": "auction",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m45",
-    "soldDay": "2026-09-03",
-    "soldAt": null,
-    "priceCents": 98500,
-    "kind": "auction",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m46",
-    "soldDay": "2026-08-31",
-    "soldAt": null,
-    "priceCents": 90500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m47",
-    "soldDay": "2026-08-31",
-    "soldAt": null,
-    "priceCents": 96500,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m48",
-    "soldDay": "2026-08-28",
-    "soldAt": null,
-    "priceCents": 95000,
-    "kind": "auction",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m49",
-    "soldDay": "2026-08-27",
-    "soldAt": null,
-    "priceCents": 98500,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m50",
-    "soldDay": "2026-08-25",
-    "soldAt": null,
-    "priceCents": 93000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m51",
-    "soldDay": "2026-08-23",
-    "soldAt": null,
-    "priceCents": 97000,
-    "kind": "bin",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m52",
-    "soldDay": "2026-08-18",
-    "soldAt": null,
-    "priceCents": 95000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m53",
-    "soldDay": "2026-08-12",
-    "soldAt": null,
-    "priceCents": 91000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "ebay",
-    "listingId": "m54",
-    "soldDay": "2026-08-11",
-    "soldAt": null,
-    "priceCents": 91000,
-    "kind": "offer",
-    "url": null
-   },
-   {
-    "source": "fanatics",
-    "listingId": "m55",
-    "soldDay": "2026-08-08",
-    "soldAt": null,
-    "priceCents": 86000,
-    "kind": "offer",
-    "url": null
-   }
-  ]
- },
- "psa:10:EVS:215:en": {
-  "kind": "daily",
-  "rows": [
-   {
-    "day": "2026-11-03",
-    "sales": 3,
-    "avgCents": 114300
-   },
-   {
-    "day": "2026-11-02",
-    "sales": 3,
-    "avgCents": 117900
-   },
-   {
-    "day": "2026-10-30",
-    "sales": 1,
-    "avgCents": 122600
-   },
-   {
-    "day": "2026-10-29",
-    "sales": 2,
-    "avgCents": 125500
-   },
-   {
-    "day": "2026-10-28",
-    "sales": 2,
-    "avgCents": 116600
-   },
-   {
-    "day": "2026-10-25",
-    "sales": 2,
-    "avgCents": 119200
-   },
-   {
-    "day": "2026-10-22",
-    "sales": 3,
-    "avgCents": 119400
-   },
-   {
-    "day": "2026-10-20",
-    "sales": 1,
-    "avgCents": 120500
-   },
-   {
-    "day": "2026-10-19",
-    "sales": 1,
-    "avgCents": 117200
-   },
-   {
-    "day": "2026-10-16",
-    "sales": 2,
-    "avgCents": 117400
-   },
-   {
-    "day": "2026-10-14",
-    "sales": 2,
-    "avgCents": 119700
-   },
-   {
-    "day": "2026-10-08",
-    "sales": 1,
-    "avgCents": 117500
-   },
-   {
-    "day": "2026-10-07",
-    "sales": 1,
-    "avgCents": 118000
-   },
-   {
-    "day": "2026-10-04",
-    "sales": 1,
-    "avgCents": 112300
-   },
-   {
-    "day": "2026-10-02",
-    "sales": 2,
-    "avgCents": 118500
-   },
-   {
-    "day": "2026-09-27",
-    "sales": 1,
-    "avgCents": 116100
-   },
-   {
-    "day": "2026-09-22",
-    "sales": 2,
-    "avgCents": 122500
-   },
-   {
-    "day": "2026-09-19",
-    "sales": 1,
-    "avgCents": 112200
-   },
-   {
-    "day": "2026-09-13",
-    "sales": 2,
-    "avgCents": 117000
-   },
-   {
-    "day": "2026-09-11",
-    "sales": 2,
-    "avgCents": 116700
-   },
-   {
-    "day": "2026-09-10",
-    "sales": 1,
-    "avgCents": 116800
-   },
-   {
-    "day": "2026-09-08",
-    "sales": 1,
-    "avgCents": 112200
-   },
-   {
-    "day": "2026-09-06",
-    "sales": 3,
-    "avgCents": 109600
-   },
-   {
-    "day": "2026-09-04",
-    "sales": 1,
-    "avgCents": 121600
-   },
-   {
-    "day": "2026-09-03",
-    "sales": 1,
-    "avgCents": 108500
-   },
-   {
-    "day": "2026-09-02",
-    "sales": 2,
-    "avgCents": 117300
-   },
-   {
-    "day": "2026-09-01",
-    "sales": 3,
-    "avgCents": 118900
-   },
-   {
-    "day": "2026-08-31",
-    "sales": 2,
-    "avgCents": 111400
-   },
-   {
-    "day": "2026-08-30",
-    "sales": 1,
-    "avgCents": 116400
-   },
-   {
-    "day": "2026-08-28",
-    "sales": 2,
-    "avgCents": 108800
-   },
-   {
-    "day": "2026-08-27",
-    "sales": 2,
-    "avgCents": 115400
-   },
-   {
-    "day": "2026-08-24",
-    "sales": 1,
-    "avgCents": 115300
-   },
-   {
-    "day": "2026-08-23",
-    "sales": 1,
-    "avgCents": 113300
-   },
-   {
-    "day": "2026-08-21",
-    "sales": 1,
-    "avgCents": 116300
-   },
-   {
-    "day": "2026-08-18",
-    "sales": 2,
-    "avgCents": 106900
-   },
-   {
-    "day": "2026-08-14",
-    "sales": 1,
-    "avgCents": 113400
-   },
-   {
-    "day": "2026-08-12",
-    "sales": 1,
-    "avgCents": 110400
-   },
-   {
-    "day": "2026-08-09",
-    "sales": 1,
-    "avgCents": 118600
-   }
-  ]
- }
+  "psa:10:SV2a:205:ja": {
+    "kind": "sales",
+    "rows": [
+      {
+        "source": "ebay",
+        "listingId": "c1-1",
+        "soldDay": "2026-11-05",
+        "soldAt": null,
+        "priceCents": 110000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-2",
+        "soldDay": "2026-11-05",
+        "soldAt": null,
+        "priceCents": 100000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-3",
+        "soldDay": "2026-11-05",
+        "soldAt": null,
+        "priceCents": 107500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-4",
+        "soldDay": "2026-11-05",
+        "soldAt": null,
+        "priceCents": 101000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-5",
+        "soldDay": "2026-11-03",
+        "soldAt": null,
+        "priceCents": 101500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-6",
+        "soldDay": "2026-10-31",
+        "soldAt": null,
+        "priceCents": 99500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-7",
+        "soldDay": "2026-10-29",
+        "soldAt": null,
+        "priceCents": 103500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-8",
+        "soldDay": "2026-10-27",
+        "soldAt": null,
+        "priceCents": 111000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-9",
+        "soldDay": "2026-10-27",
+        "soldAt": null,
+        "priceCents": 108500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-10",
+        "soldDay": "2026-10-25",
+        "soldAt": null,
+        "priceCents": 98000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-11",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 106500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-12",
+        "soldDay": "2026-10-21",
+        "soldAt": null,
+        "priceCents": 109000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-13",
+        "soldDay": "2026-10-20",
+        "soldAt": null,
+        "priceCents": 113500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-14",
+        "soldDay": "2026-10-19",
+        "soldAt": null,
+        "priceCents": 105500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-15",
+        "soldDay": "2026-10-18",
+        "soldAt": null,
+        "priceCents": 102000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-16",
+        "soldDay": "2026-10-15",
+        "soldAt": null,
+        "priceCents": 96500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-17",
+        "soldDay": "2026-10-15",
+        "soldAt": null,
+        "priceCents": 103000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-18",
+        "soldDay": "2026-10-13",
+        "soldAt": null,
+        "priceCents": 104500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-19",
+        "soldDay": "2026-10-12",
+        "soldAt": null,
+        "priceCents": 75000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-20",
+        "soldDay": "2026-10-10",
+        "soldAt": null,
+        "priceCents": 98500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-21",
+        "soldDay": "2026-10-09",
+        "soldAt": null,
+        "priceCents": 115000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-22",
+        "soldDay": "2026-10-08",
+        "soldAt": null,
+        "priceCents": 112000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-23",
+        "soldDay": "2026-10-06",
+        "soldAt": null,
+        "priceCents": 101500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-24",
+        "soldDay": "2026-10-06",
+        "soldAt": null,
+        "priceCents": 91000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-25",
+        "soldDay": "2026-10-04",
+        "soldAt": null,
+        "priceCents": 90500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-26",
+        "soldDay": "2026-10-01",
+        "soldAt": null,
+        "priceCents": 107500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-27",
+        "soldDay": "2026-09-30",
+        "soldAt": null,
+        "priceCents": 97500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-28",
+        "soldDay": "2026-09-30",
+        "soldAt": null,
+        "priceCents": 105000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-29",
+        "soldDay": "2026-09-27",
+        "soldAt": null,
+        "priceCents": 105500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-30",
+        "soldDay": "2026-09-26",
+        "soldAt": null,
+        "priceCents": 100500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-31",
+        "soldDay": "2026-09-26",
+        "soldAt": null,
+        "priceCents": 96500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-32",
+        "soldDay": "2026-09-15",
+        "soldAt": null,
+        "priceCents": 103500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-33",
+        "soldDay": "2026-09-15",
+        "soldAt": null,
+        "priceCents": 97500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-34",
+        "soldDay": "2026-09-14",
+        "soldAt": null,
+        "priceCents": 93500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-35",
+        "soldDay": "2026-09-11",
+        "soldAt": null,
+        "priceCents": 89500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-36",
+        "soldDay": "2026-09-11",
+        "soldAt": null,
+        "priceCents": 98500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-37",
+        "soldDay": "2026-09-06",
+        "soldAt": null,
+        "priceCents": 91000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-38",
+        "soldDay": "2026-09-06",
+        "soldAt": null,
+        "priceCents": 92500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-39",
+        "soldDay": "2026-09-06",
+        "soldAt": null,
+        "priceCents": 91500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-40",
+        "soldDay": "2026-09-05",
+        "soldAt": null,
+        "priceCents": 91500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-41",
+        "soldDay": "2026-09-03",
+        "soldAt": null,
+        "priceCents": 101500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-42",
+        "soldDay": "2026-09-03",
+        "soldAt": null,
+        "priceCents": 91500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-43",
+        "soldDay": "2026-08-31",
+        "soldAt": null,
+        "priceCents": 85500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-44",
+        "soldDay": "2026-08-27",
+        "soldAt": null,
+        "priceCents": 91500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-45",
+        "soldDay": "2026-08-26",
+        "soldAt": null,
+        "priceCents": 89500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-46",
+        "soldDay": "2026-08-22",
+        "soldAt": null,
+        "priceCents": 88000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-47",
+        "soldDay": "2026-08-18",
+        "soldAt": null,
+        "priceCents": 85500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-48",
+        "soldDay": "2026-08-18",
+        "soldAt": null,
+        "priceCents": 89000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-49",
+        "soldDay": "2026-08-16",
+        "soldAt": null,
+        "priceCents": 90000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-50",
+        "soldDay": "2026-08-16",
+        "soldAt": null,
+        "priceCents": 93000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-51",
+        "soldDay": "2026-08-16",
+        "soldAt": null,
+        "priceCents": 90000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-52",
+        "soldDay": "2026-08-15",
+        "soldAt": null,
+        "priceCents": 90000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-53",
+        "soldDay": "2026-08-15",
+        "soldAt": null,
+        "priceCents": 87500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-54",
+        "soldDay": "2026-08-13",
+        "soldAt": null,
+        "priceCents": 84500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-55",
+        "soldDay": "2026-08-12",
+        "soldAt": null,
+        "priceCents": 99500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-56",
+        "soldDay": "2026-08-11",
+        "soldAt": null,
+        "priceCents": 85000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-57",
+        "soldDay": "2026-08-11",
+        "soldAt": null,
+        "priceCents": 91500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-58",
+        "soldDay": "2026-08-10",
+        "soldAt": null,
+        "priceCents": 93000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c1-59",
+        "soldDay": "2026-08-10",
+        "soldAt": null,
+        "priceCents": 88500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-60",
+        "soldDay": "2026-08-10",
+        "soldAt": null,
+        "priceCents": 89000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-61",
+        "soldDay": "2026-08-08",
+        "soldAt": null,
+        "priceCents": 91000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c1-62",
+        "soldDay": "2026-08-08",
+        "soldAt": null,
+        "priceCents": 90500,
+        "kind": "bin",
+        "url": null
+      }
+    ]
+  },
+  "psa:10:EVS:215:en": {
+    "kind": "daily",
+    "rows": [
+      {
+        "day": "2026-11-05",
+        "sales": 4,
+        "avgCents": 119100
+      },
+      {
+        "day": "2026-11-01",
+        "sales": 1,
+        "avgCents": 131000
+      },
+      {
+        "day": "2026-10-31",
+        "sales": 1,
+        "avgCents": 112500
+      },
+      {
+        "day": "2026-10-29",
+        "sales": 2,
+        "avgCents": 129300
+      },
+      {
+        "day": "2026-10-28",
+        "sales": 1,
+        "avgCents": 119500
+      },
+      {
+        "day": "2026-10-27",
+        "sales": 1,
+        "avgCents": 133000
+      },
+      {
+        "day": "2026-10-25",
+        "sales": 2,
+        "avgCents": 122300
+      },
+      {
+        "day": "2026-10-24",
+        "sales": 1,
+        "avgCents": 124000
+      },
+      {
+        "day": "2026-10-23",
+        "sales": 1,
+        "avgCents": 118000
+      },
+      {
+        "day": "2026-10-22",
+        "sales": 1,
+        "avgCents": 134500
+      },
+      {
+        "day": "2026-10-21",
+        "sales": 2,
+        "avgCents": 115800
+      },
+      {
+        "day": "2026-10-20",
+        "sales": 1,
+        "avgCents": 132000
+      },
+      {
+        "day": "2026-10-18",
+        "sales": 1,
+        "avgCents": 128000
+      },
+      {
+        "day": "2026-10-16",
+        "sales": 1,
+        "avgCents": 125000
+      },
+      {
+        "day": "2026-10-15",
+        "sales": 1,
+        "avgCents": 129000
+      },
+      {
+        "day": "2026-10-14",
+        "sales": 1,
+        "avgCents": 120000
+      },
+      {
+        "day": "2026-10-13",
+        "sales": 3,
+        "avgCents": 126000
+      },
+      {
+        "day": "2026-10-11",
+        "sales": 3,
+        "avgCents": 122000
+      },
+      {
+        "day": "2026-10-09",
+        "sales": 2,
+        "avgCents": 118800
+      },
+      {
+        "day": "2026-10-07",
+        "sales": 1,
+        "avgCents": 113500
+      },
+      {
+        "day": "2026-10-06",
+        "sales": 1,
+        "avgCents": 115500
+      },
+      {
+        "day": "2026-10-05",
+        "sales": 1,
+        "avgCents": 123000
+      },
+      {
+        "day": "2026-10-04",
+        "sales": 1,
+        "avgCents": 139000
+      },
+      {
+        "day": "2026-10-01",
+        "sales": 1,
+        "avgCents": 133000
+      },
+      {
+        "day": "2026-09-30",
+        "sales": 2,
+        "avgCents": 130800
+      },
+      {
+        "day": "2026-09-28",
+        "sales": 3,
+        "avgCents": 128300
+      },
+      {
+        "day": "2026-09-27",
+        "sales": 1,
+        "avgCents": 119000
+      },
+      {
+        "day": "2026-09-26",
+        "sales": 1,
+        "avgCents": 125000
+      },
+      {
+        "day": "2026-09-25",
+        "sales": 2,
+        "avgCents": 121300
+      },
+      {
+        "day": "2026-09-21",
+        "sales": 1,
+        "avgCents": 122000
+      },
+      {
+        "day": "2026-09-19",
+        "sales": 1,
+        "avgCents": 139000
+      },
+      {
+        "day": "2026-09-18",
+        "sales": 1,
+        "avgCents": 119500
+      },
+      {
+        "day": "2026-09-16",
+        "sales": 2,
+        "avgCents": 127000
+      },
+      {
+        "day": "2026-09-15",
+        "sales": 2,
+        "avgCents": 121300
+      },
+      {
+        "day": "2026-09-14",
+        "sales": 1,
+        "avgCents": 140000
+      },
+      {
+        "day": "2026-09-12",
+        "sales": 1,
+        "avgCents": 143000
+      },
+      {
+        "day": "2026-09-09",
+        "sales": 1,
+        "avgCents": 140000
+      },
+      {
+        "day": "2026-09-08",
+        "sales": 3,
+        "avgCents": 136200
+      },
+      {
+        "day": "2026-09-06",
+        "sales": 4,
+        "avgCents": 127000
+      },
+      {
+        "day": "2026-09-05",
+        "sales": 1,
+        "avgCents": 134000
+      },
+      {
+        "day": "2026-09-04",
+        "sales": 1,
+        "avgCents": 131000
+      },
+      {
+        "day": "2026-09-03",
+        "sales": 1,
+        "avgCents": 137000
+      },
+      {
+        "day": "2026-09-02",
+        "sales": 1,
+        "avgCents": 136500
+      },
+      {
+        "day": "2026-08-31",
+        "sales": 3,
+        "avgCents": 135200
+      },
+      {
+        "day": "2026-08-29",
+        "sales": 1,
+        "avgCents": 120500
+      },
+      {
+        "day": "2026-08-26",
+        "sales": 2,
+        "avgCents": 130500
+      },
+      {
+        "day": "2026-08-23",
+        "sales": 1,
+        "avgCents": 135000
+      },
+      {
+        "day": "2026-08-22",
+        "sales": 1,
+        "avgCents": 126000
+      },
+      {
+        "day": "2026-08-20",
+        "sales": 1,
+        "avgCents": 120500
+      },
+      {
+        "day": "2026-08-19",
+        "sales": 1,
+        "avgCents": 136500
+      },
+      {
+        "day": "2026-08-18",
+        "sales": 1,
+        "avgCents": 123000
+      },
+      {
+        "day": "2026-08-17",
+        "sales": 2,
+        "avgCents": 126000
+      },
+      {
+        "day": "2026-08-16",
+        "sales": 1,
+        "avgCents": 131000
+      },
+      {
+        "day": "2026-08-15",
+        "sales": 1,
+        "avgCents": 142000
+      },
+      {
+        "day": "2026-08-14",
+        "sales": 2,
+        "avgCents": 127500
+      },
+      {
+        "day": "2026-08-13",
+        "sales": 1,
+        "avgCents": 137000
+      },
+      {
+        "day": "2026-08-11",
+        "sales": 1,
+        "avgCents": 139500
+      },
+      {
+        "day": "2026-08-10",
+        "sales": 1,
+        "avgCents": 142000
+      },
+      {
+        "day": "2026-08-08",
+        "sales": 2,
+        "avgCents": 134500
+      }
+    ]
+  },
+  "psa:10:SIT:186:en": {
+    "kind": "sales",
+    "rows": [
+      {
+        "source": "ebay",
+        "listingId": "c3-1",
+        "soldDay": "2026-11-05",
+        "soldAt": null,
+        "priceCents": 56500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-2",
+        "soldDay": "2026-11-03",
+        "soldAt": null,
+        "priceCents": 55500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-3",
+        "soldDay": "2026-11-02",
+        "soldAt": null,
+        "priceCents": 60000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-4",
+        "soldDay": "2026-11-02",
+        "soldAt": null,
+        "priceCents": 64500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-5",
+        "soldDay": "2026-10-26",
+        "soldAt": null,
+        "priceCents": 60500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-6",
+        "soldDay": "2026-10-24",
+        "soldAt": null,
+        "priceCents": 57000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-7",
+        "soldDay": "2026-10-23",
+        "soldAt": null,
+        "priceCents": 68000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-8",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 66000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-9",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 61500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-10",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 65000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-11",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 62000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-12",
+        "soldDay": "2026-10-19",
+        "soldAt": null,
+        "priceCents": 63000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-13",
+        "soldDay": "2026-10-18",
+        "soldAt": null,
+        "priceCents": 59000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-14",
+        "soldDay": "2026-10-15",
+        "soldAt": null,
+        "priceCents": 67000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-15",
+        "soldDay": "2026-10-13",
+        "soldAt": null,
+        "priceCents": 63500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-16",
+        "soldDay": "2026-10-13",
+        "soldAt": null,
+        "priceCents": 58500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-17",
+        "soldDay": "2026-10-12",
+        "soldAt": null,
+        "priceCents": 59500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-18",
+        "soldDay": "2026-10-08",
+        "soldAt": null,
+        "priceCents": 58000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-19",
+        "soldDay": "2026-10-06",
+        "soldAt": null,
+        "priceCents": 55000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-20",
+        "soldDay": "2026-10-06",
+        "soldAt": null,
+        "priceCents": 55500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-21",
+        "soldDay": "2026-10-02",
+        "soldAt": null,
+        "priceCents": 64500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-22",
+        "soldDay": "2026-10-02",
+        "soldAt": null,
+        "priceCents": 63500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-23",
+        "soldDay": "2026-10-02",
+        "soldAt": null,
+        "priceCents": 58500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-24",
+        "soldDay": "2026-10-02",
+        "soldAt": null,
+        "priceCents": 58000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-25",
+        "soldDay": "2026-09-29",
+        "soldAt": null,
+        "priceCents": 56500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-26",
+        "soldDay": "2026-09-22",
+        "soldAt": null,
+        "priceCents": 56000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-27",
+        "soldDay": "2026-09-17",
+        "soldAt": null,
+        "priceCents": 62500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-28",
+        "soldDay": "2026-09-14",
+        "soldAt": null,
+        "priceCents": 62500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-29",
+        "soldDay": "2026-09-13",
+        "soldAt": null,
+        "priceCents": 57500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-30",
+        "soldDay": "2026-09-12",
+        "soldAt": null,
+        "priceCents": 54500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-31",
+        "soldDay": "2026-09-11",
+        "soldAt": null,
+        "priceCents": 59000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-32",
+        "soldDay": "2026-09-09",
+        "soldAt": null,
+        "priceCents": 61000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-33",
+        "soldDay": "2026-09-04",
+        "soldAt": null,
+        "priceCents": 53500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-34",
+        "soldDay": "2026-08-31",
+        "soldAt": null,
+        "priceCents": 55000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-35",
+        "soldDay": "2026-08-29",
+        "soldAt": null,
+        "priceCents": 53000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-36",
+        "soldDay": "2026-08-28",
+        "soldAt": null,
+        "priceCents": 53000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-37",
+        "soldDay": "2026-08-26",
+        "soldAt": null,
+        "priceCents": 58500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-38",
+        "soldDay": "2026-08-26",
+        "soldAt": null,
+        "priceCents": 54000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-39",
+        "soldDay": "2026-08-25",
+        "soldAt": null,
+        "priceCents": 54500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-40",
+        "soldDay": "2026-08-21",
+        "soldAt": null,
+        "priceCents": 60500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-41",
+        "soldDay": "2026-08-20",
+        "soldAt": null,
+        "priceCents": 59500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-42",
+        "soldDay": "2026-08-20",
+        "soldAt": null,
+        "priceCents": 61000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-43",
+        "soldDay": "2026-08-17",
+        "soldAt": null,
+        "priceCents": 51500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-44",
+        "soldDay": "2026-08-16",
+        "soldAt": null,
+        "priceCents": 59000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-45",
+        "soldDay": "2026-08-15",
+        "soldAt": null,
+        "priceCents": 51500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-46",
+        "soldDay": "2026-08-13",
+        "soldAt": null,
+        "priceCents": 58000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-47",
+        "soldDay": "2026-08-12",
+        "soldAt": null,
+        "priceCents": 55500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-48",
+        "soldDay": "2026-08-12",
+        "soldAt": null,
+        "priceCents": 58500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c3-49",
+        "soldDay": "2026-08-10",
+        "soldAt": null,
+        "priceCents": 59500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c3-50",
+        "soldDay": "2026-08-08",
+        "soldAt": null,
+        "priceCents": 53500,
+        "kind": "bin",
+        "url": null
+      }
+    ]
+  },
+  "psa:10:FST:271:en": {
+    "kind": "daily",
+    "rows": [
+      {
+        "day": "2026-11-03",
+        "sales": 1,
+        "avgCents": 84000
+      },
+      {
+        "day": "2026-11-01",
+        "sales": 2,
+        "avgCents": 95500
+      },
+      {
+        "day": "2026-10-31",
+        "sales": 1,
+        "avgCents": 91000
+      },
+      {
+        "day": "2026-10-30",
+        "sales": 1,
+        "avgCents": 83000
+      },
+      {
+        "day": "2026-10-22",
+        "sales": 2,
+        "avgCents": 85000
+      },
+      {
+        "day": "2026-10-18",
+        "sales": 2,
+        "avgCents": 88500
+      },
+      {
+        "day": "2026-10-16",
+        "sales": 1,
+        "avgCents": 86500
+      },
+      {
+        "day": "2026-10-13",
+        "sales": 1,
+        "avgCents": 89500
+      },
+      {
+        "day": "2026-10-12",
+        "sales": 1,
+        "avgCents": 93000
+      },
+      {
+        "day": "2026-10-11",
+        "sales": 1,
+        "avgCents": 79500
+      },
+      {
+        "day": "2026-10-05",
+        "sales": 1,
+        "avgCents": 87500
+      },
+      {
+        "day": "2026-10-03",
+        "sales": 1,
+        "avgCents": 90500
+      },
+      {
+        "day": "2026-09-30",
+        "sales": 1,
+        "avgCents": 87500
+      },
+      {
+        "day": "2026-09-26",
+        "sales": 1,
+        "avgCents": 83000
+      },
+      {
+        "day": "2026-09-25",
+        "sales": 1,
+        "avgCents": 85500
+      },
+      {
+        "day": "2026-09-14",
+        "sales": 1,
+        "avgCents": 81500
+      },
+      {
+        "day": "2026-09-11",
+        "sales": 1,
+        "avgCents": 84000
+      },
+      {
+        "day": "2026-09-09",
+        "sales": 1,
+        "avgCents": 83000
+      },
+      {
+        "day": "2026-09-06",
+        "sales": 1,
+        "avgCents": 91000
+      },
+      {
+        "day": "2026-09-05",
+        "sales": 1,
+        "avgCents": 89000
+      },
+      {
+        "day": "2026-09-01",
+        "sales": 1,
+        "avgCents": 82000
+      },
+      {
+        "day": "2026-08-28",
+        "sales": 1,
+        "avgCents": 92000
+      },
+      {
+        "day": "2026-08-27",
+        "sales": 1,
+        "avgCents": 91500
+      },
+      {
+        "day": "2026-08-26",
+        "sales": 1,
+        "avgCents": 84500
+      },
+      {
+        "day": "2026-08-24",
+        "sales": 2,
+        "avgCents": 82500
+      },
+      {
+        "day": "2026-08-23",
+        "sales": 1,
+        "avgCents": 79500
+      },
+      {
+        "day": "2026-08-22",
+        "sales": 1,
+        "avgCents": 92000
+      },
+      {
+        "day": "2026-08-19",
+        "sales": 1,
+        "avgCents": 89000
+      },
+      {
+        "day": "2026-08-14",
+        "sales": 1,
+        "avgCents": 90500
+      },
+      {
+        "day": "2026-08-12",
+        "sales": 1,
+        "avgCents": 82000
+      },
+      {
+        "day": "2026-08-11",
+        "sales": 1,
+        "avgCents": 89000
+      },
+      {
+        "day": "2026-08-10",
+        "sales": 1,
+        "avgCents": 82000
+      },
+      {
+        "day": "2026-08-09",
+        "sales": 1,
+        "avgCents": 91500
+      },
+      {
+        "day": "2026-08-08",
+        "sales": 2,
+        "avgCents": 80000
+      }
+    ]
+  },
+  "psa:10:SV2a:201:ja": {
+    "kind": "sales",
+    "rows": [
+      {
+        "source": "ebay",
+        "listingId": "c5-1",
+        "soldDay": "2026-11-04",
+        "soldAt": null,
+        "priceCents": 16500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-2",
+        "soldDay": "2026-11-03",
+        "soldAt": null,
+        "priceCents": 17600,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-3",
+        "soldDay": "2026-11-03",
+        "soldAt": null,
+        "priceCents": 14100,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-4",
+        "soldDay": "2026-11-02",
+        "soldAt": null,
+        "priceCents": 15000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-5",
+        "soldDay": "2026-10-31",
+        "soldAt": null,
+        "priceCents": 14600,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-6",
+        "soldDay": "2026-10-31",
+        "soldAt": null,
+        "priceCents": 13400,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-7",
+        "soldDay": "2026-10-30",
+        "soldAt": null,
+        "priceCents": 13300,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-8",
+        "soldDay": "2026-10-30",
+        "soldAt": null,
+        "priceCents": 16100,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-9",
+        "soldDay": "2026-10-28",
+        "soldAt": null,
+        "priceCents": 15400,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-10",
+        "soldDay": "2026-10-28",
+        "soldAt": null,
+        "priceCents": 13200,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-11",
+        "soldDay": "2026-10-27",
+        "soldAt": null,
+        "priceCents": 14500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-12",
+        "soldDay": "2026-10-26",
+        "soldAt": null,
+        "priceCents": 17400,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-13",
+        "soldDay": "2026-10-25",
+        "soldAt": null,
+        "priceCents": 14200,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-14",
+        "soldDay": "2026-10-25",
+        "soldAt": null,
+        "priceCents": 16300,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-15",
+        "soldDay": "2026-10-24",
+        "soldAt": null,
+        "priceCents": 14400,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-16",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 17200,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-17",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 16200,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-18",
+        "soldDay": "2026-10-21",
+        "soldAt": null,
+        "priceCents": 13700,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-19",
+        "soldDay": "2026-10-20",
+        "soldAt": null,
+        "priceCents": 17000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-20",
+        "soldDay": "2026-10-20",
+        "soldAt": null,
+        "priceCents": 14500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-21",
+        "soldDay": "2026-10-18",
+        "soldAt": null,
+        "priceCents": 14700,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-22",
+        "soldDay": "2026-10-18",
+        "soldAt": null,
+        "priceCents": 14300,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-23",
+        "soldDay": "2026-10-17",
+        "soldAt": null,
+        "priceCents": 13900,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-24",
+        "soldDay": "2026-10-17",
+        "soldAt": null,
+        "priceCents": 13800,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-25",
+        "soldDay": "2026-10-16",
+        "soldAt": null,
+        "priceCents": 18100,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-26",
+        "soldDay": "2026-10-15",
+        "soldAt": null,
+        "priceCents": 16800,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-27",
+        "soldDay": "2026-10-14",
+        "soldAt": null,
+        "priceCents": 15200,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-28",
+        "soldDay": "2026-10-14",
+        "soldAt": null,
+        "priceCents": 14900,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-29",
+        "soldDay": "2026-10-13",
+        "soldAt": null,
+        "priceCents": 16600,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-30",
+        "soldDay": "2026-10-13",
+        "soldAt": null,
+        "priceCents": 15900,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-31",
+        "soldDay": "2026-10-13",
+        "soldAt": null,
+        "priceCents": 15100,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-32",
+        "soldDay": "2026-10-12",
+        "soldAt": null,
+        "priceCents": 14800,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-33",
+        "soldDay": "2026-10-12",
+        "soldAt": null,
+        "priceCents": 15600,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-34",
+        "soldDay": "2026-10-11",
+        "soldAt": null,
+        "priceCents": 17900,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-35",
+        "soldDay": "2026-10-11",
+        "soldAt": null,
+        "priceCents": 13600,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-36",
+        "soldDay": "2026-10-10",
+        "soldAt": null,
+        "priceCents": 14000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-37",
+        "soldDay": "2026-10-09",
+        "soldAt": null,
+        "priceCents": 15800,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-38",
+        "soldDay": "2026-10-09",
+        "soldAt": null,
+        "priceCents": 14000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-39",
+        "soldDay": "2026-10-08",
+        "soldAt": null,
+        "priceCents": 15500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-40",
+        "soldDay": "2026-10-07",
+        "soldAt": null,
+        "priceCents": 16900,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-41",
+        "soldDay": "2026-10-03",
+        "soldAt": null,
+        "priceCents": 15300,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-42",
+        "soldDay": "2026-10-02",
+        "soldAt": null,
+        "priceCents": 15100,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-43",
+        "soldDay": "2026-09-30",
+        "soldAt": null,
+        "priceCents": 13400,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-44",
+        "soldDay": "2026-09-29",
+        "soldAt": null,
+        "priceCents": 15300,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-45",
+        "soldDay": "2026-09-29",
+        "soldAt": null,
+        "priceCents": 14900,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-46",
+        "soldDay": "2026-09-28",
+        "soldAt": null,
+        "priceCents": 14200,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-47",
+        "soldDay": "2026-09-27",
+        "soldAt": null,
+        "priceCents": 13700,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-48",
+        "soldDay": "2026-09-26",
+        "soldAt": null,
+        "priceCents": 13700,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-49",
+        "soldDay": "2026-09-25",
+        "soldAt": null,
+        "priceCents": 13900,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-50",
+        "soldDay": "2026-09-25",
+        "soldAt": null,
+        "priceCents": 13900,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-51",
+        "soldDay": "2026-09-24",
+        "soldAt": null,
+        "priceCents": 13500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-52",
+        "soldDay": "2026-09-23",
+        "soldAt": null,
+        "priceCents": 15300,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-53",
+        "soldDay": "2026-09-23",
+        "soldAt": null,
+        "priceCents": 14600,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-54",
+        "soldDay": "2026-09-23",
+        "soldAt": null,
+        "priceCents": 12900,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-55",
+        "soldDay": "2026-09-22",
+        "soldAt": null,
+        "priceCents": 14900,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-56",
+        "soldDay": "2026-09-22",
+        "soldAt": null,
+        "priceCents": 14100,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-57",
+        "soldDay": "2026-09-22",
+        "soldAt": null,
+        "priceCents": 15600,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-58",
+        "soldDay": "2026-09-20",
+        "soldAt": null,
+        "priceCents": 17100,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-59",
+        "soldDay": "2026-09-20",
+        "soldAt": null,
+        "priceCents": 13100,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-60",
+        "soldDay": "2026-09-19",
+        "soldAt": null,
+        "priceCents": 13800,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-61",
+        "soldDay": "2026-09-18",
+        "soldAt": null,
+        "priceCents": 14300,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-62",
+        "soldDay": "2026-09-14",
+        "soldAt": null,
+        "priceCents": 14200,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-63",
+        "soldDay": "2026-09-14",
+        "soldAt": null,
+        "priceCents": 14400,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-64",
+        "soldDay": "2026-09-13",
+        "soldAt": null,
+        "priceCents": 15800,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-65",
+        "soldDay": "2026-09-11",
+        "soldAt": null,
+        "priceCents": 12600,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-66",
+        "soldDay": "2026-09-10",
+        "soldAt": null,
+        "priceCents": 14500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-67",
+        "soldDay": "2026-09-10",
+        "soldAt": null,
+        "priceCents": 14400,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-68",
+        "soldDay": "2026-09-09",
+        "soldAt": null,
+        "priceCents": 15600,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-69",
+        "soldDay": "2026-09-08",
+        "soldAt": null,
+        "priceCents": 15100,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-70",
+        "soldDay": "2026-09-07",
+        "soldAt": null,
+        "priceCents": 15100,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-71",
+        "soldDay": "2026-09-06",
+        "soldAt": null,
+        "priceCents": 13800,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-72",
+        "soldDay": "2026-09-06",
+        "soldAt": null,
+        "priceCents": 13000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-73",
+        "soldDay": "2026-09-02",
+        "soldAt": null,
+        "priceCents": 15100,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-74",
+        "soldDay": "2026-09-02",
+        "soldAt": null,
+        "priceCents": 15900,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-75",
+        "soldDay": "2026-09-02",
+        "soldAt": null,
+        "priceCents": 12800,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-76",
+        "soldDay": "2026-08-31",
+        "soldAt": null,
+        "priceCents": 13200,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-77",
+        "soldDay": "2026-08-31",
+        "soldAt": null,
+        "priceCents": 13600,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-78",
+        "soldDay": "2026-08-31",
+        "soldAt": null,
+        "priceCents": 16200,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-79",
+        "soldDay": "2026-08-30",
+        "soldAt": null,
+        "priceCents": 13300,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-80",
+        "soldDay": "2026-08-27",
+        "soldAt": null,
+        "priceCents": 16800,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-81",
+        "soldDay": "2026-08-26",
+        "soldAt": null,
+        "priceCents": 15200,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-82",
+        "soldDay": "2026-08-26",
+        "soldAt": null,
+        "priceCents": 12200,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-83",
+        "soldDay": "2026-08-26",
+        "soldAt": null,
+        "priceCents": 14700,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-84",
+        "soldDay": "2026-08-25",
+        "soldAt": null,
+        "priceCents": 13300,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-85",
+        "soldDay": "2026-08-25",
+        "soldAt": null,
+        "priceCents": 14800,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-86",
+        "soldDay": "2026-08-25",
+        "soldAt": null,
+        "priceCents": 13200,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-87",
+        "soldDay": "2026-08-24",
+        "soldAt": null,
+        "priceCents": 15000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-88",
+        "soldDay": "2026-08-24",
+        "soldAt": null,
+        "priceCents": 12700,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-89",
+        "soldDay": "2026-08-23",
+        "soldAt": null,
+        "priceCents": 14200,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-90",
+        "soldDay": "2026-08-22",
+        "soldAt": null,
+        "priceCents": 13800,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-91",
+        "soldDay": "2026-08-21",
+        "soldAt": null,
+        "priceCents": 13100,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-92",
+        "soldDay": "2026-08-21",
+        "soldAt": null,
+        "priceCents": 13000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-93",
+        "soldDay": "2026-08-21",
+        "soldAt": null,
+        "priceCents": 13100,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-94",
+        "soldDay": "2026-08-19",
+        "soldAt": null,
+        "priceCents": 12700,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-95",
+        "soldDay": "2026-08-17",
+        "soldAt": null,
+        "priceCents": 15300,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-96",
+        "soldDay": "2026-08-17",
+        "soldAt": null,
+        "priceCents": 16200,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-97",
+        "soldDay": "2026-08-17",
+        "soldAt": null,
+        "priceCents": 12800,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-98",
+        "soldDay": "2026-08-16",
+        "soldAt": null,
+        "priceCents": 13300,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-99",
+        "soldDay": "2026-08-16",
+        "soldAt": null,
+        "priceCents": 13200,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-100",
+        "soldDay": "2026-08-15",
+        "soldAt": null,
+        "priceCents": 14400,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-101",
+        "soldDay": "2026-08-15",
+        "soldAt": null,
+        "priceCents": 15400,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-102",
+        "soldDay": "2026-08-14",
+        "soldAt": null,
+        "priceCents": 14500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-103",
+        "soldDay": "2026-08-13",
+        "soldAt": null,
+        "priceCents": 12300,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-104",
+        "soldDay": "2026-08-13",
+        "soldAt": null,
+        "priceCents": 13400,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-105",
+        "soldDay": "2026-08-12",
+        "soldAt": null,
+        "priceCents": 14100,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-106",
+        "soldDay": "2026-08-12",
+        "soldAt": null,
+        "priceCents": 12600,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-107",
+        "soldDay": "2026-08-11",
+        "soldAt": null,
+        "priceCents": 13100,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-108",
+        "soldDay": "2026-08-10",
+        "soldAt": null,
+        "priceCents": 11800,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c5-109",
+        "soldDay": "2026-08-09",
+        "soldAt": null,
+        "priceCents": 13100,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-110",
+        "soldDay": "2026-08-09",
+        "soldAt": null,
+        "priceCents": 14700,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-111",
+        "soldDay": "2026-08-08",
+        "soldAt": null,
+        "priceCents": 11700,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c5-112",
+        "soldDay": "2026-08-07",
+        "soldAt": null,
+        "priceCents": 14200,
+        "kind": "bin",
+        "url": null
+      }
+    ]
+  },
+  "psa:9:LOR:186:en": {
+    "kind": "daily",
+    "rows": [
+      {
+        "day": "2026-11-05",
+        "sales": 1,
+        "avgCents": 28000
+      },
+      {
+        "day": "2026-11-04",
+        "sales": 1,
+        "avgCents": 26100
+      },
+      {
+        "day": "2026-11-03",
+        "sales": 2,
+        "avgCents": 27800
+      },
+      {
+        "day": "2026-11-01",
+        "sales": 1,
+        "avgCents": 27000
+      },
+      {
+        "day": "2026-10-31",
+        "sales": 1,
+        "avgCents": 26900
+      },
+      {
+        "day": "2026-10-30",
+        "sales": 1,
+        "avgCents": 27800
+      },
+      {
+        "day": "2026-10-28",
+        "sales": 2,
+        "avgCents": 26400
+      },
+      {
+        "day": "2026-10-27",
+        "sales": 1,
+        "avgCents": 26800
+      },
+      {
+        "day": "2026-10-26",
+        "sales": 2,
+        "avgCents": 28000
+      },
+      {
+        "day": "2026-10-22",
+        "sales": 2,
+        "avgCents": 27000
+      },
+      {
+        "day": "2026-10-20",
+        "sales": 1,
+        "avgCents": 27800
+      },
+      {
+        "day": "2026-10-19",
+        "sales": 3,
+        "avgCents": 27400
+      },
+      {
+        "day": "2026-10-17",
+        "sales": 2,
+        "avgCents": 26600
+      },
+      {
+        "day": "2026-10-16",
+        "sales": 1,
+        "avgCents": 27400
+      },
+      {
+        "day": "2026-10-15",
+        "sales": 1,
+        "avgCents": 27300
+      },
+      {
+        "day": "2026-10-14",
+        "sales": 1,
+        "avgCents": 28100
+      },
+      {
+        "day": "2026-10-12",
+        "sales": 1,
+        "avgCents": 27200
+      },
+      {
+        "day": "2026-10-11",
+        "sales": 1,
+        "avgCents": 25900
+      },
+      {
+        "day": "2026-10-10",
+        "sales": 1,
+        "avgCents": 27900
+      },
+      {
+        "day": "2026-10-05",
+        "sales": 1,
+        "avgCents": 27000
+      },
+      {
+        "day": "2026-10-04",
+        "sales": 1,
+        "avgCents": 27500
+      },
+      {
+        "day": "2026-10-03",
+        "sales": 2,
+        "avgCents": 26700
+      },
+      {
+        "day": "2026-10-02",
+        "sales": 1,
+        "avgCents": 26900
+      },
+      {
+        "day": "2026-09-30",
+        "sales": 1,
+        "avgCents": 28200
+      },
+      {
+        "day": "2026-09-28",
+        "sales": 1,
+        "avgCents": 26600
+      },
+      {
+        "day": "2026-09-26",
+        "sales": 1,
+        "avgCents": 28100
+      },
+      {
+        "day": "2026-09-25",
+        "sales": 1,
+        "avgCents": 28600
+      },
+      {
+        "day": "2026-09-22",
+        "sales": 1,
+        "avgCents": 27400
+      },
+      {
+        "day": "2026-09-21",
+        "sales": 1,
+        "avgCents": 27500
+      },
+      {
+        "day": "2026-09-20",
+        "sales": 2,
+        "avgCents": 27800
+      },
+      {
+        "day": "2026-09-19",
+        "sales": 1,
+        "avgCents": 27100
+      },
+      {
+        "day": "2026-09-16",
+        "sales": 1,
+        "avgCents": 26500
+      },
+      {
+        "day": "2026-09-13",
+        "sales": 1,
+        "avgCents": 27600
+      },
+      {
+        "day": "2026-09-11",
+        "sales": 1,
+        "avgCents": 26300
+      },
+      {
+        "day": "2026-09-08",
+        "sales": 2,
+        "avgCents": 27400
+      },
+      {
+        "day": "2026-09-07",
+        "sales": 1,
+        "avgCents": 26400
+      },
+      {
+        "day": "2026-09-06",
+        "sales": 1,
+        "avgCents": 27500
+      },
+      {
+        "day": "2026-09-04",
+        "sales": 1,
+        "avgCents": 26800
+      },
+      {
+        "day": "2026-09-03",
+        "sales": 1,
+        "avgCents": 27300
+      },
+      {
+        "day": "2026-09-02",
+        "sales": 3,
+        "avgCents": 27000
+      },
+      {
+        "day": "2026-08-31",
+        "sales": 2,
+        "avgCents": 26300
+      },
+      {
+        "day": "2026-08-30",
+        "sales": 1,
+        "avgCents": 26500
+      },
+      {
+        "day": "2026-08-29",
+        "sales": 1,
+        "avgCents": 27900
+      },
+      {
+        "day": "2026-08-28",
+        "sales": 1,
+        "avgCents": 27500
+      },
+      {
+        "day": "2026-08-27",
+        "sales": 1,
+        "avgCents": 27800
+      },
+      {
+        "day": "2026-08-24",
+        "sales": 3,
+        "avgCents": 27500
+      },
+      {
+        "day": "2026-08-22",
+        "sales": 1,
+        "avgCents": 26900
+      },
+      {
+        "day": "2026-08-21",
+        "sales": 2,
+        "avgCents": 27000
+      },
+      {
+        "day": "2026-08-20",
+        "sales": 1,
+        "avgCents": 28000
+      },
+      {
+        "day": "2026-08-19",
+        "sales": 3,
+        "avgCents": 26900
+      },
+      {
+        "day": "2026-08-17",
+        "sales": 1,
+        "avgCents": 28200
+      },
+      {
+        "day": "2026-08-16",
+        "sales": 1,
+        "avgCents": 28100
+      },
+      {
+        "day": "2026-08-10",
+        "sales": 2,
+        "avgCents": 28600
+      },
+      {
+        "day": "2026-08-08",
+        "sales": 1,
+        "avgCents": 27700
+      }
+    ]
+  },
+  "psa:9:EVS:189:en": {
+    "kind": "sales",
+    "rows": [
+      {
+        "source": "ebay",
+        "listingId": "c8-1",
+        "soldDay": "2026-11-05",
+        "soldAt": null,
+        "priceCents": 50000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-2",
+        "soldDay": "2026-11-01",
+        "soldAt": null,
+        "priceCents": 55500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-3",
+        "soldDay": "2026-10-30",
+        "soldAt": null,
+        "priceCents": 51500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-4",
+        "soldDay": "2026-10-29",
+        "soldAt": null,
+        "priceCents": 56500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-5",
+        "soldDay": "2026-10-27",
+        "soldAt": null,
+        "priceCents": 52000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-6",
+        "soldDay": "2026-10-27",
+        "soldAt": null,
+        "priceCents": 52500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-7",
+        "soldDay": "2026-10-23",
+        "soldAt": null,
+        "priceCents": 55000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-8",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 52000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-9",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 54000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-10",
+        "soldDay": "2026-10-22",
+        "soldAt": null,
+        "priceCents": 51000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-11",
+        "soldDay": "2026-10-19",
+        "soldAt": null,
+        "priceCents": 53500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-12",
+        "soldDay": "2026-10-18",
+        "soldAt": null,
+        "priceCents": 56000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-13",
+        "soldDay": "2026-10-18",
+        "soldAt": null,
+        "priceCents": 51500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-14",
+        "soldDay": "2026-10-16",
+        "soldAt": null,
+        "priceCents": 50500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-15",
+        "soldDay": "2026-10-15",
+        "soldAt": null,
+        "priceCents": 50000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-16",
+        "soldDay": "2026-10-14",
+        "soldAt": null,
+        "priceCents": 53000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-17",
+        "soldDay": "2026-10-12",
+        "soldAt": null,
+        "priceCents": 51000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-18",
+        "soldDay": "2026-10-10",
+        "soldAt": null,
+        "priceCents": 51000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-19",
+        "soldDay": "2026-10-08",
+        "soldAt": null,
+        "priceCents": 57500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-20",
+        "soldDay": "2026-10-05",
+        "soldAt": null,
+        "priceCents": 48500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-21",
+        "soldDay": "2026-10-03",
+        "soldAt": null,
+        "priceCents": 49000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-22",
+        "soldDay": "2026-10-01",
+        "soldAt": null,
+        "priceCents": 53500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-23",
+        "soldDay": "2026-09-30",
+        "soldAt": null,
+        "priceCents": 48500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-24",
+        "soldDay": "2026-09-30",
+        "soldAt": null,
+        "priceCents": 48000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-25",
+        "soldDay": "2026-09-29",
+        "soldAt": null,
+        "priceCents": 53000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-26",
+        "soldDay": "2026-09-28",
+        "soldAt": null,
+        "priceCents": 52500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-27",
+        "soldDay": "2026-09-27",
+        "soldAt": null,
+        "priceCents": 54000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-28",
+        "soldDay": "2026-09-26",
+        "soldAt": null,
+        "priceCents": 49000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-29",
+        "soldDay": "2026-09-26",
+        "soldAt": null,
+        "priceCents": 49000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-30",
+        "soldDay": "2026-09-24",
+        "soldAt": null,
+        "priceCents": 51000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-31",
+        "soldDay": "2026-09-24",
+        "soldAt": null,
+        "priceCents": 49500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-32",
+        "soldDay": "2026-09-24",
+        "soldAt": null,
+        "priceCents": 51500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-33",
+        "soldDay": "2026-09-24",
+        "soldAt": null,
+        "priceCents": 48500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-34",
+        "soldDay": "2026-09-21",
+        "soldAt": null,
+        "priceCents": 50000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-35",
+        "soldDay": "2026-09-19",
+        "soldAt": null,
+        "priceCents": 52000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-36",
+        "soldDay": "2026-09-18",
+        "soldAt": null,
+        "priceCents": 49500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-37",
+        "soldDay": "2026-09-16",
+        "soldAt": null,
+        "priceCents": 49000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-38",
+        "soldDay": "2026-09-14",
+        "soldAt": null,
+        "priceCents": 54000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-39",
+        "soldDay": "2026-09-14",
+        "soldAt": null,
+        "priceCents": 54500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-40",
+        "soldDay": "2026-09-13",
+        "soldAt": null,
+        "priceCents": 50000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-41",
+        "soldDay": "2026-09-11",
+        "soldAt": null,
+        "priceCents": 47500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-42",
+        "soldDay": "2026-09-04",
+        "soldAt": null,
+        "priceCents": 47000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-43",
+        "soldDay": "2026-09-02",
+        "soldAt": null,
+        "priceCents": 50000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-44",
+        "soldDay": "2026-09-01",
+        "soldAt": null,
+        "priceCents": 51000,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-45",
+        "soldDay": "2026-08-30",
+        "soldAt": null,
+        "priceCents": 49500,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-46",
+        "soldDay": "2026-08-28",
+        "soldAt": null,
+        "priceCents": 53500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-47",
+        "soldDay": "2026-08-27",
+        "soldAt": null,
+        "priceCents": 49000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-48",
+        "soldDay": "2026-08-24",
+        "soldAt": null,
+        "priceCents": 49000,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "fanatics",
+        "listingId": "c8-49",
+        "soldDay": "2026-08-24",
+        "soldAt": null,
+        "priceCents": 50500,
+        "kind": "offer",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-50",
+        "soldDay": "2026-08-24",
+        "soldAt": null,
+        "priceCents": 48000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-51",
+        "soldDay": "2026-08-22",
+        "soldAt": null,
+        "priceCents": 47500,
+        "kind": "auction",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-52",
+        "soldDay": "2026-08-20",
+        "soldAt": null,
+        "priceCents": 52000,
+        "kind": "bin",
+        "url": null
+      },
+      {
+        "source": "ebay",
+        "listingId": "c8-53",
+        "soldDay": "2026-08-17",
+        "soldAt": null,
+        "priceCents": 47500,
+        "kind": "auction",
+        "url": null
+      }
+    ]
+  },
+  "psa:10:MEW:193:en": {
+    "kind": "daily",
+    "rows": [
+      {
+        "day": "2026-11-05",
+        "sales": 1,
+        "avgCents": 20900
+      },
+      {
+        "day": "2026-11-04",
+        "sales": 2,
+        "avgCents": 19300
+      },
+      {
+        "day": "2026-11-03",
+        "sales": 3,
+        "avgCents": 19700
+      },
+      {
+        "day": "2026-10-31",
+        "sales": 1,
+        "avgCents": 18700
+      },
+      {
+        "day": "2026-10-30",
+        "sales": 3,
+        "avgCents": 19200
+      },
+      {
+        "day": "2026-10-29",
+        "sales": 1,
+        "avgCents": 18300
+      },
+      {
+        "day": "2026-10-28",
+        "sales": 2,
+        "avgCents": 18400
+      },
+      {
+        "day": "2026-10-27",
+        "sales": 1,
+        "avgCents": 19100
+      },
+      {
+        "day": "2026-10-26",
+        "sales": 1,
+        "avgCents": 20100
+      },
+      {
+        "day": "2026-10-22",
+        "sales": 2,
+        "avgCents": 19300
+      },
+      {
+        "day": "2026-10-20",
+        "sales": 3,
+        "avgCents": 19000
+      },
+      {
+        "day": "2026-10-19",
+        "sales": 2,
+        "avgCents": 19300
+      },
+      {
+        "day": "2026-10-17",
+        "sales": 2,
+        "avgCents": 19400
+      },
+      {
+        "day": "2026-10-16",
+        "sales": 1,
+        "avgCents": 18600
+      },
+      {
+        "day": "2026-10-14",
+        "sales": 1,
+        "avgCents": 18900
+      },
+      {
+        "day": "2026-10-13",
+        "sales": 1,
+        "avgCents": 18500
+      },
+      {
+        "day": "2026-10-11",
+        "sales": 2,
+        "avgCents": 20100
+      },
+      {
+        "day": "2026-10-10",
+        "sales": 2,
+        "avgCents": 19500
+      },
+      {
+        "day": "2026-10-09",
+        "sales": 1,
+        "avgCents": 19600
+      },
+      {
+        "day": "2026-10-07",
+        "sales": 1,
+        "avgCents": 21100
+      },
+      {
+        "day": "2026-10-06",
+        "sales": 3,
+        "avgCents": 19300
+      },
+      {
+        "day": "2026-10-03",
+        "sales": 2,
+        "avgCents": 18400
+      },
+      {
+        "day": "2026-10-02",
+        "sales": 4,
+        "avgCents": 19800
+      },
+      {
+        "day": "2026-09-27",
+        "sales": 1,
+        "avgCents": 20500
+      },
+      {
+        "day": "2026-09-26",
+        "sales": 1,
+        "avgCents": 19600
+      },
+      {
+        "day": "2026-09-25",
+        "sales": 1,
+        "avgCents": 18100
+      },
+      {
+        "day": "2026-09-24",
+        "sales": 3,
+        "avgCents": 19300
+      },
+      {
+        "day": "2026-09-23",
+        "sales": 1,
+        "avgCents": 18500
+      },
+      {
+        "day": "2026-09-22",
+        "sales": 1,
+        "avgCents": 18400
+      },
+      {
+        "day": "2026-09-19",
+        "sales": 1,
+        "avgCents": 20800
+      },
+      {
+        "day": "2026-09-18",
+        "sales": 2,
+        "avgCents": 19100
+      },
+      {
+        "day": "2026-09-17",
+        "sales": 2,
+        "avgCents": 18500
+      },
+      {
+        "day": "2026-09-16",
+        "sales": 5,
+        "avgCents": 19600
+      },
+      {
+        "day": "2026-09-15",
+        "sales": 3,
+        "avgCents": 19100
+      },
+      {
+        "day": "2026-09-14",
+        "sales": 1,
+        "avgCents": 20200
+      },
+      {
+        "day": "2026-09-13",
+        "sales": 2,
+        "avgCents": 19600
+      },
+      {
+        "day": "2026-09-11",
+        "sales": 2,
+        "avgCents": 19600
+      },
+      {
+        "day": "2026-09-09",
+        "sales": 2,
+        "avgCents": 19700
+      },
+      {
+        "day": "2026-09-07",
+        "sales": 1,
+        "avgCents": 18200
+      },
+      {
+        "day": "2026-09-06",
+        "sales": 1,
+        "avgCents": 18900
+      },
+      {
+        "day": "2026-09-03",
+        "sales": 1,
+        "avgCents": 18800
+      },
+      {
+        "day": "2026-09-02",
+        "sales": 2,
+        "avgCents": 19600
+      },
+      {
+        "day": "2026-08-30",
+        "sales": 1,
+        "avgCents": 20400
+      },
+      {
+        "day": "2026-08-27",
+        "sales": 2,
+        "avgCents": 18600
+      },
+      {
+        "day": "2026-08-22",
+        "sales": 1,
+        "avgCents": 18700
+      },
+      {
+        "day": "2026-08-20",
+        "sales": 2,
+        "avgCents": 18300
+      },
+      {
+        "day": "2026-08-19",
+        "sales": 1,
+        "avgCents": 20000
+      },
+      {
+        "day": "2026-08-16",
+        "sales": 3,
+        "avgCents": 19400
+      },
+      {
+        "day": "2026-08-15",
+        "sales": 2,
+        "avgCents": 20200
+      },
+      {
+        "day": "2026-08-13",
+        "sales": 3,
+        "avgCents": 19300
+      },
+      {
+        "day": "2026-08-11",
+        "sales": 1,
+        "avgCents": 18600
+      },
+      {
+        "day": "2026-08-08",
+        "sales": 1,
+        "avgCents": 18500
+      }
+    ]
+  }
 }
