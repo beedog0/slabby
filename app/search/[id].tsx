@@ -5,7 +5,7 @@
 // to spin it 360°, as on a vault card. In con mode (?con=1) it also shows what to pay.
 
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { trendTint } from '../../src/components/MiniChart';
@@ -21,7 +21,6 @@ import {
   cardNumber,
   catalogCard,
   displayName,
-  firstGrade,
   firstLowGrade,
   gradeLabel,
   isQuiet,
@@ -49,8 +48,8 @@ export default function SearchedCard() {
   const { width } = useWindowDimensions();
   const [card, setCard] = useState<CatalogCard | null | undefined | 'error'>(undefined);
   const [prices, setPrices] = useState<SearchPrices | null | undefined>(undefined);
-  const [pick, setPick] = useState<Choice>('psa10');
-  const touched = useRef(false);
+  // Opens on the raw single (Bryan, 2026-11-06); every grade is one tap away on the toggle.
+  const [pick, setPick] = useState<Choice>('raw');
   const [tilting, setTilting] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -70,18 +69,7 @@ export default function SearchedCard() {
     };
   }, [id, attempt]);
 
-  // Open on the first grade with sales, unless the user already tapped one while prices loaded.
-  useEffect(() => {
-    if (prices && !touched.current) setPick(firstGrade(prices));
-  }, [prices]);
-
-  const choose = useCallback(
-    (c: Choice) => {
-      touched.current = true;
-      setPick(c);
-    },
-    [],
-  );
+  const choose = useCallback((c: Choice) => setPick(c), []);
   const onTab = (t: Tab) => choose(t === 'low' ? (isLow(pick) ? pick : firstLowGrade(prices ?? null)) : t);
 
   const ready = card && card !== 'error' ? card : null;
