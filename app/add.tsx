@@ -1,5 +1,6 @@
 // Add a slab by hand: used when PSA can't look the cert up, and for BGS/CGC slabs (v1 scans PSA
 // only). The card is matched to its price source after it's added, same as a scanned one.
+// Card search opens it prefilled (name, set, number, grade, photo) with the product already known.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, type ReactNode } from 'react';
@@ -15,21 +16,35 @@ import type { Game } from '../src/types';
 import { useVault } from '../src/store/vault';
 import { color, space, type } from '../src/theme/tokens';
 
-type Grader = 'psa' | 'bgs' | 'cgc';
+type Grader = 'psa' | 'bgs' | 'cgc' | 'raw';
 
 export default function AddByHand() {
-  const { cert: certParam } = useLocalSearchParams<{ cert?: string }>();
+  const p = useLocalSearchParams<{
+    cert?: string;
+    name?: string;
+    set?: string;
+    setCode?: string;
+    number?: string;
+    language?: string;
+    game?: string;
+    grader?: Grader;
+    grade?: string;
+    productId?: string;
+    image?: string;
+  }>();
+  const certParam = p.cert;
+  const fromSearch = !!p.productId;
   const insets = useSafeAreaInsets();
   const add = useVault((s) => s.add);
-  const [game, setGame] = useState<Game>('pokemon');
+  const [game, setGame] = useState<Game>(p.game && p.game in GAMES ? (p.game as Game) : 'pokemon');
   const [cert, setCert] = useState(certParam ?? '');
-  const [grader, setGrader] = useState<Grader>('psa');
-  const [grade, setGrade] = useState(10);
-  const [name, setName] = useState('');
-  const [setTitle, setSetTitle] = useState('');
-  const [number, setNumber] = useState('');
+  const [grader, setGrader] = useState<Grader>(p.grader ?? 'psa');
+  const [grade, setGrade] = useState(Number(p.grade) || 10);
+  const [name, setName] = useState(p.name ?? '');
+  const [setTitle, setSetTitle] = useState(p.set ?? '');
+  const [number, setNumber] = useState(p.number ?? '');
   const [variety, setVariety] = useState('');
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState(p.language && GAMES[game].languages.includes(p.language) ? p.language : 'en');
   const info = GAMES[game];
   const [paid, setPaid] = useState('');
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
@@ -53,13 +68,17 @@ export default function AddByHand() {
       language,
       paidCents: Number.isFinite(dollars) ? dollars * 100 : null,
       plan,
+      // The set code only fits while the set is the one search picked.
+      setCode: p.setCode && setTitle === p.set ? p.setCode : null,
+      imageFrontUrl: p.image || null,
     });
-    add(card);
-    matchNewCard(card)
-      .then(() => refreshPrices([card]))
+    const saved = grader === 'raw' ? { ...card, grade: null } : card;
+    add(saved);
+    matchNewCard(saved, fromSearch ? p.productId : undefined)
+      .then(() => refreshPrices([saved]))
       .catch(() => {});
     router.dismissTo('/');
-    router.push(`/card/${card.id}`);
+    router.push(`/card/${saved.id}`);
   };
 
   return (
@@ -74,9 +93,11 @@ export default function AddByHand() {
           </IconButton>
         </View>
         <View style={styles.gutter}>
-          <Text style={[type.title, { color: color.ink }]}>Add a slab</Text>
+          <Text style={[type.title, { color: color.ink }]}>{fromSearch ? 'Add to vault' : 'Add a slab'}</Text>
           <Text style={[type.text, { color: color.secondary, paddingTop: 2, paddingBottom: space.l }]}>
-            Type what the label says. Prices fill in once the card is matched.
+            {fromSearch
+              ? 'Check the grade, then add what you paid.'
+              : 'Type what the label says. Prices fill in once the card is matched.'}
           </Text>
 
           <Field label="Game">
@@ -143,7 +164,7 @@ export default function AddByHand() {
           </Field>
           <Field label="Grader">
             <Segmented<Grader>
-              style={{ width: 170 }}
+              style={{ width: 220 }}
               value={grader}
               onChange={(g) => {
                 setGrader(g);
@@ -153,17 +174,20 @@ export default function AddByHand() {
                 { value: 'psa', label: 'PSA' },
                 { value: 'bgs', label: 'BGS' },
                 { value: 'cgc', label: 'CGC' },
+                { value: 'raw', label: 'Raw' },
               ]}
             />
           </Field>
-          <Field label="Grade">
-            <Stepper
-              label="grade"
-              value={String(grade)}
-              onMinus={() => setGrade((g) => Math.max(1, g - step))}
-              onPlus={() => setGrade((g) => Math.min(10, g + step))}
-            />
-          </Field>
+          {grader === 'raw' ? null : (
+            <Field label="Grade">
+              <Stepper
+                label="grade"
+                value={String(grade)}
+                onMinus={() => setGrade((g) => Math.max(1, g - step))}
+                onPlus={() => setGrade((g) => Math.min(10, g + step))}
+              />
+            </Field>
+          )}
           <Field label="Cert number">
             <TextInput
               value={cert}

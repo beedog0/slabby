@@ -31,7 +31,7 @@ import { shareSellSheet } from '../src/services/sellSheet';
 import { DEFAULT_CON_NAME } from '../src/store/con';
 import { ShelfView } from '../src/components/collection/ShelfView';
 import { ViewSwitch } from '../src/components/collection/ViewSwitch';
-import { IconButton, PrimaryButton, ScanIcon } from '../src/components/ui';
+import { IconButton, PrimaryButton, ScanIcon, SearchIcon } from '../src/components/ui';
 import { changeText, money, rowTitle } from '../src/lib/format';
 import {
   collection,
@@ -328,6 +328,9 @@ export default function Home() {
               </Pressable>
             ) : (
               <>
+                <IconButton label="Search cards" onPress={() => router.push('/search')}>
+                  <SearchIcon />
+                </IconButton>
                 <IconButton label="Scan a slab" onPress={() => router.push('/scan')}>
                   <ScanIcon />
                 </IconButton>

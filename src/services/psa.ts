@@ -236,6 +236,9 @@ export type ManualDetails = {
   language: string;
   paidCents: number | null;
   plan: Card['plan'];
+  /** From card search: the set code and the card photo are already known. */
+  setCode?: string | null;
+  imageFrontUrl?: string | null;
 };
 
 /** A vault card typed in by hand: when PSA can't look the cert up, or for BGS/CGC slabs. */
@@ -248,12 +251,12 @@ export function cardFromDetails(d: ManualDetails): Card {
     grader: d.grader,
     grade: d.grade,
     name: d.name.trim(),
-    ...manualSet(d.game, d.setName),
+    ...(d.setCode?.trim() ? { setName: d.setName.trim() || null, setCode: d.setCode.trim() } : manualSet(d.game, d.setName)),
     number: d.number.trim().replace(/^#/, '') || null,
     variety: d.variety?.trim() || null,
     language: d.language,
     year: null,
-    imageFrontUrl: null,
+    imageFrontUrl: d.imageFrontUrl || null,
     paidCents: d.paidCents,
     paidAt: now.slice(0, 10),
     plan: d.plan,

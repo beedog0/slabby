@@ -261,9 +261,9 @@ const retried = new Set<string>();
 
 /**
  * Ask the server to match a newly scanned or added card to its price source and photo, then save the photo.
- * Resolves to the server's answer, or null when the call itself failed (signed out, offline).
+ * `tcgPlayerId` comes from card search. Resolves to the server's answer, or null when the call itself failed (signed out, offline).
  */
-export async function matchNewCard(card: Card): Promise<CardRef | null> {
+export async function matchNewCard(card: Card, tcgPlayerId?: string): Promise<CardRef | null> {
   if (!supabase) return null;
   const { data, error } = await supabase.functions.invoke<CardRef>('card-match', {
     body: {
@@ -275,6 +275,8 @@ export async function matchNewCard(card: Card): Promise<CardRef | null> {
       language: card.language,
       setName: card.setName,
       setCode: card.setCode,
+      // Added from search: the product is known, so the server skips matching.
+      tcgPlayerId,
     },
   });
   if (error || !data) return null;

@@ -1,6 +1,6 @@
 // card-match: resolve a card_key to a TCGplayer product id (and photo) once, shared by all users.
 // Called by the app right after a card is added.
-// Body: { cardKey, game, variety, name, number, language, setName, setCode }. game defaults to pokemon.
+// Body: { cardKey, game, variety, name, number, language, setName, setCode, tcgPlayerId? }. game defaults to pokemon.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { rawToday } from '../_shared/comps-math.ts';
@@ -26,7 +26,11 @@ Deno.serve(async (req) => {
   const game: string = c.game ?? 'pokemon';
   if (game === 'pokemon') {
     // PokemonPriceTracker first (it also has the prices); the TCGplayer catalog for what it misses.
-    const m = (await matchCard(c).catch(() => null)) ?? (await tcgcsvMatch(c).catch(() => null));
+    // Added from search: the product is already known, so no search credit is spent.
+    const m =
+      (await fromCatalog(admin, c.tcgPlayerId).catch(() => null)) ??
+      (await matchCard(c).catch(() => null)) ??
+      (await tcgcsvMatch(c).catch(() => null));
     const row = {
       card_key: c.cardKey,
       game,
@@ -76,4 +80,11 @@ async function firstTcgComps(admin: ReturnType<typeof createClient>, cardKey: st
   const today = new Date().toISOString().slice(0, 10);
   const row = rawToday([], market, today);
   if (row) await admin.from('price_daily').upsert({ card_key: cardKey, ...row });
+}
+
+/** A product picked in card search, looked up in our own catalog (0008_card_search.sql). */
+async function fromCatalog(admin: ReturnType<typeof createClient>, id: unknown) {
+  if (!id || !/^\d+$/.test(String(id))) return null;
+  const { data } = await admin.from('catalog').select('product_id, image_url, set_name').eq('product_id', Number(id)).maybeSingle();
+  return data ? { tcgPlayerId: String(data.product_id), image: data.image_url as string, setName: data.set_name as string } : null;
 }
