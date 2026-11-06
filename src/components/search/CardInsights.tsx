@@ -13,10 +13,19 @@ import { ArtImage } from '../ArtImage';
 
 type Choice = 'raw' | SearchGrade;
 
-export function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+export function Section({ title, note, action, children }: { title: string; note?: string; action?: { label: string; onPress: () => void }; children: React.ReactNode }) {
   return (
     <View style={{ paddingTop: space.section }}>
-      <Text style={[type.section, { color: color.ink }]}>{title}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <Text style={[type.section, { color: color.ink, flexShrink: 1 }]} numberOfLines={1}>
+          {title}
+        </Text>
+        {action ? (
+          <Pressable onPress={action.onPress} hitSlop={12} accessibilityRole="button">
+            <Text style={[type.text, { color: color.ink, fontWeight: '600' }]}>{action.label}</Text>
+          </Pressable>
+        ) : null}
+      </View>
       {note ? <Text style={[type.secondary, { color: color.secondary, paddingTop: 2 }]}>{note}</Text> : null}
       <View style={{ paddingTop: space.m }}>{children}</View>
     </View>
@@ -91,10 +100,10 @@ export function RangeMeter({ low, high, now, days }: { low: number; high: number
 }
 
 /** The set's priciest other singles, raw TCGplayer market with the 7-day move. */
-export function SetRow({ setName, cards }: { setName: string; cards: Found[] }) {
+export function SetRow({ setName, cards, onAll }: { setName: string; cards: Found[]; onAll?: () => void }) {
   if (!cards.length) return null;
   return (
-    <Section title={`More from ${setName}`} note="Raw TCGplayer market · 7-day change">
+    <Section title={`More from ${setName}`} note="Raw TCGplayer market · 7-day change" action={onAll ? { label: 'See all', onPress: onAll } : undefined}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter }} contentContainerStyle={styles.setRow}>
         {cards.map((c) => (
           <Pressable
