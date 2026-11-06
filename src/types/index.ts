@@ -1,11 +1,14 @@
 // Mirrors the Supabase schema in supabase/migrations. Money is always integer cents.
 
 export type Grader = 'psa' | 'bgs' | 'cgc' | 'raw';
+export type Game = 'pokemon' | 'onepiece' | 'riftbound';
 export type Plan = 'hold' | 'sell' | 'trade';
 export type CardStatus = 'owned' | 'sold';
 
 export type Card = {
   id: string;
+  /** Missing on cards saved before other games existed: those are Pokémon. */
+  game?: Game;
   certNumber: string | null;
   grader: Grader;
   grade: number | null;
