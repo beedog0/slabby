@@ -1,6 +1,6 @@
 import cards from '../../mocks/cards.json';
 import { DEFAULT_RULES, type Card } from '../../types';
-import { arrange, matches, swapOrder } from '../arrange';
+import { arrange, dropOrder, matches, moveTo, slotAt, swapOrder } from '../arrange';
 import { rowFor } from '../portfolio';
 
 const rows = (cards as Card[]).filter((c) => c.status === 'owned').map((c) => rowFor(c, DEFAULT_RULES));
@@ -47,5 +47,24 @@ describe('swapOrder', () => {
   });
   it('keeps hidden cards from the old order at the end', () => {
     expect(swapOrder(['x', 'a', 'b'], ['a', 'b'], 'a', 'b')).toEqual(['b', 'a', 'x']);
+  });
+});
+
+describe('drag to arrange', () => {
+  it('moves one slab and keeps the rest in order', () => {
+    expect(moveTo(['a', 'b', 'c', 'd'], 'd', 0)).toEqual(['d', 'a', 'b', 'c']);
+    expect(moveTo(['a', 'b', 'c', 'd'], 'a', 2)).toEqual(['b', 'c', 'a', 'd']);
+    expect(moveTo(['a', 'b'], 'a', 9)).toEqual(['b', 'a']);
+  });
+  it('saves the dropped order with hidden slabs after it', () => {
+    expect(dropOrder(['a', 'x', 'b', 'y'], ['b', 'a'])).toEqual(['b', 'a', 'x', 'y']);
+  });
+  it('finds the slot under a point', () => {
+    const g = { cols: 3, inset: 12, step: 110, pitch: 220, count: 7 };
+    expect(slotAt(0, 0, g)).toBe(0);
+    expect(slotAt(130, 10, g)).toBe(1);
+    expect(slotAt(400, 10, g)).toBe(2);
+    expect(slotAt(20, 230, g)).toBe(3);
+    expect(slotAt(400, 900, g)).toBe(6); // past the end lands on the last slot
   });
 });

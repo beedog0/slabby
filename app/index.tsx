@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { ValueChart } from '../src/components/MiniChart';
+import { ArrangeShelf } from '../src/components/collection/ArrangeShelf';
 import { EmptyFilter, EmptyVault } from '../src/components/collection/EmptyVault';
 import { FilterTabs } from '../src/components/collection/FilterTabs';
 import { GridView } from '../src/components/collection/GridView';
@@ -25,7 +26,7 @@ import { removeWithUndo } from '../src/components/collection/remove';
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { openSlabMenu } from '../src/components/menu/Menu';
 import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
-import { arrange, swapOrder } from '../src/pricing/arrange';
+import { arrange } from '../src/pricing/arrange';
 import { shareSellSheet } from '../src/services/sellSheet';
 import { DEFAULT_CON_NAME } from '../src/store/con';
 import { ShelfView } from '../src/components/collection/ShelfView';
@@ -103,9 +104,9 @@ export default function Home() {
   const all = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   const base = useMemo(() => collection(all, filter), [all, filter]);
   const [query, setQuery] = useState('');
-  // Arranging: tap one slab, then another, to swap them. Saves as "My order".
+  // Arranging: hold a slab, drag it to its spot. Saves as "My order".
   const [arranging, setArranging] = useState(false);
-  const [picked, setPicked] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const shown = useMemo(
     () =>
       arrange(base.rows, {
@@ -137,18 +138,19 @@ export default function Home() {
 
   const startArranging = () => {
     setQuery('');
-    setPicked(null);
-    if (mode === 'scroll') setMode('shelf');
+    doneSelecting();
+    if (mode !== 'shelf') setMode('shelf');
+    // Start from what's on screen, so the first drag doesn't reshuffle everything else.
+    setOrder(arrange(base.rows, { sort, order, pinnedId }).map((r) => r.card.id));
+    setSort('mine');
     setArranging(true);
   };
   const doneArranging = () => {
     setArranging(false);
-    setPicked(null);
-    setSort('mine');
+    setDragging(false);
   };
   const startSelecting = (first?: string) => {
     setArranging(false);
-    setPicked(null);
     setSelected(new Set(first ? [first] : []));
     setSelecting(true);
   };
@@ -211,23 +213,6 @@ export default function Home() {
 
   const actions: SlabActions = selecting
     ? { selected, onPress: (r) => toggle(r.card.id), onLongPress: (r) => toggle(r.card.id) }
-    : arranging
-    ? {
-        selectedId: picked,
-        onPress: (r) => {
-          if (!picked) return setPicked(r.card.id);
-          if (picked !== r.card.id)
-            setOrder(
-              swapOrder(
-                order,
-                list.rows.map((x) => x.card.id),
-                picked,
-                r.card.id,
-              ),
-            );
-          setPicked(null);
-        },
-      }
     : { onLongPress: slabMenu };
 
   const count = list.rows.length;
@@ -265,6 +250,7 @@ export default function Home() {
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
       <ScrollView
+        scrollEnabled={!dragging}
         contentContainerStyle={{
           paddingTop: insets.top + space.l,
           // The dock only shows on an empty vault; a full vault scrolls to the bottom edge.
@@ -351,7 +337,7 @@ export default function Home() {
                     },
                   ]}
                 >
-                  {picked ? 'Now tap where it should go.' : 'Tap a slab, then tap another to swap them.'}
+                  Hold a slab, then drag it to its spot.
                 </Text>
               ) : (
                 <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
@@ -381,7 +367,16 @@ export default function Home() {
             ) : (
               <View style={styles.gutter}>
                 {/* Selecting from the swipe view shows the grid, so several slabs are in reach. */}
-                {mode === 'shelf' ? (
+                {arranging ? (
+                  <ArrangeShelf
+                    rows={list.rows}
+                    width={contentW}
+                    pinnedId={pinnedId}
+                    order={order}
+                    onOrder={setOrder}
+                    onDragChange={setDragging}
+                  />
+                ) : mode === 'shelf' ? (
                   <ShelfView rows={list.rows} width={contentW} actions={actions} />
                 ) : (
                   <GridView rows={list.rows} width={contentW} actions={actions} />

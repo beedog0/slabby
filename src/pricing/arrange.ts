@@ -83,3 +83,32 @@ export function swapOrder(order: string[], shown: string[], a: string, b: string
   [full[i], full[j]] = [full[j], full[i]];
   return full;
 }
+
+/** Move one id to a new index in a list, the rest keep their relative order. */
+export function moveTo(list: string[], id: string, to: number): string[] {
+  const from = list.indexOf(id);
+  if (from < 0) return list;
+  const next = list.filter((x) => x !== id);
+  next.splice(Math.max(0, Math.min(next.length, to)), 0, id);
+  return next;
+}
+
+/**
+ * Saved shelf order after a drag: `dropped` is the shown list in its new order. Slabs hidden by
+ * the current tab or search keep their places after it, as with swapOrder.
+ */
+export function dropOrder(order: string[], dropped: string[]): string[] {
+  const seen = new Set(dropped);
+  return [...dropped, ...order.filter((id) => !seen.has(id))];
+}
+
+/** Which shelf slot a point falls in, for a grid of `cols` slots `step` apart, rows `pitch` apart. */
+export function slotAt(
+  x: number,
+  y: number,
+  g: { cols: number; inset: number; step: number; pitch: number; count: number },
+): number {
+  const col = Math.max(0, Math.min(g.cols - 1, Math.floor((x - g.inset) / g.step)));
+  const row = Math.max(0, Math.floor(y / g.pitch));
+  return Math.max(0, Math.min(g.count - 1, row * g.cols + col));
+}
