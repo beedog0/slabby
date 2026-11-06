@@ -47,6 +47,7 @@ export const radius = {
   segmented: 9,
   thumb: 3,
   slab: 12,
+  chip: 15,
 } as const;
 
 export const size = {
@@ -82,6 +83,8 @@ export const motion = {
   sheetOut: 180,
   dropIn: 160,
   dropOut: 120,
+  /** Applied-filter chips under search's control row. */
+  chip: 30,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };

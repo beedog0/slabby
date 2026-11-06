@@ -10,6 +10,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Segmented } from '../src/components/Segmented';
 import { SlabView } from '../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton, Stepper } from '../src/components/ui';
+import { ordinal } from '../src/lib/format';
+import { cardKey } from '../src/pricing/cardKey';
 import { matchNewCard, refreshPrices } from '../src/services/comps';
 import { cardFromDetails } from '../src/services/psa';
 import { useVault } from '../src/store/vault';
@@ -79,6 +81,24 @@ export default function AddByHand() {
 
   const step = grader === 'psa' ? 1 : 0.5;
   const ready = name.trim().length > 0;
+
+  // Already own it? A cert can only be one slab, so that gets the louder line and the button
+  // says "Add again". Otherwise count copies of the same card at the same grade (raw singles too).
+  const owned = useVault((s) => s.cards).filter((c) => c.status === 'owned');
+  const certOwned = cert.trim().length > 0 && owned.some((c) => c.certNumber === cert.trim());
+  const sameKey = cardKey({
+    grader,
+    grade: grader === 'raw' ? null : grade,
+    setCode: p.setCode && setTitle === p.set ? p.setCode : null,
+    number: number.trim().replace(/^#/, '') || null,
+    language,
+  });
+  const copies = number.trim() ? owned.filter((c) => cardKey(c) === sameKey).length : 0;
+  const dupLine = certOwned
+    ? `Cert ${cert.trim()} is already in your vault.`
+    : copies > 0
+      ? `You already have ${copies} of this card. This would be your ${ordinal(copies + 1)}.`
+      : null;
 
   const save = () => {
     if (!ready) return;
@@ -234,7 +254,12 @@ export default function AddByHand() {
         </View>
       </ScrollView>
       <View style={[styles.gutter, { paddingBottom: insets.bottom + space.l, paddingTop: space.m }]}>
-        <PrimaryButton title="Add to vault" onPress={save} style={ready ? undefined : { opacity: 0.4 }} />
+        {dupLine ? (
+          <Text style={[type.secondary, { color: certOwned ? color.ink : color.secondary, paddingBottom: space.m, textAlign: 'center' }]}>
+            {dupLine}
+          </Text>
+        ) : null}
+        <PrimaryButton title={certOwned ? 'Add again' : 'Add to vault'} onPress={save} style={ready ? undefined : { opacity: 0.4 }} />
       </View>
       <KeyboardDone />
     </KeyboardAvoidingView>
