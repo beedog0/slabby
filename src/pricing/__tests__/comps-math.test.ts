@@ -4,6 +4,7 @@ import {
   gradeKey,
   gradedDaily,
   percentile,
+  productName,
   rawDaily,
 } from '../../../supabase/functions/_shared/comps-math';
 
@@ -82,5 +83,18 @@ describe('fromDaily', () => {
   });
   it('is null with no rows', () => {
     expect(fromDaily([])).toBeNull();
+  });
+});
+
+describe('productName', () => {
+  it('drops the printed number and rarity tags from catalog titles', () => {
+    expect(productName('Pikachu ex - 236/187')).toBe('Pikachu ex');
+    expect(productName('Pikachu - 120/SV-P')).toBe('Pikachu');
+    expect(productName('Charizard (Secret)')).toBe('Charizard');
+    expect(productName('Mew ex')).toBe('Mew ex');
+  });
+  it('is null for nothing', () => {
+    expect(productName(null)).toBeNull();
+    expect(productName('')).toBeNull();
   });
 });

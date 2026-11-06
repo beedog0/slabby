@@ -163,6 +163,31 @@ export function repairCard(c: Card): Card {
   return next;
 }
 
+// Words that don't tell two card names apart.
+const NAME_FILLER = new Set(['ex', 'gx', 'v', 'vmax', 'vstar', 'holo', 'the', 'and', 'of']);
+const nameWords = (t: string) =>
+  t
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w && !NAME_FILLER.has(w));
+
+/**
+ * The name to show once a card is matched to its catalog product. Newer Japanese labels can print
+ * a short code where the name goes ("PZA #236" on SV8a), so a label name that shares no word with
+ * the matched product's name was a misread and the product's name wins. A name that agrees
+ * ("Charizard-holo" vs "Charizard") is kept. Null when nothing should change.
+ */
+export function nameFromMatch(current: string, matched: string | null | undefined): string | null {
+  const m = matched?.trim();
+  if (!m || m === current) return null;
+  const have = nameWords(current);
+  const want = new Set(nameWords(m));
+  if (!want.size) return null;
+  return have.some((w) => want.has(w)) ? null : m;
+}
+
 /** OCR often drops the space before the suffix: "PIKACHUex" → "PIKACHU ex". */
 export function splitSuffix(name: string): string {
   return name.replace(/([a-z]{3,})(ex|GX|VMAX|VSTAR)$/i, '$1 $2');

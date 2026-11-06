@@ -106,3 +106,16 @@ export function rawDaily(points: RawPoint[], today: string, days = 90): DailyRow
 export function bareNumber(n: string | null | undefined): string {
   return (n ?? '').split('/')[0].replace(/^0+(?=\d)/, '').trim();
 }
+
+/**
+ * A catalog product title as a card name: "Pikachu ex - 236/187" → "Pikachu ex",
+ * "Charizard (Secret)" → "Charizard". Null when nothing is left.
+ */
+export function productName(title: string | null | undefined): string | null {
+  const n = (title ?? '')
+    .replace(/\s+-\s+[A-Z]*\d+[A-Za-z]*(?:\/[A-Z0-9-]+)?\s*$/i, '')
+    .replace(/(?:\s*\([^)]*\))+\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return n || null;
+}

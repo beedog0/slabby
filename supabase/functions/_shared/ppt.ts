@@ -70,7 +70,7 @@ export async function matchCard(c: { name: string; number: string | null; langua
     if (!hits.length) continue;
     const best = hits.map((h) => ({ h, s: score(h, c) })).sort((x, y) => y.s - x.s)[0].h;
     const image = best.imageCdnUrl400 ?? `https://tcgplayer-cdn.tcgplayer.com/product/${best.tcgPlayerId}_400w.jpg`;
-    return { tcgPlayerId: String(best.tcgPlayerId), image, setName: best.setName };
+    return { tcgPlayerId: String(best.tcgPlayerId), image, setName: best.setName, name: best.name };
   }
   return null;
 }
@@ -86,4 +86,11 @@ export async function fetchComps(tcgPlayerId: string, language: string): Promise
     maxDataPoints: '120',
   })) as { data: PptCard | PptCard[] };
   return Array.isArray(body.data) ? body.data[0] : body.data;
+}
+
+/** Just the product title for a TCGplayer id, to name cards matched before names were kept. */
+export async function productTitle(tcgPlayerId: string, language: string): Promise<string | null> {
+  const body = (await get('/cards', { tcgPlayerId, language: lang(language) })) as { data: PptCard | PptCard[] };
+  const d = Array.isArray(body.data) ? body.data[0] : body.data;
+  return d?.name ?? null;
 }

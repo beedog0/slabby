@@ -1,4 +1,4 @@
-import { cardFromCert, gradeFrom, lookupCert, parseBrand, parseCertFromQr, repairCard, splitSuffix, titleName } from '../psa';
+import { cardFromCert, gradeFrom, lookupCert, nameFromMatch, parseBrand, parseCertFromQr, repairCard, splitSuffix, titleName } from '../psa';
 
 
 describe('parseCertFromQr', () => {
@@ -55,5 +55,21 @@ describe('lookupCert on mocks', () => {
   });
   it('reports unknown certs', async () => {
     expect((await lookupCert('12345678')).status).toBe('not_found');
+  });
+});
+
+describe('nameFromMatch', () => {
+  it('replaces a label code that is not a name with the matched card name', () => {
+    // 2024 POKEMON JPN SV8a / PZA #236: the label line under the brand is a code, not the name.
+    expect(nameFromMatch('Pza', 'Pikachu ex')).toBe('Pikachu ex');
+  });
+  it('keeps a label name that agrees with the match', () => {
+    expect(nameFromMatch('Mew ex', 'Mew ex')).toBeNull();
+    expect(nameFromMatch('Charizard-holo', 'Charizard')).toBeNull();
+    expect(nameFromMatch('Pikachu', 'Pikachu ex')).toBeNull();
+  });
+  it('does nothing without a matched name', () => {
+    expect(nameFromMatch('Pza', null)).toBeNull();
+    expect(nameFromMatch('Pza', '  ')).toBeNull();
   });
 });

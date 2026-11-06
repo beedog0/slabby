@@ -2,8 +2,8 @@
 // Called by the app right after a card is added. Body: { cardKey, name, number, language, setName, setCode }.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { gradeKey, gradedDaily, rawDaily, type DailySales } from '../_shared/comps-math.ts';
-import { fetchComps, matchCard } from '../_shared/ppt.ts';
+import { gradeKey, gradedDaily, productName, rawDaily, type DailySales } from '../_shared/comps-math.ts';
+import { fetchComps, matchCard, productTitle } from '../_shared/ppt.ts';
 import { tcgcsvMatch } from '../_shared/tcgcsv.ts';
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
@@ -19,7 +19,17 @@ Deno.serve(async (req) => {
   const known = await admin.from('card_refs').select('*').eq('card_key', c.cardKey).maybeSingle();
   // A matched card is final. An unmatched one is tried again: matching improves, and the card's
   // details may have been fixed since.
-  if (known.data?.tcgplayer_id) return json(known.data);
+  if (known.data?.tcgplayer_id) {
+    if (known.data.matched_name) return json(known.data);
+    // Matched before names were kept: look the name up once so the app can fix label misreads.
+    const id = known.data.tcgplayer_id;
+    const title =
+      (await productTitle(id, known.data.language).catch(() => null)) ??
+      (await tcgcsvMatch(c).catch(() => null).then((t) => (t?.tcgPlayerId === id ? t.name : null)));
+    const name = productName(title);
+    if (name) await admin.from('card_refs').update({ matched_name: name }).eq('card_key', c.cardKey);
+    return json({ ...known.data, matched_name: name });
+  }
 
   // PokemonPriceTracker first (it also has the prices); the TCGplayer catalog for what it misses.
   const m = (await matchCard(c).catch(() => null)) ?? (await tcgcsvMatch(c).catch(() => null));
@@ -29,6 +39,8 @@ Deno.serve(async (req) => {
     tcgplayer_id: m?.tcgPlayerId ?? null,
     image_url: m?.image ?? null,
     matched_set: m?.setName ?? null,
+    // The catalog's name for the card. The app prefers it over a label read that missed the name.
+    matched_name: productName(m?.name),
   };
   await admin.from('card_refs').upsert(row);
   if (m?.tcgPlayerId) await firstComps(admin, c.cardKey, m.tcgPlayerId, row.language).catch(() => {});

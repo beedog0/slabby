@@ -48,5 +48,6 @@ export async function tcgcsvMatch(c: { name: string; number: string | null; lang
     tcgPlayerId: String(best.productId),
     image: `https://tcgplayer-cdn.tcgplayer.com/product/${best.productId}_400w.jpg`,
     setName: group.name,
+    name: best.name,
   };
 }
