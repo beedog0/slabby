@@ -23,6 +23,8 @@ export const color = {
   ghost: '#D8D8DE',
   /** Dims the page behind a sheet. Flat, no blur, no gradient. */
   scrim: 'rgba(10,10,10,0.28)',
+  /** Lighter dim behind a dropdown: the page stays readable, the white panel still separates. */
+  scrimLight: 'rgba(10,10,10,0.16)',
 } as const;
 
 export const space = {
@@ -70,12 +72,16 @@ export const size = {
   menuRow: 56,
   grabberW: 36,
   grabberH: 5,
+  /** Home … dropdown width. */
+  dropdownW: 224,
 } as const;
 
 /** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */
 export const motion = {
   sheetIn: 240,
   sheetOut: 180,
+  dropIn: 160,
+  dropOut: 120,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };

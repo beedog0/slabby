@@ -2,7 +2,7 @@
 // Con mode starts from the … menu. Supersedes the 01-vault.png layout at Bryan's request (collection-first).
 
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import {
   Alert,
   Pressable,
@@ -21,7 +21,8 @@ import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
 import type { SlabActions } from '../src/components/collection/actions';
-import { openMenu, openSlabMenu } from '../src/components/menu/Menu';
+import { openDropdown } from '../src/components/menu/Dropdown';
+import { openSlabMenu } from '../src/components/menu/Menu';
 import { shareSlab } from '../src/components/share/ShareCard';
 import { arrange, swapOrder } from '../src/pricing/arrange';
 import { shareSellSheet } from '../src/services/sellSheet';
@@ -130,27 +131,26 @@ export default function Home() {
   };
 
   // Grouped by when you'd reach for it: at the con, around the shelf, then settings.
+  const moreRef = useRef<ComponentRef<typeof View>>(null);
   const more = () =>
-    openMenu({
-      items: [
-        [
-          { label: 'Con mode', onPress: () => router.push('/con') },
-          {
-            label: 'Sell sheet',
-            onPress: () =>
-              shareSellSheet(all, DEFAULT_CON_NAME).catch(() => Alert.alert('Couldn’t make the sell sheet')),
-          },
-        ],
-        [
-          { label: 'Arrange shelf', onPress: startArranging },
-          { label: 'Add by hand', onPress: () => router.push('/add') },
-        ],
-        [
-          { label: 'Pricing rules', onPress: () => router.push('/settings/pricing') },
-          { label: 'Back up', onPress: () => router.push('/settings/account') },
-        ],
+    openDropdown(moreRef, [
+      [
+        { label: 'Con mode', onPress: () => router.push('/con') },
+        {
+          label: 'Sell sheet',
+          onPress: () =>
+            shareSellSheet(all, DEFAULT_CON_NAME).catch(() => Alert.alert('Couldn’t make the sell sheet')),
+        },
       ],
-    });
+      [
+        { label: 'Arrange shelf', onPress: startArranging },
+        { label: 'Add by hand', onPress: () => router.push('/add') },
+      ],
+      [
+        { label: 'Pricing rules', onPress: () => router.push('/settings/pricing') },
+        { label: 'Back up', onPress: () => router.push('/settings/account') },
+      ],
+    ]);
 
   // Long-press any slab: pin it first, share it, or open it.
   const slabMenu = (row: CardRow) => {
@@ -234,9 +234,11 @@ export default function Home() {
                 <IconButton label="Scan a slab" onPress={() => router.push('/scan')}>
                   <ScanIcon />
                 </IconButton>
-                <IconButton label="More" onPress={more}>
-                  <MoreIcon />
-                </IconButton>
+                <View ref={moreRef} collapsable={false}>
+                  <IconButton label="More" onPress={more}>
+                    <MoreIcon />
+                  </IconButton>
+                </View>
               </>
             )}
           </View>
