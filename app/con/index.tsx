@@ -3,13 +3,15 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { Segmented } from '../../src/components/Segmented';
 import { Hairline, PrimaryButton, ScanIcon } from '../../src/components/ui';
 import { elapsed, money } from '../../src/lib/format';
 import { conSummary, rowFor } from '../../src/pricing/portfolio';
+import { conFreshnessLine } from '../../src/pricing/trend';
+import { refreshCards } from '../../src/services/comps';
 import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
 import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
@@ -25,6 +27,8 @@ export default function ConMode() {
   const { session, start, end } = useCon();
   const [tab, setTab] = useState<Tab>('sale');
   const [, tick] = useState(0);
+  const [refreshing, setRefreshing] = useState(0);
+  const [refreshFailed, setRefreshFailed] = useState(false);
 
   useEffect(() => {
     if (!session) {
@@ -43,6 +47,21 @@ export default function ConMode() {
   const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   if (!session) return null;
   const sum = conSummary(rows, session.startedAt);
+  // Cards on the table: for sale or trade only.
+  const onTable = rows.filter((r) => r.card.status === 'owned' && (r.card.plan === 'sell' || r.card.plan === 'trade'));
+  const freshness = conFreshnessLine(
+    onTable.flatMap((r) => (r.price ? [r.price] : [])),
+    { refreshing, failed: refreshFailed },
+  );
+
+  const pull = async () => {
+    const list = onTable.map((r) => r.card);
+    if (!list.length) return;
+    setRefreshing(list.length);
+    const statuses = await refreshCards(list, { force: true });
+    setRefreshFailed(statuses.some((s) => s === 'failed'));
+    setRefreshing(0);
+  };
 
   const visible = rows.filter((r) => {
     const c = r.card;
@@ -87,6 +106,11 @@ export default function ConMode() {
           <Text style={[type.secondary, { color: color.secondary }]}>if everything hits floor</Text>
         </View>
       </View>
+      {freshness ? (
+        <Text numberOfLines={1} style={[type.secondary, styles.freshness, { color: color.secondary }]}>
+          {freshness}
+        </Text>
+      ) : null}
 
       <Segmented<Tab>
         style={{ marginHorizontal: space.gutter, marginTop: space.xl }}
@@ -99,7 +123,10 @@ export default function ConMode() {
         ]}
       />
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.m, paddingBottom: space.xxl }}>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.m, paddingBottom: space.xxl }}
+        refreshControl={<RefreshControl refreshing={refreshing > 0} onRefresh={pull} tintColor={color.secondary} />}
+      >
         {visible.map((r) => (
           <View key={r.card.id}>
             <ConRow row={r} onPress={() => r.card.status === 'owned' && router.push(`/con/table/${r.card.id}`)} />
@@ -136,6 +163,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   totals: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: space.gutter, paddingTop: space.xl },
+  freshness: { paddingHorizontal: space.gutter, paddingTop: space.s },
   footer: { flexDirection: 'row', gap: space.m, paddingHorizontal: space.gutter, paddingTop: space.s },
   scan: {
     width: size.button,
