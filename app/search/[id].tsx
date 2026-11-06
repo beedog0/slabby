@@ -57,6 +57,7 @@ export default function SearchedCard() {
   const [tilting, setTilting] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [more, setMore] = useState<Found[]>([]);
+  const [groupId, setGroupId] = useState<number | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -82,7 +83,14 @@ export default function SearchedCard() {
   useEffect(() => {
     let live = true;
     setMore([]);
-    if (ready && !buying) setCards(ready).then((m) => live && setMore(m)).catch(() => {});
+    if (ready)
+      setCards(ready)
+        .then((m) => {
+          if (!live) return;
+          setGroupId(m.groupId);
+          if (!buying) setMore(m.cards);
+        })
+        .catch(() => {});
     return () => {
       live = false;
     };
@@ -125,7 +133,10 @@ export default function SearchedCard() {
   const hist = history(price);
   const change = hist && !quiet ? hist.change : null;
   const no = cardNumber(ready.number);
-  const subtitle = [setTitle(ready.setName), no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
+  const detail = [no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
+  const openSet = () =>
+    groupId != null &&
+    router.push({ pathname: '/set/[id]', params: { id: String(groupId), name: ready.setName, language: ready.language, game: ready.game } });
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
   const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
 
@@ -144,7 +155,11 @@ export default function SearchedCard() {
               {displayName(ready.name)}
             </Text>
             <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
-              {subtitle}
+              {/* The set name opens the whole set. */}
+              <Text onPress={openSet} accessibilityRole="link" style={{ color: color.ink }}>
+                {setTitle(ready.setName)}
+              </Text>
+              {detail ? ` · ${detail}` : ''}
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
@@ -217,7 +232,7 @@ export default function SearchedCard() {
               </>
             )
           ) : null}
-          {!buying ? <SetRow setName={setTitle(ready.setName)} cards={more} /> : null}
+          {!buying ? <SetRow setName={setTitle(ready.setName)} cards={more} onAll={openSet} /> : null}
           {prices?.capped ? (
             <Text style={[type.secondary, { color: color.secondary, paddingTop: space.m }]}>
               Graded prices for new cards are paused until tomorrow to save credits for your scans.
