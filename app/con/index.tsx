@@ -1,13 +1,17 @@
 // Con mode: sold today, floor total, for-sale list with ask and floor. Reference: 05-con-mode.png.
+// The + beside "Got an offer" puts a slab on the table: pick one from the vault or scan a new one,
+// then mark it For sale, Trade only or Sold.
 
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { Segmented } from '../../src/components/Segmented';
-import { Hairline, PrimaryButton, ScanIcon } from '../../src/components/ui';
+import { openConStatusMenu } from '../../src/components/conStatusMenu';
+import { openMenu } from '../../src/components/menu/Menu';
+import { Hairline, PlusIcon, PrimaryButton } from '../../src/components/ui';
 import { elapsed, money } from '../../src/lib/format';
 import { conSummary, rowFor } from '../../src/pricing/portfolio';
 import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
@@ -24,6 +28,11 @@ export default function ConMode() {
   const rules = useRules((s) => s.rules);
   const { session, start, end } = useCon();
   const [tab, setTab] = useState<Tab>('sale');
+  // After a quick add, land on the tab the slab went to. `at` makes a repeat of the same tab count.
+  const params = useLocalSearchParams<{ tab?: Tab; at?: string }>();
+  useEffect(() => {
+    if (params.tab === 'sale' || params.tab === 'sold' || params.tab === 'trade') setTab(params.tab);
+  }, [params.tab, params.at]);
   const [, tick] = useState(0);
 
   useEffect(() => {
@@ -50,6 +59,16 @@ export default function ConMode() {
     if (tab === 'trade') return c.status === 'owned' && c.plan === 'trade';
     return c.status === 'owned' && c.plan === 'sell';
   });
+
+  const quickAdd = () =>
+    openMenu({
+      title: 'Add to the table',
+      subtitle: 'Then mark it for sale, trade only, or sold',
+      items: [
+        { label: 'From my collection', onPress: () => router.push('/con/add') },
+        { label: 'Scan a new slab', onPress: () => router.push({ pathname: '/scan', params: { con: '1' } }) },
+      ],
+    });
 
   const done = () => {
     end();
@@ -102,7 +121,11 @@ export default function ConMode() {
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.m, paddingBottom: space.xxl }}>
         {visible.map((r) => (
           <View key={r.card.id}>
-            <ConRow row={r} onPress={() => r.card.status === 'owned' && router.push(`/con/table/${r.card.id}`)} />
+            <ConRow
+              row={r}
+              onPress={() => r.card.status === 'owned' && router.push(`/con/table/${r.card.id}`)}
+              onLongPress={r.card.status === 'owned' ? () => openConStatusMenu(r.card) : undefined}
+            />
             <Hairline inset={size.thumbW + space.m} />
           </View>
         ))}
@@ -115,8 +138,13 @@ export default function ConMode() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.l }]}>
         <PrimaryButton style={{ flex: 1 }} title="Got an offer" onPress={() => router.push('/con/pick')} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Scan a slab" onPress={() => router.push('/scan')} style={styles.scan}>
-          <ScanIcon />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add a slab to the table"
+          onPress={quickAdd}
+          style={({ pressed }) => [styles.add, pressed && { opacity: 0.6 }]}
+        >
+          <PlusIcon />
         </Pressable>
       </View>
     </View>
@@ -137,7 +165,7 @@ const styles = StyleSheet.create({
   },
   totals: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: space.gutter, paddingTop: space.xl },
   footer: { flexDirection: 'row', gap: space.m, paddingHorizontal: space.gutter, paddingTop: space.s },
-  scan: {
+  add: {
     width: size.button,
     height: size.button,
     borderRadius: radius.button,

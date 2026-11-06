@@ -1,18 +1,21 @@
 // Scan: point at the front label and tap "Read label". The photo is read on device (Apple Vision)
 // → sheet → "Add to vault". No PSA call on this path: PSA's API is closed to us for now, so label
-// reading is the default. The QR → PSA lookup only runs where the label reader isn't built in
+// reading is the default. Opened from con mode's + (con=1), the sheet asks For sale / Trade only /
+// Sold instead of Hold / Sell and goes back to the con screen. The QR → PSA lookup only runs where the label reader isn't built in
 // (web, Expo Go). Reference: 02-scan.png. Comps never run on this path.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { CardThumb } from '../src/components/CardThumb';
+import { setConStatus } from '../src/components/conStatusMenu';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
+import { CON_STATUS_LABEL, type ConStatus } from '../src/lib/conStatus';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
 import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
@@ -33,6 +36,8 @@ export default function Scan() {
   const [manual, setManual] = useState('');
   const [paid, setPaid] = useState('');
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
+  const fromCon = useLocalSearchParams<{ con?: string }>().con === '1';
+  const [conStatus, setConStatusChoice] = useState<Exclude<ConStatus, 'hold'>>('sale');
   const add = useVault((s) => s.add);
   const existing = useVault((s) => s.cards);
   const lastCert = useRef<string | null>(null);
@@ -57,17 +62,21 @@ export default function Scan() {
 
   const preview = result?.status === 'found' ? cardFromCert(result.payload, { paidCents: null, plan }) : null;
   const price = preview ? priceFor(preview) : null;
-  const already = preview?.certNumber ? existing.some((c) => c.certNumber === preview.certNumber && c.status === 'owned') : false;
+  const owned = preview?.certNumber ? existing.find((c) => c.certNumber === preview.certNumber && c.status === 'owned') : undefined;
+  const already = !!owned;
 
   const addToVault = () => {
     if (result?.status !== 'found') return;
     const dollars = parseInt(paid.replace(/[^0-9]/g, ''), 10);
-    const card = cardFromCert(result.payload, { paidCents: Number.isFinite(dollars) ? dollars * 100 : null, plan });
+    // From con mode, a sold slab is added on the table first; the Sold screen then takes its price.
+    const cardPlan = fromCon ? (conStatus === 'trade' ? 'trade' : 'sell') : plan;
+    const card = cardFromCert(result.payload, { paidCents: Number.isFinite(dollars) ? dollars * 100 : null, plan: cardPlan });
     add(card);
     matchNewCard(card)
       .then(() => refreshPrices([card]))
       .catch(() => {});
-    router.replace(`/card/${card.id}`);
+    if (fromCon) setConStatus(card, conStatus, { replace: true });
+    else router.replace(`/card/${card.id}`);
   };
 
   const rescan = () => {
@@ -247,22 +256,39 @@ export default function Scan() {
               </View>
               <Hairline />
               <View style={styles.field}>
-                <Text style={[type.body, { color: color.ink }]}>Plan</Text>
-                <Segmented
-                  style={{ width: 150 }}
-                  value={plan}
-                  onChange={setPlan}
-                  options={[
-                    { value: 'hold', label: 'Hold' },
-                    { value: 'sell', label: 'Sell' },
-                  ]}
-                />
+                <Text style={[type.body, { color: color.ink }]}>{fromCon ? 'Mark as' : 'Plan'}</Text>
+                {fromCon ? (
+                  <Segmented<Exclude<ConStatus, 'hold'>>
+                    style={{ width: 230 }}
+                    value={conStatus}
+                    onChange={setConStatusChoice}
+                    options={(['sale', 'trade', 'sold'] as const).map((v) => ({ value: v, label: CON_STATUS_LABEL[v] }))}
+                  />
+                ) : (
+                  <Segmented
+                    style={{ width: 150 }}
+                    value={plan}
+                    onChange={setPlan}
+                    options={[
+                      { value: 'hold', label: 'Hold' },
+                      { value: 'sell', label: 'Sell' },
+                    ]}
+                  />
+                )}
               </View>
               <Hairline />
               <PrimaryButton
                 style={{ marginTop: space.l }}
-                title={already ? 'Already in your vault' : 'Add to vault'}
-                onPress={already ? () => router.back() : addToVault}
+                title={
+                  owned && fromCon
+                    ? `Already yours · mark ${CON_STATUS_LABEL[conStatus].toLowerCase()}`
+                    : already
+                      ? 'Already in your vault'
+                      : fromCon
+                        ? 'Add to the table'
+                        : 'Add to vault'
+                }
+                onPress={owned && fromCon ? () => setConStatus(owned, conStatus, { replace: true }) : already ? () => router.back() : addToVault}
               />
             </>
           ) : (
