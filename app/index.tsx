@@ -203,6 +203,19 @@ export default function Home() {
       {' this month'}
     </>
   ) : null;
+  // While a finger is on the chart: the change from the chart's first day to that day, then the date.
+  const scrubDelta = scrubbed && valueLine.length ? scrubbed.cents - valueLine[0] : 0;
+  const scrubChange = scrubbed ? changeText(scrubDelta, scrubbed.cents) : null;
+  const scrubLine = scrubbed ? (
+    <>
+      {scrubChange ? (
+        <Text style={{ color: scrubDelta > 0 ? color.gain : color.loss }}>{scrubChange}</Text>
+      ) : (
+        'No change'
+      )}
+      {scrubbed.date ? ` · ${scrubbed.date}` : ''}
+    </>
+  ) : null;
   // Line above the number: what it is, and how many slabs it counts.
   const label = `${VALUE_LABEL[filter]} · ${plural(total, 'slab')}`;
   // Line under the number: how that value moved (or, for sale and sold, the number that matters there).
@@ -278,7 +291,7 @@ export default function Home() {
                 {money(scrubbed ? scrubbed.cents : stats.totalCents)}
               </Text>
               <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
-                {scrubbed ? (scrubbed.date ?? ' ') : subline}
+                {scrubbed ? scrubLine : subline}
               </Text>
               <View style={styles.chart}>
                 {valueLine.length > 1 ? (
