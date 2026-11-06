@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
+import { PinMark } from './PinMark';
 import { color, shadow, size, space } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
 
@@ -29,7 +30,10 @@ export function ShelfView({ rows, width, actions }: { rows: CardRow[]; width: nu
                 onLongPress={actions?.onLongPress ? () => actions.onLongPress!(r) : undefined}
                 style={({ pressed }) => [pressed && { opacity: 0.85 }, dimmed(actions, r) && { opacity: 0.35 }]}
               >
-                <SlabView card={r.card} width={slabW} posed={false} />
+                <View>
+              <SlabView card={r.card} width={slabW} posed={false} />
+              {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} /> : null}
+            </View>
               </Pressable>
             ))}
           </View>
