@@ -1,13 +1,14 @@
-// Home: a small, quiet line of the collection's value, green when up over the window, red when down.
+// Home: a small, quiet line of the collection's value, green when up over the window, red when
+// down, ink within ±3% (the same threshold as sparklines and the trend sentence).
 
 import Svg, { Path } from 'react-native-svg';
 import { trendOf } from '../pricing/portfolio';
-import { color, size } from '../theme/tokens';
+import { color, size, trendThreshold } from '../theme/tokens';
 import { PriceChart } from './PriceChart';
 import { downsample, sparkPath } from './Sparkline';
 
 export const trendTint = (series: number[]) => {
-  const t = trendOf(series);
+  const t = trendOf(series, trendThreshold);
   return t === 'up' ? color.gain : t === 'down' ? color.loss : color.ink;
 };
 

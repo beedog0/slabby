@@ -125,11 +125,16 @@ export function collection(rows: CardRow[], filter: CollectionFilter): { rows: C
   return { rows: sorted, totalCents: sorted.reduce((s, r) => s + value(r), 0) };
 }
 
-/** Up, down or flat across a series (first point to last). Drives green/red on prices and lines. */
-export function trendOf(series: number[]): 'up' | 'down' | 'flat' {
+/**
+ * Up, down or flat across a series (first point to last). Drives green/red on prices and lines.
+ * Moves within ±`threshold` (a fraction of the first point) read as flat.
+ */
+export function trendOf(series: number[], threshold = 0): 'up' | 'down' | 'flat' {
   if (series.length < 2) return 'flat';
-  const d = series[series.length - 1] - series[0];
-  return d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+  const first = series[0];
+  const d = series[series.length - 1] - first;
+  const limit = Math.abs(first) * threshold;
+  return d > limit ? 'up' : d < -limit ? 'down' : 'flat';
 }
 
 /**

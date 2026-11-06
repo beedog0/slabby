@@ -103,6 +103,8 @@ describe('collection value line', () => {
     expect(trendOf([1, 5, 2])).toBe('up');
     expect(trendOf([5, 1])).toBe('down');
     expect(trendOf([3])).toBe('flat');
+    expect(trendOf([100, 102], 0.03)).toBe('flat');
+    expect(trendOf([100, 96], 0.03)).toBe('down');
   });
 });
 
