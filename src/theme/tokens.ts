@@ -25,6 +25,9 @@ export const color = {
   scrim: 'rgba(10,10,10,0.28)',
   /** Lighter dim behind a dropdown: the page stays readable, the white panel still separates. */
   scrimLight: 'rgba(10,10,10,0.16)',
+  // Camera screen only: dims the picture outside the label window, and backs the hint.
+  scanScrim: 'rgba(0,0,0,0.55)',
+  scanHint: 'rgba(0,0,0,0.6)',
 } as const;
 
 export const space = {

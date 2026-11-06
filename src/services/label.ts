@@ -156,3 +156,15 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
     complete: !!(name && grade && cert),
   };
 }
+
+/**
+ * Auto-read on the scan screen: a key for a read that's good enough to act on without a tap (name
+ * and grade found), or null. Two reads in a row with the same key mean the label is in frame and
+ * held steady, so a blurry or half-framed read never adds the wrong card.
+ */
+export function steadyKey(p: ParsedLabel | null): string | null {
+  const c = p?.payload.PSACert;
+  if (!c?.Subject || !c.CardGrade) return null;
+  const norm = (s?: string) => (s ?? '').toUpperCase().replace(/[^A-Z0-9.]/g, '');
+  return [c.Subject, c.CardNumber, c.CardGrade, c.CertNumber].map(norm).join('|');
+}
