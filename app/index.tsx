@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { ValueChart } from '../src/components/MiniChart';
-import { ArrangeShelf } from '../src/components/collection/ArrangeShelf';
+import { ArrangeShelf, type PageScroll } from '../src/components/collection/ArrangeShelf';
 import { EmptyFilter, EmptyVault } from '../src/components/collection/EmptyVault';
 import { FilterTabs } from '../src/components/collection/FilterTabs';
 import { GridView } from '../src/components/collection/GridView';
@@ -109,6 +109,24 @@ export default function Home() {
   // Arranging: hold a slab, drag it to its spot. Saves as "My order".
   const [arranging, setArranging] = useState(false);
   const [dragging, setDragging] = useState(false);
+  // The page's scroll, so a slab held near the screen edge can scroll it while arranging.
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const scrollY = useRef(0);
+  const pageH = useRef({ content: 0, view: 0 });
+  const pageScroll: PageScroll = {
+    y: () => scrollY.current,
+    by: (dy) => {
+      const max = Math.max(0, pageH.current.content - pageH.current.view);
+      const next = Math.max(0, Math.min(max, scrollY.current + dy));
+      const moved = next - scrollY.current;
+      if (moved) {
+        scrollY.current = next;
+        scrollRef.current?.scrollTo({ y: next, animated: false });
+      }
+      return moved;
+    },
+    band: () => ({ top: insets.top, bottom: screenH - insets.bottom }),
+  };
   const shown = useMemo(
     () =>
       arrange(base.rows, {
@@ -276,7 +294,18 @@ export default function Home() {
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
       <ScrollView
+        ref={scrollRef}
         scrollEnabled={!scrubbed && !dragging}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          scrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        onLayout={(e) => {
+          pageH.current.view = e.nativeEvent.layout.height;
+        }}
+        onContentSizeChange={(_, h) => {
+          pageH.current.content = h;
+        }}
         contentContainerStyle={{
           paddingTop: insets.top + space.l,
           // The dock only shows on an empty vault; a full vault scrolls to the bottom edge.
@@ -408,6 +437,7 @@ export default function Home() {
                     order={order}
                     onOrder={setOrder}
                     onDragChange={setDragging}
+                    scroll={pageScroll}
                   />
                 ) : mode === 'shelf' ? (
                   <ShelfView rows={list.rows} width={contentW} actions={actions} />
