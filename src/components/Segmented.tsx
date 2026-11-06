@@ -21,7 +21,7 @@ export function Segmented<T extends string>({ options, value, onChange, style }:
             onPress={() => onChange(o.value)}
             style={[styles.seg, on && styles.on]}
           >
-            <Text style={[type.secondary, { color: color.ink, fontWeight: on ? '600' : '500' }]}>{o.label}</Text>
+            <Text numberOfLines={1} style={[type.secondary, { color: color.ink, fontWeight: on ? '600' : '500' }]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 2,
   },
-  seg: { flex: 1, borderRadius: radius.segmented - 2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.m },
+  seg: { flex: 1, borderRadius: radius.segmented - 2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.s },
   on: {
     backgroundColor: color.canvas,
     shadowColor: '#000',
