@@ -75,7 +75,9 @@ export async function refreshPrices(cards: Card[]): Promise<void> {
     .select('card_key, day, market_cents, low_cents, high_cents, sales_30d')
     .in('card_key', keys)
     .gte('day', since)
-    .limit(keys.length * 90);
+    // Newest first, so a limit that bites drops the oldest day, never today's.
+    .order('day', { ascending: false })
+    .limit(keys.length * 91);
   if (error || !data) return;
   const fresh = await freshnessFor(keys);
   const grouped = new Map<string, DailyRow[]>();
@@ -118,37 +120,68 @@ export function isStale(refreshedAt: string | null | undefined, now = Date.now()
 }
 
 export type RefreshStatus = 'refreshed' | 'fresh' | 'failed' | 'skipped';
-type RefreshAnswer = { status: 'refreshed' | 'fresh' | 'throttled' | 'no_match' | 'error' };
+type RefreshAnswer = { status: 'refreshed' | 'fresh' | 'throttled' | 'no_match' | 'not_owned' | 'error' };
+export type RefreshOpts = {
+  force?: boolean;
+  now?: number;
+  /** Forced only: skip when comps were written less than this long ago (con mode: 1 h). */
+  minAgeMs?: number;
+  /** Called once, right before the server is actually asked (never for a skip). */
+  onStart?: () => void;
+};
 
+const HOUR = 3_600_000;
 /** Set when comps-refresh isn't deployed (404); the app then stops asking for this run. */
 let refreshUnavailable = false;
-const inFlight = new Map<string, Promise<RefreshStatus>>();
+type Running = { promise: Promise<RefreshStatus>; started: boolean; listeners: (() => void)[] };
+const inFlight = new Map<string, Running>();
+/** When each card_key was last sent to comps-refresh, whatever came of it. */
+const lastAttemptAt = new Map<string, number>();
 
 /**
  * Ask the server to refresh one card's comps, then reload its prices. Skipped without Supabase
- * or a session, and (unless forced) while the comps are fresh. One call per card_key at a time.
- * Never throws. 'failed' = the update didn't happen (offline, server error); 'fresh' = nothing
- * newer to get right now (cooldown, budget spent).
+ * or a session, and (unless forced) while the comps are fresh or the card was tried in the last
+ * 6 h. One call per card_key at a time. Never throws. 'failed' = the update didn't happen
+ * (offline, server error); 'fresh' = nothing newer to get right now (cooldown, budget spent).
+ * A forced refresh with comps-refresh missing still reloads price_daily.
  */
-export function refreshCard(card: Card, opts: { force?: boolean; now?: number } = {}): Promise<RefreshStatus> {
+export function refreshCard(card: Card, opts: RefreshOpts = {}): Promise<RefreshStatus> {
   const key = cardKey(card);
   const running = inFlight.get(key);
-  if (running) return running;
-  const p = runRefresh(card, key, opts).finally(() => inFlight.delete(key));
-  inFlight.set(key, p);
-  return p;
+  if (running) {
+    if (opts.onStart) running.started ? opts.onStart() : running.listeners.push(opts.onStart);
+    return running.promise;
+  }
+  const entry: Running = { promise: null as unknown as Promise<RefreshStatus>, started: false, listeners: opts.onStart ? [opts.onStart] : [] };
+  const start = () => {
+    entry.started = true;
+    for (const l of entry.listeners.splice(0)) l();
+  };
+  entry.promise = runRefresh(card, key, opts, start).finally(() => inFlight.delete(key));
+  inFlight.set(key, entry);
+  return entry.promise;
 }
 
-async function runRefresh(card: Card, key: string, { force = false, now = Date.now() }: { force?: boolean; now?: number }): Promise<RefreshStatus> {
-  if (!supabase || refreshUnavailable) return 'skipped';
-  if (!force && !isStale(usePrices.getState().byKey[key]?.refreshedAt, now)) return 'fresh';
+async function runRefresh(card: Card, key: string, { force = false, now = Date.now(), minAgeMs }: RefreshOpts, start: () => void): Promise<RefreshStatus> {
+  if (!supabase) return 'skipped';
+  if (refreshUnavailable) {
+    if (force) await refreshPrices([card]).catch(() => {});
+    return 'skipped';
+  }
+  const refreshedAt = usePrices.getState().byKey[key]?.refreshedAt;
+  if (!force && !isStale(refreshedAt, now)) return 'fresh';
+  if (!force && now - (lastAttemptAt.get(key) ?? -Infinity) < SIX_HOURS) return 'skipped';
+  if (force && minAgeMs && !isStale(refreshedAt, now, minAgeMs)) return 'fresh';
   try {
     if (!(await supabase.auth.getSession()).data.session) return 'skipped';
+    start();
+    lastAttemptAt.set(key, now);
     const { data, error } = await supabase.functions.invoke<RefreshAnswer>('comps-refresh', { body: { cardKey: key, force } });
     if (error) {
       const status = (error as { context?: { status?: number } }).context?.status;
       if (status === 404) {
         refreshUnavailable = true;
+        if (force) await refreshPrices([card]).catch(() => {});
         return 'skipped';
       }
       return 'failed';
@@ -161,6 +194,7 @@ async function runRefresh(card: Card, key: string, { force = false, now = Date.n
       case 'throttled':
         return 'fresh';
       case 'no_match':
+      case 'not_owned':
         return 'skipped';
       default:
         return 'failed';
@@ -170,8 +204,15 @@ async function runRefresh(card: Card, key: string, { force = false, now = Date.n
   }
 }
 
-/** Refresh several cards, three at a time. Resolves to each card's status, in order. */
-export async function refreshCards(cards: Card[], opts: { force?: boolean } = {}): Promise<RefreshStatus[]> {
+/**
+ * Refresh several cards, three at a time. Resolves to each card's status, in order. Forced with
+ * comps-refresh missing, it reloads their price_daily in one query instead.
+ */
+export async function refreshCards(cards: Card[], opts: Omit<RefreshOpts, 'onStart'> = {}): Promise<RefreshStatus[]> {
+  if (opts.force && supabase && refreshUnavailable) {
+    await refreshPrices(cards).catch(() => {});
+    return cards.map(() => 'skipped');
+  }
   const out: RefreshStatus[] = new Array(cards.length);
   let next = 0;
   const worker = async () => {
@@ -184,15 +225,19 @@ export async function refreshCards(cards: Card[], opts: { force?: boolean } = {}
   return out;
 }
 
+/** Con mode's pull: don't spend a call on cards written in the last hour. */
+export const CON_MIN_AGE_MS = HOUR;
+
 /** Whether a refresh can be asked for at all (Supabase configured, comps-refresh deployed). */
 export function canRefresh(): boolean {
   return !!supabase && !refreshUnavailable;
 }
 
-/** Test hook: forget that comps-refresh was missing. */
+/** Test hook: forget that comps-refresh was missing, and every attempt. */
 export function resetRefreshForTests() {
   refreshUnavailable = false;
   inFlight.clear();
+  lastAttemptAt.clear();
 }
 
 type CardRef = { card_key: string; tcgplayer_id: string | null; image_url: string | null };

@@ -21,9 +21,10 @@ export function useCardRefresh(card: Card | undefined, opts: { auto?: boolean } 
 
   const run = useCallback(
     async (force: boolean) => {
-      if (!card || !canRefresh()) return;
-      setState('refreshing');
-      const status: RefreshStatus = await refreshCard(card, { force });
+      if (!card) return;
+      // 'refreshing' only once the server is really asked: signed out or skipped, nothing shows.
+      // With comps-refresh missing, a pull still reloads price_daily (inside refreshCard).
+      const status: RefreshStatus = await refreshCard(card, { force, onStart: () => alive.current && setState('refreshing') });
       if (alive.current) setState(status === 'failed' ? 'failed' : 'idle');
     },
     [card],
