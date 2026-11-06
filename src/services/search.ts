@@ -194,30 +194,3 @@ export function buyPrices(marketCents: number | null | undefined, rules: Pricing
   const i = { marketCents, low30Cents: marketCents, rules };
   return { target: buyTarget(i), max: buyMax(i) };
 }
-
-export type SearchSort = 'best' | 'priceHigh' | 'priceLow' | 'name';
-export type SearchLanguage = 'all' | 'en' | 'ja';
-
-export const SORT_LABEL: Record<SearchSort, string> = {
-  best: 'Best match',
-  priceHigh: 'Price high',
-  priceLow: 'Price low',
-  name: 'Name',
-};
-
-/**
- * Sort and filter a page of results on the phone. Cards with no price go last in price sorts.
- * "Best match" keeps the server's order (closest name first).
- */
-export function arrange(cards: CatalogCard[], sort: SearchSort, language: SearchLanguage): CatalogCard[] {
-  const kept = language === 'all' ? cards : cards.filter((c) => c.language === language);
-  if (sort === 'best') return kept;
-  const out = [...kept];
-  if (sort === 'name') return out.sort((a, b) => displayName(a.name).localeCompare(displayName(b.name)));
-  const dir = sort === 'priceHigh' ? -1 : 1;
-  return out.sort((a, b) => {
-    if (a.marketCents == null) return b.marketCents == null ? 0 : 1;
-    if (b.marketCents == null) return -1;
-    return dir * (a.marketCents - b.marketCents);
-  });
-}
