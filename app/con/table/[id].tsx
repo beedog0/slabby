@@ -4,16 +4,19 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardThumb } from '../../../src/components/CardThumb';
 import { PriceLine, type Tick } from '../../../src/components/PriceLine';
 import { Segmented } from '../../../src/components/Segmented';
 import { SoldState } from '../../../src/components/SoldState';
+import { TrendSentence } from '../../../src/components/TrendSentence';
 import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, Stepper } from '../../../src/components/ui';
 import { gradeLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
 import { minFloorOverride } from '../../../src/pricing/rules';
+import { freshnessLine, freshnessWorthShowing, trendSentence, trendVerdict } from '../../../src/pricing/trend';
 import { useCardRow } from '../../../src/pricing/useCardRow';
+import { useCardRefresh } from '../../../src/services/useRefresh';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
 import { color, size, space, type } from '../../../src/theme/tokens';
@@ -27,9 +30,14 @@ export default function BeforeTheTable() {
   const rules = useRules((s) => s.rules);
   const update = useVault((s) => s.update);
   const [mode, setMode] = useState<Mode>('sell');
+  const refresh = useCardRefresh(row?.card);
 
   if (!row) return null;
   const { card, price } = row;
+  const refreshState = refresh.pulling ? 'refreshing' : refresh.state;
+  // Only when it matters here: behind, updating, or the update failed.
+  const fresh =
+    price && freshnessWorthShowing(price, refreshState) ? freshnessLine(price, { raw: card.grader === 'raw', state: refreshState }) : null;
   const step = rules.roundToCents || 100;
 
   const header = (
@@ -63,6 +71,11 @@ export default function BeforeTheTable() {
           {gradeLabel(card.grader, card.grade, card.condition)}
           {price ? ` · market ${money(price.marketCents)}` : ''}
         </Text>
+        {fresh && card.status !== 'sold' ? (
+          <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+            {fresh}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -135,7 +148,10 @@ export default function BeforeTheTable() {
   return (
     <View style={[styles.page, { paddingTop: insets.top }]}>
       {header}
-      <ScrollView contentContainerStyle={{ paddingBottom: space.xxl }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: space.xxl }}
+        refreshControl={<RefreshControl refreshing={refresh.pulling} onRefresh={refresh.pull} tintColor={color.secondary} />}
+      >
         {identity}
 
         <View style={[styles.center, { paddingTop: space.xxxl }]}>
@@ -175,6 +191,14 @@ export default function BeforeTheTable() {
             <Chevron />
           </Pressable>
           <Hairline />
+          {!selling ? (
+            <>
+              <View style={styles.trend}>
+                <TrendSentence parts={trendSentence(trendVerdict(price, 30, { raw }), 30, raw)} />
+              </View>
+              <Hairline />
+            </>
+          ) : null}
           {selling ? (
             <>
               <View style={styles.override}>
@@ -225,5 +249,6 @@ const styles = StyleSheet.create({
   },
   identity: { flexDirection: 'row', alignItems: 'center', gap: space.l, paddingHorizontal: space.gutter, paddingTop: space.l },
   formula: { minHeight: 56, flexDirection: 'row', alignItems: 'center' },
+  trend: { minHeight: 56, justifyContent: 'center' },
   override: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: space.m },
 });
