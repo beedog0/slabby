@@ -151,3 +151,11 @@ export function SlidersIcon() {
     </Svg>
   );
 }
+
+export function SearchIcon({ s = 24, tint = color.ink }: { s?: number; tint?: string }) {
+  return (
+    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={tint} strokeWidth={1.75} strokeLinecap="round">
+      <Path d="M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15ZM16 16l4.5 4.5" />
+    </Svg>
+  );
+}

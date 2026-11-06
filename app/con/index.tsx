@@ -7,7 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { Segmented } from '../../src/components/Segmented';
-import { Hairline, PrimaryButton, ScanIcon } from '../../src/components/ui';
+import { Hairline, PrimaryButton, ScanIcon, SearchIcon } from '../../src/components/ui';
 import { elapsed, money } from '../../src/lib/format';
 import { conSummary, rowFor } from '../../src/pricing/portfolio';
 import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
@@ -115,6 +115,9 @@ export default function ConMode() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.l }]}>
         <PrimaryButton style={{ flex: 1 }} title="Got an offer" onPress={() => router.push('/con/pick')} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Search a card to buy" onPress={() => router.push('/search?con=1')} style={styles.scan}>
+          <SearchIcon />
+        </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Scan a slab" onPress={() => router.push('/scan')} style={styles.scan}>
           <ScanIcon />
         </Pressable>

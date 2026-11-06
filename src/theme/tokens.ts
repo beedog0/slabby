@@ -24,6 +24,8 @@ export const color = {
   // Camera screen only: dims the picture outside the label window, and backs the hint.
   scanScrim: 'rgba(0,0,0,0.55)',
   scanHint: 'rgba(0,0,0,0.6)',
+  /** Behind a bottom sheet. */
+  scrim: 'rgba(0,0,0,0.25)',
 } as const;
 
 export const space = {
@@ -97,6 +99,14 @@ export const shadow = {
     shadowOpacity: 0.18,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
+  },
+  /** Dropdown menus: the one floating surface besides the slab. */
+  menu: {
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   slabContact: {
     shadowColor: '#000',

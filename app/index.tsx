@@ -13,7 +13,7 @@ import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { ShelfView } from '../src/components/collection/ShelfView';
 import { ViewSwitch } from '../src/components/collection/ViewSwitch';
-import { IconButton, PrimaryButton, ScanIcon } from '../src/components/ui';
+import { IconButton, PrimaryButton, ScanIcon, SearchIcon } from '../src/components/ui';
 import { money, monthLine } from '../src/lib/format';
 import { collection, collectionSeries, filterStats, rowFor, soldSeries, type CollectionFilter } from '../src/pricing/portfolio';
 import { refreshPrices } from '../src/services/comps';
@@ -128,6 +128,9 @@ export default function Home() {
         <View style={styles.header}>
           <Text style={[type.section, { color: color.ink }]}>Slabby</Text>
           <View style={{ flexDirection: 'row' }}>
+            <IconButton label="Search cards" onPress={() => router.push('/search')}>
+              <SearchIcon />
+            </IconButton>
             <IconButton label="Scan a slab" onPress={() => router.push('/scan')}>
               <ScanIcon />
             </IconButton>

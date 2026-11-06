@@ -1,5 +1,5 @@
 // card-match: resolve a card_key to a TCGplayer product id (and photo) once, shared by all users.
-// Called by the app right after a card is added. Body: { cardKey, name, number, language, setName, setCode }.
+// Called by the app right after a card is added. Body: { cardKey, name, number, language, setName, setCode, tcgPlayerId? }.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { gradeKey, gradedDaily, rawDaily, type DailySales } from '../_shared/comps-math.ts';
@@ -21,8 +21,12 @@ Deno.serve(async (req) => {
   // details may have been fixed since.
   if (known.data?.tcgplayer_id) return json(known.data);
 
-  // PokemonPriceTracker first (it also has the prices); the TCGplayer catalog for what it misses.
-  const m = (await matchCard(c).catch(() => null)) ?? (await tcgcsvMatch(c).catch(() => null));
+  // Added from search: the product is already known, so no search credit is spent.
+  // Otherwise PokemonPriceTracker first (it also has the prices); TCGplayer's catalog for what it misses.
+  const m =
+    (await fromCatalog(admin, c.tcgPlayerId).catch(() => null)) ??
+    (await matchCard(c).catch(() => null)) ??
+    (await tcgcsvMatch(c).catch(() => null));
   const row = {
     card_key: c.cardKey,
     language: c.language ?? 'en',
@@ -45,4 +49,11 @@ async function firstComps(admin: ReturnType<typeof createClient>, cardKey: strin
     ? gradedDaily((card.ebay?.priceHistory?.[gk] ?? {}) as DailySales, today)
     : rawDaily(card.priceHistory?.conditions?.['Near Mint']?.history ?? [], today);
   if (rows.length) await admin.from('price_daily').upsert(rows.map((r) => ({ card_key: cardKey, ...r })));
+}
+
+/** A product picked in card search, looked up in our own catalog (0008_card_search.sql). */
+async function fromCatalog(admin: ReturnType<typeof createClient>, id: unknown) {
+  if (!id || !/^\d+$/.test(String(id))) return null;
+  const { data } = await admin.from('catalog').select('product_id, image_url, set_name').eq('product_id', Number(id)).maybeSingle();
+  return data ? { tcgPlayerId: String(data.product_id), image: data.image_url as string, setName: data.set_name as string } : null;
 }

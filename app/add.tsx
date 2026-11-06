@@ -1,35 +1,103 @@
 // Add a slab by hand: used when PSA can't look the cert up, and for BGS/CGC slabs (v1 scans PSA
 // only). The card is matched to its price source after it's added, same as a scanned one.
+// Card search opens it prefilled (name, set, number, grade, photo) with the product already known.
 
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Segmented } from '../src/components/Segmented';
+import { SlabView } from '../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton, Stepper } from '../src/components/ui';
+import { ordinal } from '../src/lib/format';
+import { cardKey } from '../src/pricing/cardKey';
 import { matchNewCard, refreshPrices } from '../src/services/comps';
 import { cardFromDetails } from '../src/services/psa';
 import { useVault } from '../src/store/vault';
-import { color, space, type } from '../src/theme/tokens';
+import { color, size, space, type } from '../src/theme/tokens';
+import type { Card } from '../src/types';
 
-type Grader = 'psa' | 'bgs' | 'cgc';
+type Grader = 'psa' | 'bgs' | 'cgc' | 'raw';
 
 export default function AddByHand() {
-  const { cert: certParam } = useLocalSearchParams<{ cert?: string }>();
+  const p = useLocalSearchParams<{
+    cert?: string;
+    game?: Card['game'];
+    name?: string;
+    set?: string;
+    setCode?: string;
+    number?: string;
+    language?: string;
+    grader?: Grader;
+    grade?: string;
+    productId?: string;
+    image?: string;
+  }>();
+  const certParam = p.cert;
+  const fromSearch = !!p.productId;
   const insets = useSafeAreaInsets();
   const add = useVault((s) => s.add);
   const [cert, setCert] = useState(certParam ?? '');
-  const [grader, setGrader] = useState<Grader>('psa');
-  const [grade, setGrade] = useState(10);
-  const [name, setName] = useState('');
-  const [setTitle, setSetTitle] = useState('');
-  const [number, setNumber] = useState('');
-  const [language, setLanguage] = useState<'en' | 'ja'>('en');
+  const [grader, setGrader] = useState<Grader>(p.grader ?? 'psa');
+  const [grade, setGrade] = useState(Number(p.grade) || 10);
+  const [name, setName] = useState(p.name ?? '');
+  const [setTitle, setSetTitle] = useState(p.set ?? '');
+  const [number, setNumber] = useState(p.number ?? '');
+  const [language, setLanguage] = useState<'en' | 'ja'>(p.language === 'ja' ? 'ja' : 'en');
   const [paid, setPaid] = useState('');
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
 
+  // From search: show the card as it will look in the vault, slabbed at the chosen grade or raw.
+  const preview = useMemo<Card | null>(
+    () =>
+      fromSearch
+        ? {
+            id: `add-preview-${p.productId}`,
+            certNumber: cert || null,
+            grader,
+            grade: grader === 'raw' ? null : grade,
+            name: name.trim() || ' ',
+            setName: setTitle.trim() || null,
+            setCode: p.setCode && setTitle === p.set ? p.setCode : null,
+            number: number.trim() || null,
+            language,
+            year: null,
+            imageFrontUrl: p.image || null,
+            paidCents: null,
+            paidAt: null,
+            plan,
+            floorOverrideCents: null,
+            askOverrideCents: null,
+            status: 'owned',
+            soldCents: null,
+            soldAt: null,
+            soldWhere: null,
+            createdAt: new Date(0).toISOString(),
+          }
+        : null,
+    [fromSearch, p.productId, p.setCode, p.set, p.image, cert, grader, grade, name, setTitle, number, language, plan],
+  );
+
   const step = grader === 'psa' ? 1 : 0.5;
   const ready = name.trim().length > 0;
+
+  // Already own it? A cert can only be one slab, so that gets the louder line and the button
+  // says "Add again". Otherwise count copies of the same card at the same grade (raw singles too).
+  const owned = useVault((s) => s.cards).filter((c) => c.status === 'owned');
+  const certOwned = cert.trim().length > 0 && owned.some((c) => c.certNumber === cert.trim());
+  const sameKey = cardKey({
+    grader,
+    grade: grader === 'raw' ? null : grade,
+    setCode: p.setCode && setTitle === p.set ? p.setCode : null,
+    number: number.trim().replace(/^#/, '') || null,
+    language,
+  });
+  const copies = number.trim() ? owned.filter((c) => cardKey(c) === sameKey).length : 0;
+  const dupLine = certOwned
+    ? `Cert ${cert.trim()} is already in your vault.`
+    : copies > 0
+      ? `You already have ${copies} of this card. This would be your ${ordinal(copies + 1)}.`
+      : null;
 
   const save = () => {
     if (!ready) return;
@@ -44,13 +112,18 @@ export default function AddByHand() {
       language,
       paidCents: Number.isFinite(dollars) ? dollars * 100 : null,
       plan,
+      // The set code only fits while the set is the one search picked.
+      setCode: p.setCode && setTitle === p.set ? p.setCode : null,
+      imageFrontUrl: p.image || null,
+      game: p.game,
     });
-    add(card);
-    matchNewCard(card)
-      .then(() => refreshPrices([card]))
+    const saved = grader === 'raw' ? { ...card, grade: null } : card;
+    add(saved);
+    matchNewCard(saved, fromSearch ? p.productId : undefined)
+      .then(() => refreshPrices([saved]))
       .catch(() => {});
     router.dismissTo('/');
-    router.push(`/card/${card.id}`);
+    router.push(`/card/${saved.id}`);
   };
 
   return (
@@ -65,11 +138,18 @@ export default function AddByHand() {
           </IconButton>
         </View>
         <View style={styles.gutter}>
-          <Text style={[type.title, { color: color.ink }]}>Add a slab</Text>
+          <Text style={[type.title, { color: color.ink }]}>{fromSearch ? 'Add to vault' : 'Add a slab'}</Text>
           <Text style={[type.text, { color: color.secondary, paddingTop: 2, paddingBottom: space.l }]}>
-            Type what the label says. Prices fill in once the card is matched.
+            {fromSearch
+              ? 'Check the grade, then add what you paid.'
+              : 'Type what the label says. Prices fill in once the card is matched.'}
           </Text>
 
+          {preview ? (
+            <View style={styles.preview}>
+              <SlabView card={preview} width={size.heroW * 0.75} />
+            </View>
+          ) : null}
           <Field label="Card name">
             <TextInput
               value={name}
@@ -113,7 +193,7 @@ export default function AddByHand() {
           </Field>
           <Field label="Grader">
             <Segmented<Grader>
-              style={{ width: 170 }}
+              style={{ width: 220 }}
               value={grader}
               onChange={(g) => {
                 setGrader(g);
@@ -123,17 +203,20 @@ export default function AddByHand() {
                 { value: 'psa', label: 'PSA' },
                 { value: 'bgs', label: 'BGS' },
                 { value: 'cgc', label: 'CGC' },
+                { value: 'raw', label: 'Raw' },
               ]}
             />
           </Field>
-          <Field label="Grade">
-            <Stepper
-              label="grade"
-              value={String(grade)}
-              onMinus={() => setGrade((g) => Math.max(1, g - step))}
-              onPlus={() => setGrade((g) => Math.min(10, g + step))}
-            />
-          </Field>
+          {grader === 'raw' ? null : (
+            <Field label="Grade">
+              <Stepper
+                label="grade"
+                value={String(grade)}
+                onMinus={() => setGrade((g) => Math.max(1, g - step))}
+                onPlus={() => setGrade((g) => Math.min(10, g + step))}
+              />
+            </Field>
+          )}
           <Field label="Cert number">
             <TextInput
               value={cert}
@@ -168,7 +251,12 @@ export default function AddByHand() {
         </View>
       </ScrollView>
       <View style={[styles.gutter, { paddingBottom: insets.bottom + space.l, paddingTop: space.m }]}>
-        <PrimaryButton title="Add to vault" onPress={save} style={ready ? undefined : { opacity: 0.4 }} />
+        {dupLine ? (
+          <Text style={[type.secondary, { color: certOwned ? color.ink : color.secondary, paddingBottom: space.m, textAlign: 'center' }]}>
+            {dupLine}
+          </Text>
+        ) : null}
+        <PrimaryButton title={certOwned ? 'Add again' : 'Add to vault'} onPress={save} style={ready ? undefined : { opacity: 0.4 }} />
       </View>
     </KeyboardAvoidingView>
   );
@@ -190,6 +278,7 @@ function Field({ label, children, last }: { label: string; children: ReactNode; 
 
 const styles = StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
+  preview: { alignItems: 'center', paddingBottom: space.xl },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   field: { minHeight: 56, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.l },
   input: { flex: 1, textAlign: 'right', color: color.ink, paddingVertical: space.m },
