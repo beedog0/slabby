@@ -11,11 +11,17 @@ describe('set page helpers', () => {
   const cards = [f(1, '215/203', 142000, 'Secret Rare', 0.05), f(2, '7/203', 300, 'Common', null), f(3, '189/203', 34500, 'Ultra Rare', -0.08), f(4, 'TG12', null, 'Common', 0.01)];
 
   it('sorts by price, number and 7-day move', () => {
-    expect(arrangeSet(cards, 'price', null).map((c) => c.productId)).toEqual([1, 3, 2, 4]);
-    expect(arrangeSet(cards, 'number', null).map((c) => c.productId)).toEqual([2, 4, 3, 1]);
-    expect(arrangeSet(cards, 'rising', null).map((c) => c.productId)).toEqual([1, 4, 3]);
-    expect(arrangeSet(cards, 'falling', null).map((c) => c.productId)).toEqual([3, 4, 1]);
-    expect(arrangeSet(cards, 'price', 'Common').map((c) => c.productId)).toEqual([2, 4]);
+    expect(arrangeSet(cards, 'price_high').map((c) => c.productId)).toEqual([1, 3, 2, 4]);
+    expect(arrangeSet(cards, 'price_low').map((c) => c.productId)).toEqual([2, 3, 1]);
+    expect(arrangeSet(cards, 'number').map((c) => c.productId)).toEqual([2, 4, 3, 1]);
+    expect(arrangeSet(cards, 'rising').map((c) => c.productId)).toEqual([1, 4, 3]);
+    expect(arrangeSet(cards, 'falling').map((c) => c.productId)).toEqual([3, 4, 1]);
+    expect(arrangeSet(cards, 'rarity').map((c) => c.productId)).toEqual([1, 3, 2, 4]);
+  });
+
+  it('sorts and filters together', () => {
+    expect(arrangeSet(cards, 'number', ['Common']).map((c) => c.productId)).toEqual([2, 4]);
+    expect(arrangeSet(cards, 'price_high', ['Common', 'Ultra Rare']).map((c) => c.productId)).toEqual([3, 2, 4]);
   });
 
   it('counts rarities', () => {

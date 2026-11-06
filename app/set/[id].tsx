@@ -4,8 +4,8 @@
 
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
 import { BackIcon, Hairline, IconButton } from '../../src/components/ui';
@@ -13,7 +13,7 @@ import { money, pct } from '../../src/lib/format';
 import { cardNumber, displayName, type Game } from '../../src/services/search';
 import type { Found } from '../../src/services/searchFilters';
 import { arrangeSet, cardsInSet, rarities, SET_SORTS, setMeta, type SetMeta, type SetSort } from '../../src/services/setCards';
-import { color, radius, shadow, space, type } from '../../src/theme/tokens';
+import { color, radius, shadow, size, space, type } from '../../src/theme/tokens';
 
 const COLS = 3;
 const GAP = space.m;
@@ -26,8 +26,17 @@ export default function SetPage() {
   const { width } = useWindowDimensions();
   const [cards, setCards] = useState<Found[] | null | 'error'>(null);
   const [meta, setMetaState] = useState<SetMeta | null>(null);
-  const [sort, setSort] = useState<SetSort>('price');
-  const [rarity, setRarity] = useState<string | null>(null);
+  const [sort, setSort] = useState<SetSort>('price_high');
+  const [picked, setPicked] = useState<string[]>([]);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [menuTop, setMenuTop] = useState(0);
+  const controlsRef = useRef<ComponentRef<typeof View>>(null);
+  const openSort = () =>
+    controlsRef.current?.measureInWindow((_x, y, _w, h) => {
+      setMenuTop(y + h);
+      setSortOpen(true);
+    });
+  const toggle = (r: string) => setPicked((p) => (p.includes(r) ? p.filter((x) => x !== r) : [...p, r]));
 
   useEffect(() => {
     let live = true;
@@ -53,7 +62,7 @@ export default function SetPage() {
     };
   }, [setName, language, game]);
 
-  const shown = useMemo(() => arrangeSet(list, sort, rarity), [list, sort, rarity]);
+  const shown = useMemo(() => arrangeSet(list, sort, picked), [list, sort, picked]);
   const kinds = useMemo(() => rarities(list), [list]);
   const priced = list.filter((c) => c.marketCents != null);
   const value = priced.reduce((t, c) => t + (c.marketCents ?? 0), 0);
@@ -103,12 +112,21 @@ export default function SetPage() {
         ) : null}
         <Hairline />
 
-        <Tabs value={sort} onChange={setSort} options={SET_SORTS} />
+        {/* Same row as search: what's shown on the left, the sort on the right. Rarity pills
+            below filter; the sort applies on top of whatever they leave. */}
+        <View ref={controlsRef} style={styles.controls}>
+          <Text style={[type.secondary, { color: color.secondary }]}>
+            {list.length ? (picked.length ? `${shown.length} of ${list.length} cards` : `${list.length} cards`) : ''}
+          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Sort" onPress={openSort} hitSlop={8} style={styles.control}>
+            <Text style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>{SET_SORTS.find((o) => o.value === sort)!.label} ▾</Text>
+          </Pressable>
+        </View>
         {kinds.length > 1 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.gutter }} contentContainerStyle={styles.chips}>
-            <Chip label="All" on={rarity == null} onPress={() => setRarity(null)} />
+            <Chip label="All" on={!picked.length} onPress={() => setPicked([])} />
             {kinds.map((k) => (
-              <Chip key={k.rarity} label={`${k.rarity} ${k.n}`} on={rarity === k.rarity} onPress={() => setRarity(rarity === k.rarity ? null : k.rarity)} />
+              <Chip key={k.rarity} label={`${k.rarity} ${k.n}`} on={picked.includes(k.rarity)} onPress={() => toggle(k.rarity)} />
             ))}
           </ScrollView>
         ) : null}
@@ -128,11 +146,31 @@ export default function SetPage() {
         contentContainerStyle={{ paddingBottom: insets.bottom + space.xl, gap: space.l }}
         ListEmptyComponent={
           <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>
-            {cards === null ? 'Loading the set…' : cards === 'error' ? 'Can’t load this set right now.' : sort === 'rising' || sort === 'falling' ? 'No price moves this week yet.' : 'No cards here.'}
+            {cards === null ? 'Loading the set…' : cards === 'error' ? 'Can’t load this set right now.' : sort === 'rising' || sort === 'falling' ? 'No price moves this week yet.' : picked.length ? 'No cards with those rarities.' : 'No cards here.'}
           </Text>
         }
         renderItem={({ item }) => <Tile card={item} w={cellW} />}
       />
+      <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setSortOpen(false)} accessibilityLabel="Close" />
+        <View style={[styles.menu, { top: menuTop }]}>
+          {SET_SORTS.map((o) => (
+            <Pressable
+              key={o.value}
+              accessibilityRole="menuitem"
+              accessibilityState={{ selected: o.value === sort }}
+              onPress={() => {
+                setSort(o.value);
+                setSortOpen(false);
+              }}
+              style={({ pressed }) => [styles.menuRow, pressed && { backgroundColor: color.well }]}
+            >
+              <Text style={[type.text, { color: color.ink, flex: 1 }]}>{o.label}</Text>
+              <Text style={[type.text, { color: color.ink, width: 16, textAlign: 'right' }]}>{o.value === sort ? '✓' : ''}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -142,23 +180,6 @@ function Stat({ label, value, tint }: { label: string; value: string; tint?: str
     <View style={{ flex: 1, gap: 2 }}>
       <Text style={[type.secondary, { color: color.secondary }]}>{label}</Text>
       <Text style={[type.numberM, { color: tint ?? color.ink }]}>{value}</Text>
-    </View>
-  );
-}
-
-/** Text tabs with a short ink mark under the picked one (same as the grade row on a card). */
-function Tabs<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
-  return (
-    <View style={styles.tabs} accessibilityRole="tablist">
-      {options.map((o) => {
-        const on = o.value === value;
-        return (
-          <Pressable key={o.value} onPress={() => onChange(o.value)} accessibilityRole="tab" accessibilityState={{ selected: on }} style={styles.tab}>
-            <Text style={[type.text, { color: on ? color.ink : color.secondary, fontWeight: on ? '600' : '400' }]}>{o.label}</Text>
-            <View style={[styles.mark, on && { backgroundColor: color.ink }]} />
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
@@ -202,9 +223,10 @@ const styles = StyleSheet.create({
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   logo: { width: '70%', height: 76, marginTop: space.s },
   stats: { flexDirection: 'row', gap: space.l, paddingTop: space.xl, paddingBottom: space.l },
-  tabs: { flexDirection: 'row', gap: space.xl, paddingTop: space.m },
-  tab: { height: 44, justifyContent: 'center' },
-  mark: { height: 2, borderRadius: 1, marginTop: 4, backgroundColor: 'transparent' },
+  controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: space.s },
+  control: { minHeight: size.touch - 12, justifyContent: 'center' },
+  menu: { position: 'absolute', right: space.gutter, width: 230, borderRadius: radius.field, backgroundColor: color.canvas, paddingVertical: space.xs, ...shadow.menu },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: space.s, paddingHorizontal: space.gutter, minHeight: size.touch },
   chips: { paddingHorizontal: space.gutter, gap: space.s, paddingTop: space.s, paddingBottom: space.m },
   chip: { height: 32, paddingHorizontal: space.m, borderRadius: 16, backgroundColor: color.well, justifyContent: 'center' },
 });
