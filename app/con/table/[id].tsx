@@ -34,8 +34,9 @@ export default function BeforeTheTable() {
 
   if (!row) return null;
   const { card, price } = row;
-  const refreshState = refresh.pulling ? 'refreshing' : refresh.state;
-  // Only when it matters here: behind, updating, or the update failed.
+  // Only when it matters here: behind, or the update failed. Never "Updating…": the pull spinner
+  // says it, and a line that comes and goes would make the screen jump.
+  const refreshState = refresh.state === 'failed' ? 'failed' : 'idle';
   const fresh =
     price && freshnessWorthShowing(price, refreshState) ? freshnessLine(price, { raw: card.grader === 'raw', state: refreshState }) : null;
   const step = rules.roundToCents || 100;
@@ -194,7 +195,7 @@ export default function BeforeTheTable() {
           {!selling ? (
             <>
               <View style={styles.trend}>
-                <TrendSentence parts={trendSentence(trendVerdict(price, 30, { raw }), 30, raw)} />
+                <TrendSentence parts={trendSentence(trendVerdict(price, 30, { raw }), 30, raw, { window: true })} />
               </View>
               <Hairline />
             </>

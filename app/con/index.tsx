@@ -11,7 +11,7 @@ import { Hairline, PrimaryButton, ScanIcon } from '../../src/components/ui';
 import { elapsed, money } from '../../src/lib/format';
 import { conSummary, rowFor } from '../../src/pricing/portfolio';
 import { conFreshnessLine } from '../../src/pricing/trend';
-import { refreshCards } from '../../src/services/comps';
+import { CON_MIN_AGE_MS, refreshCards } from '../../src/services/comps';
 import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
 import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
@@ -49,16 +49,18 @@ export default function ConMode() {
   const sum = conSummary(rows, session.startedAt);
   // Cards on the table: for sale or trade only.
   const onTable = rows.filter((r) => r.card.status === 'owned' && (r.card.plan === 'sell' || r.card.plan === 'trade'));
+  // Quiet during a pull (the spinner says it); the line shows only when behind or failed.
   const freshness = conFreshnessLine(
     onTable.flatMap((r) => (r.price ? [r.price] : [])),
-    { refreshing, failed: refreshFailed },
+    { failed: refreshFailed },
   );
 
   const pull = async () => {
     const list = onTable.map((r) => r.card);
     if (!list.length) return;
     setRefreshing(list.length);
-    const statuses = await refreshCards(list, { force: true });
+    // Cards written in the last hour aren't worth a call.
+    const statuses = await refreshCards(list, { force: true, minAgeMs: CON_MIN_AGE_MS });
     setRefreshFailed(statuses.some((s) => s === 'failed'));
     setRefreshing(0);
   };

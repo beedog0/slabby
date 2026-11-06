@@ -44,23 +44,49 @@ describe('trendVerdict', () => {
     expect(trendVerdict(price({ sales30d: 0, series90: line(15, 1_000, 1_100) }), 30, { raw: true })).toMatchObject({ enough: true, sales: 0 });
     expect(trendVerdict(price({ sales30d: 0, series90: line(14, 1_000, 1_100) }), 30, { raw: true }).enough).toBe(false);
   });
+  it('raw needs at least half the window in points as well as 15', () => {
+    expect(trendVerdict(price({ series90: line(44, 1_000, 1_100) }), 90, { raw: true }).enough).toBe(false);
+    expect(trendVerdict(price({ series90: line(45, 1_000, 1_100) }), 90, { raw: true }).enough).toBe(true);
+  });
+  it('compares the last sale by whole UTC days, whatever the hour', () => {
+    // 30 days before Nov 6 is Oct 7: in, from just after midnight to just before the next one.
+    for (const t of ['2026-11-06T00:01:00Z', '2026-11-06T12:00:00Z', '2026-11-06T23:59:00Z']) {
+      expect(trendVerdict(price({ lastSaleDay: '2026-10-07' }), 30, { now: Date.parse(t) }).enough).toBe(true);
+      expect(trendVerdict(price({ lastSaleDay: '2026-10-06' }), 30, { now: Date.parse(t) }).enough).toBe(false);
+    }
+  });
 });
 
 describe('trendSentence', () => {
   const t = (o: object) => ({ direction: 'up' as const, change: 0.081, sales: 14, enough: true, ...o });
-  it('colours only the percent', () => {
-    const parts = trendSentence(t({}), 30);
-    expect(text(parts)).toBe('Up 8% in 30 days on 14 sales');
-    expect(parts.filter((p) => p.tone !== 'secondary')).toEqual([{ text: '8%', tone: 'gain' }]);
-    expect(text(trendSentence(t({ direction: 'down', change: -0.06, sales: 9 }), 90))).toBe('Down 6% in 90 days on 9 sales');
+  it('colours only the percent, and leaves the window to the 30d/90d control', () => {
+    const parts = trendSentence(t({ change: 0.21, sales: 62 }), 90);
+    expect(text(parts)).toBe('Up 21% on 62 sales');
+    expect(parts.filter((p) => p.tone !== 'secondary')).toEqual([{ text: '21%', tone: 'gain' }]);
+    expect(text(trendSentence(t({ direction: 'down', change: -0.06, sales: 9 }), 90))).toBe('Down 6% on 9 sales');
+    expect(text(trendSentence(t({ sales: 1 }), 30))).toBe('Up 8% on 1 sale');
     expect(trendSentence(t({ direction: 'down', change: -0.06 }), 90)[1].tone).toBe('loss');
   });
   it('flat and not-enough are all secondary', () => {
-    expect(trendSentence(t({ direction: 'flat', change: 0.01 }), 30)).toEqual([{ text: 'Flat over 30 days on 14 sales', tone: 'secondary' }]);
-    expect(trendSentence(t({ enough: false }), 30)).toEqual([{ text: 'Not enough sales to call a trend', tone: 'secondary' }]);
+    expect(trendSentence(t({ direction: 'flat', change: 0.01 }), 30)).toEqual([{ text: 'Flat on 14 sales', tone: 'secondary' }]);
+    expect(trendSentence(t({ enough: false }), 30)).toEqual([{ text: 'Too few sales for a trend', tone: 'secondary' }]);
   });
   it('raw names TCGplayer', () => {
-    expect(text(trendSentence(t({ sales: 0 }), 30, true))).toBe('Up 8% in 30 days on TCGplayer');
+    expect(text(trendSentence(t({ direction: 'down', change: -0.1, sales: 0 }), 30, true))).toBe('Down 10% on TCGplayer');
+  });
+  it('names the window where no control does (Before the table)', () => {
+    expect(text(trendSentence(t({}), 30, false, { window: true }))).toBe('Up 8% in 30 days on 14 sales');
+    expect(text(trendSentence(t({ direction: 'flat' }), 30, false, { window: true }))).toBe('Flat over 30 days on 14 sales');
+    expect(text(trendSentence(t({ enough: false }), 30, false, { window: true }))).toBe('Too few sales for a trend');
+  });
+  it('stays short enough for one line at 375 wide', () => {
+    // Longest realistic copy: 3-digit percent and sale count.
+    const longest = [
+      text(trendSentence(t({ direction: 'down', change: -0.999, sales: 999 }), 90)),
+      text(trendSentence(t({ direction: 'down', change: -0.999, sales: 999 }), 30, false, { window: true })),
+    ];
+    expect(longest[0].length).toBeLessThanOrEqual(22);
+    expect(longest[1].length).toBeLessThanOrEqual(36);
   });
 });
 
@@ -79,15 +105,16 @@ describe('freshnessLine', () => {
   });
   it('no sale on record, and raw', () => {
     expect(freshnessLine(price({ refreshedAt: at(2), lastSaleDay: null }), { now: NOW })).toBe('Updated 2h ago · no sales on record');
-    expect(freshnessLine(price({ refreshedAt: at(2), lastSaleDay: '2026-11-06' }), { raw: true, now: NOW })).toBe('Updated 2h ago · TCGplayer market');
+    expect(freshnessLine(price({ refreshedAt: at(2), lastSaleDay: '2026-11-06' }), { raw: true, now: NOW })).toBe('Updated 2h ago');
   });
   it('falls back to the price_daily day when freshness is unknown', () => {
     expect(freshnessLine(price({ asOf: '2026-11-05' }), { now: NOW })).toBe('Updated yesterday');
     expect(freshnessLine(price({ asOf: '2026-11-06' }), { now: NOW })).toBe('Updated today');
     expect(freshnessLine(price({ asOf: '2026-11-03' }), { now: NOW })).toBe('Updated 3 days ago · prices may be behind');
   });
-  it('Before the table shows it only when behind or busy', () => {
+  it('Before the table shows it only when behind or failed, never while refreshing', () => {
     expect(freshnessWorthShowing(price({ refreshedAt: at(2) }), 'idle', NOW)).toBe(false);
+    expect(freshnessWorthShowing(price({ refreshedAt: at(2) }), 'refreshing', NOW)).toBe(false);
     expect(freshnessWorthShowing(price({ refreshedAt: at(30) }), 'idle', NOW)).toBe(true);
     expect(freshnessWorthShowing(price({ refreshedAt: at(2) }), 'failed', NOW)).toBe(true);
   });
@@ -101,8 +128,5 @@ describe('conFreshnessLine', () => {
   it('names the oldest card when behind or failed', () => {
     expect(conFreshnessLine([price({ refreshedAt: at(2) }), price({ refreshedAt: at(50) })], { now: NOW })).toBe('Prices updated 2 days ago · pull to refresh');
     expect(conFreshnessLine([price({ refreshedAt: at(2) })], { failed: true, now: NOW })).toBe('Prices updated 2h ago · pull to refresh');
-  });
-  it('counts cards while refreshing', () => {
-    expect(conFreshnessLine([price()], { refreshing: 14, now: NOW })).toBe('Updating 14 cards…');
   });
 });
