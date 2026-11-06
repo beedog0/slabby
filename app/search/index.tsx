@@ -18,6 +18,11 @@ import { buyPrices, cardNumber, displayName, type Game } from '../../src/service
 import {
   catalogProgress,
   changeOf,
+  chips,
+  LANGUAGE_NAME,
+  toggle,
+  withoutChip,
+  type Lang,
   EMPTY_QUERY,
   filterCount,
   findCards,
@@ -146,7 +151,7 @@ export default function Search() {
                 autoCapitalize="none"
                 returnKeyType="search"
                 clearButtonMode="while-editing"
-                placeholder={f.set ? `Search ${f.set.name}` : 'Umbreon VMAX 215'}
+                placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Umbreon VMAX 215'}
                 placeholderTextColor={color.secondary}
                 style={[type.body, styles.input]}
                 accessibilityLabel="Search cards"
@@ -159,9 +164,9 @@ export default function Search() {
                 // Sets and rarities belong to one game; Japanese only exists for Pokémon.
                 set({
                   game: g === 'all' ? null : g,
-                  set: null,
+                  sets: [],
                   rarities: [],
-                  language: g === 'all' || g === 'pokemon' ? f.language : null,
+                  languages: g === 'all' || g === 'pokemon' ? f.languages : [],
                 })
               }
               options={[
@@ -186,6 +191,30 @@ export default function Search() {
               <ViewSwitch value={layout} onChange={setSearchLayout} modes={SEARCH_MODES} />
             </View>
           </View>
+        ) : null}
+        {runnable(f) && filterCount(f) ? (
+          // What's applied, newest last; tap one to take it off.
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} keyboardShouldPersistTaps="handled">
+            {chips(f).map((c) => (
+              <Pressable
+                key={`${c.kind}:${c.key}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${c.label}`}
+                onPress={() => setF((prev) => withoutChip(prev, c))}
+                style={({ pressed }) => [styles.chip, pressed && { opacity: 0.6 }]}
+              >
+                <Text numberOfLines={1} style={[type.secondary, { color: color.ink, maxWidth: 180 }]}>
+                  {c.label}
+                </Text>
+                <Text style={[type.secondary, { color: color.secondary }]}>×</Text>
+              </Pressable>
+            ))}
+            {filterCount(f) > 1 ? (
+              <Pressable accessibilityRole="button" onPress={() => set({ languages: [], sets: [], rarities: [] })} hitSlop={8} style={styles.chipClear}>
+                <Text style={[type.secondary, { color: color.secondary }]}>Clear</Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
         ) : null}
         {/* A hairline under the pinned row once results scroll beneath it. */}
         <Animated.View
@@ -263,8 +292,10 @@ function SortMenu({ open, top, sort, onSort, onClose }: { open: boolean; top: nu
 }
 
 /**
- * Filters for the current search, from what actually matches it (with counts): language
- * (Pokémon only), rarity (pick several) and one set. Changes apply as you tap.
+ * Filters for the current search, from what actually matches it (with counts). Every group is
+ * pick-several: languages (Pokémon only), rarities, sets. Changes apply as you tap.
+ * The scrim fades and the sheet slides as one motion, starting only once the sheet's height is
+ * known, so nothing dims before the sheet is there.
  */
 function FilterSheet({
   open,
@@ -283,21 +314,54 @@ function FilterSheet({
   onClose: () => void;
   bottom: number;
 }) {
+  const [mounted, setMounted] = useState(open);
+  const [sheetH, setSheetH] = useState(0);
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (open) setMounted(true);
+    else if (mounted) {
+      Animated.timing(progress, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setMounted(false));
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (open && mounted && sheetH) {
+      progress.setValue(0);
+      Animated.timing(progress, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    }
+  }, [open, mounted, sheetH]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!mounted) return null;
+
   const showLanguage = !f.game || f.game === 'pokemon';
   const sets = facets?.sets ?? [];
   const rarities = facets?.rarities ?? [];
-  // Keep a picked set or rarity visible even when it falls out of the facet list.
-  const setRows = f.set && !sets.some((s) => s.id === f.set!.id) ? [{ ...f.set, n: 0 }, ...sets] : sets;
+  const languages = (['en', 'ja'] as Lang[]).map((key) => ({ key, n: facets?.languages.find((x) => x.key === key)?.n ?? 0 }));
+  // Keep picked sets and rarities visible even when they fall out of the facet list.
+  const setRows = [...f.sets.filter((x) => !sets.some((s) => s.id === x.id)).map((x) => ({ ...x, n: 0 })), ...sets];
   const rarityRows = [...f.rarities.filter((r) => !rarities.some((x) => x.key === r)).map((key) => ({ key, n: 0 })), ...rarities];
+
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[StyleSheet.absoluteFill, styles.scrim]} onPress={onClose} accessibilityLabel="Close" />
-      <View style={[styles.sheet, { paddingBottom: bottom + space.l }]}>
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, { opacity: progress }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+      </Animated.View>
+      <Animated.View
+        onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
+        style={[
+          styles.sheet,
+          { paddingBottom: bottom + space.l },
+          sheetH
+            ? { transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [sheetH, 0] }) }] }
+            : { opacity: 0 },
+        ]}
+      >
         <View style={styles.grabber} />
         <View style={styles.sheetHead}>
           <Text style={[type.section, { color: color.ink }]}>Filter</Text>
           {filterCount(f) ? (
-            <Pressable accessibilityRole="button" onPress={() => onChange({ language: null, set: null, rarities: [] })} hitSlop={8}>
+            <Pressable accessibilityRole="button" onPress={() => onChange({ languages: [], sets: [], rarities: [] })} hitSlop={8}>
               <Text style={[type.text, { color: color.secondary }]}>Clear</Text>
             </Pressable>
           ) : null}
@@ -306,17 +370,15 @@ function FilterSheet({
           {showLanguage ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Language</Text>
-              <View style={styles.gutter}>
-                <Segmented<'all' | 'en' | 'ja'>
-                  value={f.language ?? 'all'}
-                  onChange={(l) => onChange({ language: l === 'all' ? null : l, set: null, rarities: [] })}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'en', label: 'English' },
-                    { value: 'ja', label: 'Japanese' },
-                  ]}
+              {languages.map((l) => (
+                <CheckRow
+                  key={l.key}
+                  label={LANGUAGE_NAME[l.key]}
+                  detail={l.n ? String(l.n) : undefined}
+                  on={f.languages.includes(l.key)}
+                  onPress={() => onChange({ languages: toggle(f.languages, l.key) })}
                 />
-              </View>
+              ))}
             </View>
           ) : null}
 
@@ -329,9 +391,7 @@ function FilterSheet({
                   label={r.key}
                   detail={r.n ? String(r.n) : undefined}
                   on={f.rarities.includes(r.key)}
-                  onPress={() =>
-                    onChange({ rarities: f.rarities.includes(r.key) ? f.rarities.filter((x) => x !== r.key) : [...f.rarities, r.key] })
-                  }
+                  onPress={() => onChange({ rarities: toggle(f.rarities, r.key) })}
                 />
               ))}
             </View>
@@ -340,13 +400,13 @@ function FilterSheet({
           {setRows.length ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Set</Text>
-              {setRows.slice(0, 40).map((s) => (
+              {setRows.slice(0, 40).map((x) => (
                 <CheckRow
-                  key={s.id}
-                  label={s.name}
-                  detail={s.n ? String(s.n) : undefined}
-                  on={f.set?.id === s.id}
-                  onPress={() => onChange({ set: f.set?.id === s.id ? null : { id: s.id, name: s.name } })}
+                  key={x.id}
+                  label={x.name}
+                  detail={x.n ? String(x.n) : undefined}
+                  on={f.sets.some((y) => y.id === x.id)}
+                  onPress={() => onChange({ sets: toggle(f.sets, { id: x.id, name: x.name }, (a, b) => a.id === b.id) })}
                 />
               ))}
             </View>
@@ -359,7 +419,7 @@ function FilterSheet({
         <View style={styles.gutter}>
           <PrimaryButton title={`Show ${count} ${count === 1 ? 'card' : 'cards'}`} onPress={onClose} />
         </View>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -520,6 +580,17 @@ const styles = StyleSheet.create({
   sectionTitle: { color: color.ink, fontWeight: '600', paddingHorizontal: space.gutter, paddingBottom: space.s },
   header: { position: 'absolute', left: 0, right: 0, zIndex: 1, backgroundColor: color.canvas },
   statusCover: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2, backgroundColor: color.canvas },
+  chips: { gap: space.s, paddingHorizontal: space.gutter, paddingBottom: space.s, alignItems: 'center' },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    height: size.chip,
+    paddingHorizontal: space.m,
+    borderRadius: radius.chip,
+    backgroundColor: color.well,
+  },
+  chipClear: { height: size.chip, justifyContent: 'center', paddingHorizontal: space.xs },
   controlsRight: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginRight: -10 },
   gridRow: { gap: GRID_GAP, paddingHorizontal: space.gutter, paddingBottom: space.xxl },
   tileArt: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },

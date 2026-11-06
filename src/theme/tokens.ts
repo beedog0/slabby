@@ -45,6 +45,7 @@ export const radius = {
   segmented: 9,
   thumb: 3,
   slab: 12,
+  chip: 15,
 } as const;
 
 export const size = {
@@ -66,6 +67,8 @@ export const size = {
   viewIcon: 40,
   /** Home value chart; its slot keeps this height on every filter so the tabs never move. */
   homeChart: 84,
+  /** Applied-filter chips under search's control row. */
+  chip: 30,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };
