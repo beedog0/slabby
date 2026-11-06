@@ -286,7 +286,7 @@ export default function Home() {
           paddingTop: insets.top + space.l,
           // The dock only shows on an empty vault; a full vault scrolls to the bottom edge.
           paddingBottom:
-            insets.bottom + (isEmpty || selecting ? size.button + space.xxxl + space.l : space.xxl),
+            insets.bottom + (isEmpty || selecting || arranging ? size.button + space.xxxl + space.l : space.xxl),
         }}
       >
         <View style={styles.header}>
@@ -299,9 +299,8 @@ export default function Home() {
                 <Text style={[type.body, { color: color.ink, fontWeight: '600' }]}>Done</Text>
               </Pressable>
             ) : arranging ? (
-              <Pressable accessibilityRole="button" onPress={doneArranging} style={styles.done}>
-                <Text style={[type.body, { color: color.ink, fontWeight: '600' }]}>Done</Text>
-              </Pressable>
+              // Done lives in the bottom bar while arranging; this keeps the header's height.
+              <View style={{ height: size.touch }} />
             ) : (
               <>
                 <IconButton label="Scan a slab" onPress={() => router.push('/scan')}>
@@ -428,6 +427,11 @@ export default function Home() {
           <Pressable accessibilityRole="link" onPress={() => router.push('/add')} style={styles.quiet}>
             <Text style={[type.text, { color: color.secondary }]}>Add by hand</Text>
           </Pressable>
+        </View>
+      ) : arranging ? (
+        // Done stays in reach at the bottom however far down the shelves you've scrolled.
+        <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
+          <PrimaryButton title="Done" onPress={doneArranging} />
         </View>
       ) : selecting && picks.length ? (
         <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
