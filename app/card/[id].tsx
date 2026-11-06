@@ -12,6 +12,7 @@ import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
+import { CardAnalytics } from '../../src/components/search/CardAnalytics';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
 import { gradeLabel, money, pct, rowTitle } from '../../src/lib/format';
 import { detailFor } from '../../src/pricing/portfolio';
@@ -169,6 +170,10 @@ export default function SlabDetail() {
             No comps yet for this card. Prices fill in when sales come in.
           </Text>
         )}
+        {/* The search page's analytics, at this card's grade (raw for raw). */}
+        <View style={styles.gutter}>
+          <CardAnalytics card={card} />
+        </View>
       </ScrollView>
 
     </View>

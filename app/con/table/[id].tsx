@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardThumb } from '../../../src/components/CardThumb';
+import { CardAnalytics } from '../../../src/components/search/CardAnalytics';
 import { PriceLine, type Tick } from '../../../src/components/PriceLine';
 import { Segmented } from '../../../src/components/Segmented';
 import { SoldState } from '../../../src/components/SoldState';
@@ -202,6 +203,8 @@ export default function BeforeTheTable() {
               <Hairline />
             </>
           ) : null}
+          {/* Key stats, range, prices by grade and the set, as on the search page. */}
+          <CardAnalytics card={card} con />
         </View>
       </ScrollView>
 
