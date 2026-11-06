@@ -253,7 +253,7 @@ export function EdgeStrip({ length, depth, vertical }: { length: number; depth: 
   const seam = Math.max(StyleSheet.hairlineWidth, depth * 0.04);
   const across = vertical ? { width: depth, height: length } : { width: length, height: depth };
   return (
-    <View style={[across, { overflow: 'hidden', borderRadius: depth * 0.18 }]}>
+    <View style={[across, { overflow: 'hidden', borderRadius: depth * 0.06 }]}>
       <LinearGradient
         colors={['#E9ECEF', ACRYLIC.edge, ACRYLIC.edgeDark, ACRYLIC.edge, '#EEF0F2']}
         locations={[0, 0.3, 0.5, 0.7, 1]}
@@ -268,7 +268,7 @@ export function EdgeStrip({ length, depth, vertical }: { length: number; depth: 
           { backgroundColor: 'rgba(0,0,0,0.18)' },
         ]}
       />
-      <View style={[styles.abs, { inset: 0, borderRadius: depth * 0.18, borderWidth: seam, borderColor: 'rgba(0,0,0,0.12)' }]} />
+      <View style={[styles.abs, { inset: 0, borderRadius: depth * 0.06, borderWidth: seam, borderColor: 'rgba(0,0,0,0.12)' }]} />
     </View>
   );
 }

@@ -85,8 +85,10 @@ export const Slab3D = memo(function Slab3D({ card, width, yaw: yawIn, pitch: pit
   const backShade = 0.22 * (1 - clamp01(-c));
   const shadowScale = Math.max(0.14, Math.abs(c));
 
-  const sideLen = L.h - L.corner * 0.8;
-  const capLen = L.w - L.corner * 0.8;
+  // Edges run the full height and width: seen side-on the case is a plain rectangle, so a
+  // shorter strip let the face's corners poke out past it.
+  const sideLen = L.h;
+  const capLen = L.w;
   // Every face is laid out centred on the slab, so its transform origin is the slab's centre.
   const center = (w: number, h: number) => ({ position: 'absolute' as const, left: (L.w - w) / 2, top: (L.h - h) / 2, width: w, height: h });
 
