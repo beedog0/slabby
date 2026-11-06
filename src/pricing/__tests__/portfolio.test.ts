@@ -108,12 +108,30 @@ describe('collection value line', () => {
   });
 });
 
-import { gridPrices } from '../../components/PriceChart';
+import { chartRange, indexAtX, paidOnChart } from '../../components/PriceChart';
 
-describe('chart gridlines', () => {
-  it('picks two round prices inside the range', () => {
-    expect(gridPrices(118_000, 142_000)).toEqual([120_000, 140_000]);
-    expect(gridPrices(5_000, 5_000)).toEqual([5_000]);
+describe('chart scale and scrub', () => {
+  it('keeps a real range and widens a flat one to 4% of the value', () => {
+    expect(chartRange([12_400, 17_400])).toEqual({ lo: 12_400, hi: 17_400 });
+    const flat = chartRange([10_000, 10_100]);
+    expect(flat.hi - flat.lo).toBeCloseTo(404);
+    expect((flat.hi + flat.lo) / 2).toBe(10_050);
+  });
+
+  it('draws the paid line only when it sits near the price range', () => {
+    const series = [10_000, 9_500, 9_000, 8_300]; // $100 down to $83
+    expect(paidOnChart(series, 9_000)).toBe(true); // inside
+    expect(paidOnChart(series, 7_600)).toBe(true); // just under the low
+    expect(paidOnChart(series, 6_000)).toBe(false); // paid $60: far below, header says it
+    expect(paidOnChart(series, null)).toBe(false);
+  });
+
+  it('maps a finger position to the day under it, clamped to the ends', () => {
+    expect(indexAtX(8, 300, 91)).toBe(0);
+    expect(indexAtX(292, 300, 91)).toBe(90);
+    expect(indexAtX(150, 300, 91)).toBe(45);
+    expect(indexAtX(-40, 300, 91)).toBe(0);
+    expect(indexAtX(900, 300, 91)).toBe(90);
   });
 });
 
