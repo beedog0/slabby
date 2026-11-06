@@ -1,11 +1,12 @@
 // Slab detail: slab, value vs paid, price chart, comps row, and "Your price" (ask and lowest),
-// which opens Before the table. Sell sheet moves live in the … menu.
+// which opens Before the table. The graded comps row opens Recent sales (card/[id]/sales.tsx).
+// Sell sheet moves live in the … menu.
 // Reference: 03-slab-detail.png. "More stats" (Phase 3) and the 1y range (needs history beyond
 // 90 days) are left out until they have data behind them, so nothing here is a dead tap.
 
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActionSheetIOS, Alert, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActionSheetIOS, Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { trendTint } from '../../src/components/MiniChart';
@@ -14,7 +15,6 @@ import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
-import { ebaySoldUrl } from '../../src/lib/ebay';
 import { gradeLabel, money, rowTitle } from '../../src/lib/format';
 import { detailFor } from '../../src/pricing/portfolio';
 import { freshnessLine, trendSentence, trendVerdict } from '../../src/pricing/trend';
@@ -135,23 +135,23 @@ export default function SlabDetail() {
             {price ? (
               <>
                 <Pressable
-                  accessibilityRole={raw ? undefined : 'link'}
-                  accessibilityHint={raw ? undefined : 'Opens eBay sold listings'}
+                  accessibilityRole={raw ? undefined : 'button'}
+                  accessibilityHint={raw ? undefined : 'Shows recent sales'}
                   disabled={raw}
-                  onPress={() => Linking.openURL(ebaySoldUrl(card)).catch(() => {})}
+                  onPress={() => router.push(`/card/${card.id}/sales`)}
                   style={({ pressed }) => [styles.compsArea, pressed && { opacity: 0.5 }]}
                 >
                   <View style={styles.compsLine}>
                     <Text style={[type.body, { color: color.ink, fontWeight: '400', flexShrink: 1 }]}>
                       {raw
-                        ? 'TCGplayer market, 30 days'
+                        ? 'TCGplayer market'
                         : price.sales30d > 0
                           ? `${price.sales30d} eBay sales, 30 days`
                           : 'No eBay sales in 30 days'}
                     </Text>
                     <View style={styles.priceLink}>
                       <Text style={[type.body, { color: color.ink }]}>
-                        {!raw && price.sales30d === 0
+                        {raw || price.sales30d === 0
                           ? money(price.marketCents)
                           : `${money(price.lowCents)}–${money(price.highCents).replace('$', '')}`}
                       </Text>
