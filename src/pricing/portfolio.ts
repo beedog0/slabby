@@ -203,3 +203,30 @@ export function soldSeries(rows: CardRow[], days = 30, now = new Date()): number
   let run = before;
   return out.map((v) => (run += v));
 }
+
+export type ConBuySummary = { spentCents: number; count: number; underMarketCents: number };
+
+/** The market a buy is measured against: what it was when you paid, else today's. */
+export function buyMarket(r: CardRow): number | null {
+  return r.card.boughtMarketCents ?? r.price?.marketCents ?? null;
+}
+
+/** Slabs bought in Buying during this con session, newest first. Slabs added while selling don't count. */
+export function boughtIn(rows: CardRow[], conId: string): CardRow[] {
+  return rows
+    .filter((r) => r.card.boughtConId === conId && r.card.paidCents != null)
+    .sort((a, b) => b.card.createdAt.localeCompare(a.card.createdAt));
+}
+
+/** Buying side of a con: what you spent and how far under market, per the market when you paid. */
+export function conBuySummary(rows: CardRow[], conId: string): ConBuySummary {
+  let spentCents = 0, count = 0, underMarketCents = 0;
+  for (const r of boughtIn(rows, conId)) {
+    const paid = r.card.paidCents ?? 0;
+    spentCents += paid;
+    count++;
+    const m = buyMarket(r);
+    if (m != null) underMarketCents += m - paid;
+  }
+  return { spentCents, count, underMarketCents };
+}

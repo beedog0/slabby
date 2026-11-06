@@ -25,8 +25,8 @@ export function backToCon(s: ConStatus, id?: string) {
 /** Long-press on a con row: Hold, For sale, Trade only, Sold. Sold hands off for the price. */
 export function openConStatusMenu(card: Card, opts: { onChanged: (s: ConStatus) => void; onSold: () => void }) {
   const now = conStatusOf(card);
-  openSlabMenu(
-    card,
+  openSlabMenu(card, [
+    [{ label: 'Got an offer', onPress: () => router.push(`/con/offer/${card.id}`) }],
     CON_STATUSES.map((s) => ({
       label: CON_STATUS_LABEL[s],
       selected: now === s,
@@ -37,5 +37,5 @@ export function openConStatusMenu(card: Card, opts: { onChanged: (s: ConStatus) 
         opts.onChanged(s);
       },
     })),
-  );
+  ]);
 }

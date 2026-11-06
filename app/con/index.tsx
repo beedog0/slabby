@@ -1,4 +1,5 @@
-// Con mode: sold today, floor total, for-sale list with ask and floor. Reference: 05-con-mode.png.
+// Con mode: a Selling / Buying switch under the con name. Selling: sold today, what's left at floor,
+// the for-sale list with ask and floor. Buying: src/components/con/BuyingPane.tsx. Reference: 05-con-mode.png.
 // The + beside "Got an offer" opens the "Put on the table" sheet: pick slabs from the vault and set
 // Hold, For sale, Trade only or Sold without leaving con mode, or scan a new one. Long-press a row
 // for the same choices. Whatever changed is flashed on the tab it landed on. Search and sort sit
@@ -13,8 +14,9 @@ import { ConRow } from '../../src/components/ConRow';
 import { SearchSort } from '../../src/components/collection/SearchSort';
 import { Segmented } from '../../src/components/Segmented';
 import { openConStatusMenu, takeScanAdded } from '../../src/components/conStatusMenu';
+import { BuyingPane } from '../../src/components/con/BuyingPane';
 import { TableSheet, type TableSheetOpen } from '../../src/components/con/TableSheet';
-import { Hairline, PlusIcon, PrimaryButton, SearchIcon } from '../../src/components/ui';
+import { Hairline, PlusIcon, PrimaryButton } from '../../src/components/ui';
 import { conTabFor, type ConStatus } from '../../src/lib/conStatus';
 import { elapsed, money } from '../../src/lib/format';
 import { arrange, type SortKey } from '../../src/pricing/arrange';
@@ -35,12 +37,16 @@ export default function ConMode() {
   const insets = useSafeAreaInsets();
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
-  const { session, start, end } = useCon();
+  const { session, start, end, mode, setMode } = useCon();
+  const selling = mode !== 'buy';
   const [tab, setTab] = useState<Tab>('sale');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('value');
   const [sheet, setSheet] = useState<TableSheetOpen | null>(null);
-  const [flash, setFlash] = useState<{ ids: string[]; at: number }>({ ids: [], at: 0 });
+  const [flash, setFlash] = useState<{ ids: string[]; at: number }>({
+    ids: [],
+    at: 0,
+  });
   /** Show where changed slabs went: the tab of the last change, with every changed row flashed. */
   const landOn = (changed: { id: string; status: ConStatus }[]) => {
     const last = changed[changed.length - 1];
@@ -59,7 +65,11 @@ export default function ConMode() {
     }, []),
   );
   // Back from the scanner: `at` makes a repeat of the same tab count.
-  const params = useLocalSearchParams<{ tab?: Tab; flash?: string; at?: string }>();
+  const params = useLocalSearchParams<{
+    tab?: Tab;
+    flash?: string;
+    at?: string;
+  }>();
   useEffect(() => {
     if (params.tab === 'sale' || params.tab === 'sold' || params.tab === 'trade') setTab(params.tab);
     if (params.flash) setFlash({ ids: [params.flash], at: Date.now() });
@@ -117,7 +127,13 @@ export default function ConMode() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top + space.l }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: color.canvas,
+        paddingTop: insets.top + space.l,
+      }}
+    >
       <View style={styles.header}>
         <View style={{ gap: 3, flex: 1 }}>
           <View style={styles.indicator}>
@@ -135,96 +151,122 @@ export default function ConMode() {
         </Pressable>
       </View>
 
-      <View style={styles.totals}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[type.displayS, { color: color.ink }]}>{money(sum.soldCents)}</Text>
-          <Text style={[type.secondary, { color: color.secondary }]}>
-            sold today · {sum.soldCount} of {sum.totalCount}
-          </Text>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 2 }}>
-          <Text style={[type.numberM, { color: color.ink }]}>{money(sum.floorTotalCents)}</Text>
-          <Text style={[type.secondary, { color: color.secondary }]}>if everything hits floor</Text>
-        </View>
-      </View>
-      {freshness ? (
-        <Text numberOfLines={1} style={[type.secondary, styles.freshness, { color: color.secondary }]}>
-          {freshness}
-        </Text>
-      ) : null}
-
-      <Segmented<Tab>
-        style={{ marginHorizontal: space.gutter, marginTop: space.xl }}
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: 'sale', label: 'For sale' },
-          { value: 'sold', label: 'Sold' },
-          { value: 'trade', label: 'Trade only' },
-        ]}
-      />
-
-      <View style={{ marginHorizontal: space.gutter, marginTop: space.s }}>
-        <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} sorts={CON_SORTS} />
-      </View>
-
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.xs, paddingBottom: space.xxl }}
-        refreshControl={<RefreshControl refreshing={refreshing > 0} onRefresh={pull} tintColor={color.secondary} />}
-      >
-        {visible.map((r) => (
-          <View key={r.card.id}>
-            <Flash on={flash.ids.includes(r.card.id)} at={flash.at} />
-            <ConRow
-              row={r}
-              onPress={() => r.card.status === 'owned' && router.push(`/con/table/${r.card.id}`)}
-              onLongPress={
-                r.card.status === 'owned'
-                  ? () =>
-                      openConStatusMenu(r.card, {
-                        onChanged: (s) => landOn([{ id: r.card.id, status: s }]),
-                        onSold: () => setSheet({ step: 'price', id: r.card.id }),
-                      })
-                  : undefined
-              }
-            />
-            <Hairline inset={size.thumbW + space.m} />
-          </View>
+      <View accessibilityRole="tablist" style={styles.modes}>
+        {(['sell', 'buy'] as const).map((m) => (
+          <Pressable
+            key={m}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: mode === m }}
+            hitSlop={8}
+            onPress={() => {
+              if (m === mode) return;
+              Haptics.selectionAsync().catch(() => {});
+              setMode(m);
+            }}
+          >
+            <Text style={[type.section, { color: mode === m ? color.ink : color.secondary }]}>{m === 'sell' ? 'Selling' : 'Buying'}</Text>
+            <View style={[styles.modeBar, { backgroundColor: mode === m ? color.ink : 'transparent' }]} />
+          </Pressable>
         ))}
-        {visible.length === 0 ? (
-          <Text style={[type.text, { color: color.secondary, paddingTop: space.xl }]}>
-            {query.trim() && onTab.length
-              ? 'Nothing here matches.'
-              : tab === 'sold'
-                ? 'Nothing sold yet.'
-                : tab === 'trade'
-                  ? 'No cards marked trade only.'
-                  : 'No cards marked for sale.'}
-          </Text>
-        ) : null}
-      </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: insets.bottom + space.l }]}>
-        <PrimaryButton style={{ flex: 1 }} title="Got an offer" onPress={() => router.push('/con/pick')} />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Search a card to buy"
-          onPress={() => router.push('/search?con=1')}
-          style={({ pressed }) => [styles.add, pressed && { opacity: 0.6 }]}
-        >
-          <SearchIcon />
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add a slab to the table"
-          onPress={() => setSheet({ step: 'list' })}
-          style={({ pressed }) => [styles.add, pressed && { opacity: 0.6 }]}
-        >
-          <PlusIcon />
-        </Pressable>
       </View>
+
+      {selling ? (
+        <>
+          <View style={styles.totals}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={[type.displayS, { color: color.ink }]}>{money(sum.soldCents)}</Text>
+              <Text style={[type.secondary, { color: color.secondary }]}>
+                sold today · {sum.soldCount} of {sum.totalCount}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', gap: 2 }}>
+              <Text style={[type.numberM, { color: color.ink }]}>{money(sum.floorTotalCents)}</Text>
+              <Text style={[type.secondary, { color: color.secondary }]}>left at floor</Text>
+            </View>
+          </View>
+          {freshness ? (
+            <Text numberOfLines={1} style={[type.secondary, styles.freshness, { color: color.secondary }]}>
+              {freshness}
+            </Text>
+          ) : null}
+
+          <Segmented<Tab>
+            style={{ marginHorizontal: space.gutter, marginTop: space.xl }}
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'sale', label: 'For sale' },
+              { value: 'sold', label: 'Sold' },
+              { value: 'trade', label: 'Trade only' },
+            ]}
+          />
+
+          <View style={{ marginHorizontal: space.gutter, marginTop: space.s }}>
+            <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} sorts={CON_SORTS} />
+          </View>
+
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentContainerStyle={{
+              paddingHorizontal: space.gutter,
+              paddingTop: space.xs,
+              paddingBottom: space.xxl,
+            }}
+            refreshControl={<RefreshControl refreshing={refreshing > 0} onRefresh={pull} tintColor={color.secondary} />}
+          >
+            {visible.map((r) => (
+              <View key={r.card.id}>
+                <Flash on={flash.ids.includes(r.card.id)} at={flash.at} />
+                <ConRow
+                  row={r}
+                  onPress={() => router.push(r.card.status === 'owned' ? `/con/table/${r.card.id}` : `/con/offer/${r.card.id}`)}
+                  onLongPress={
+                    r.card.status === 'owned'
+                      ? () =>
+                          openConStatusMenu(r.card, {
+                            onChanged: (s) => landOn([{ id: r.card.id, status: s }]),
+                            onSold: () => setSheet({ step: 'price', id: r.card.id }),
+                          })
+                      : undefined
+                  }
+                />
+                <Hairline inset={size.thumbW + space.m} />
+              </View>
+            ))}
+            {visible.length === 0 ? (
+              <Text style={[type.text, { color: color.secondary, paddingTop: space.xl }]}>
+                {query.trim() && onTab.length
+                  ? 'Nothing here matches.'
+                  : tab === 'sold'
+                    ? 'Nothing sold yet.'
+                    : tab === 'trade'
+                      ? 'No cards marked trade only.'
+                      : 'No cards marked for sale.'}
+              </Text>
+            ) : null}
+          </ScrollView>
+
+          <View style={[styles.footer, { paddingBottom: insets.bottom + space.l }]}>
+            <PrimaryButton style={{ flex: 1 }} title="Got an offer" onPress={() => router.push('/con/pick')} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add a slab to the table"
+              onPress={() => setSheet({ step: 'list' })}
+              style={({ pressed }) => [styles.add, pressed && { opacity: 0.6 }]}
+            >
+              <PlusIcon />
+            </Pressable>
+          </View>
+        </>
+      ) : (
+        <BuyingPane
+          rows={rows}
+          conId={session.id}
+          bottomInset={insets.bottom}
+          flash={(id) => <Flash on={flash.ids.includes(id)} at={flash.at} />}
+        />
+      )}
 
       <TableSheet
         open={sheet}
@@ -248,13 +290,25 @@ function Flash({ on, at }: { on: boolean; at: number }) {
   useEffect(() => {
     if (!on) return;
     o.setValue(1);
-    Animated.timing(o, { toValue: 0, duration: 600, delay: 200, useNativeDriver: true }).start();
+    Animated.timing(o, {
+      toValue: 0,
+      duration: 600,
+      delay: 200,
+      useNativeDriver: true,
+    }).start();
   }, [on, at, o]);
   return <Animated.View pointerEvents="none" style={[styles.flash, { opacity: o }]} />;
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, gap: space.m },
+  modes: { flexDirection: 'row', gap: space.xl, paddingHorizontal: space.gutter, paddingTop: space.l },
+  modeBar: { height: 2, borderRadius: 1, marginTop: space.xs },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.gutter,
+    gap: space.m,
+  },
   indicator: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: color.conFill },
   done: {
@@ -265,10 +319,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  totals: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: space.gutter, paddingTop: space.xl },
-  flash: { position: 'absolute', top: 0, bottom: 0, left: -space.gutter, right: -space.gutter, backgroundColor: color.well },
+  totals: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: space.gutter,
+    paddingTop: space.xl,
+  },
+  flash: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: -space.gutter,
+    right: -space.gutter,
+    backgroundColor: color.well,
+  },
+  footer: {
+    flexDirection: 'row',
+    gap: space.m,
+    paddingHorizontal: space.gutter,
+    paddingTop: space.s,
+  },
   freshness: { paddingHorizontal: space.gutter, paddingTop: space.s },
-  footer: { flexDirection: 'row', gap: space.m, paddingHorizontal: space.gutter, paddingTop: space.s },
   add: {
     width: size.button,
     height: size.button,

@@ -190,5 +190,11 @@ export function mergeVault(
   const remote = remoteAll.filter((c) => !removed.has(c.id));
   const remoteIds = new Set(remote.map((c) => c.id));
   const toPush = local.filter((c) => isUuid(c.id) && !remoteIds.has(c.id));
-  return { merged: [...toPush, ...remote], toPush };
+  // Con buys are phone-only notes (not columns yet): keep them on the server's copy.
+  const localById = new Map(local.map((c) => [c.id, c]));
+  const kept = remote.map((r) => {
+    const l = localById.get(r.id);
+    return l?.boughtConId ? { ...r, boughtConId: l.boughtConId, boughtMarketCents: l.boughtMarketCents ?? null } : r;
+  });
+  return { merged: [...toPush, ...kept], toPush };
 }

@@ -17,11 +17,12 @@ import { minFloorOverride } from '../../../src/pricing/rules';
 import { freshnessLine, freshnessWorthShowing, trendSentence, trendVerdict } from '../../../src/pricing/trend';
 import { useCardRow } from '../../../src/pricing/useCardRow';
 import { useCardRefresh } from '../../../src/services/useRefresh';
+import { useCon, type ConMode } from '../../../src/store/con';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
 import { color, size, space, type } from '../../../src/theme/tokens';
 
-type Mode = 'sell' | 'buy';
+type Mode = ConMode;
 
 export default function BeforeTheTable() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -29,7 +30,8 @@ export default function BeforeTheTable() {
   const row = useCardRow(id);
   const rules = useRules((s) => s.rules);
   const update = useVault((s) => s.update);
-  const [mode, setMode] = useState<Mode>('sell');
+  // Starts on con mode's side; flipping here is a quick look and never changes con mode.
+  const [mode, setMode] = useState<Mode>(useCon.getState().mode);
   const refresh = useCardRefresh(row?.card);
 
   if (!row) return null;

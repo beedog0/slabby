@@ -24,6 +24,9 @@ export type Card = {
   imageFrontUrl: string | null;
   /** Placeholder art color until card photos are wired up. */
   artColor?: string;
+  /** Bought in con mode's Buying: which con session, and the market for that grade when you paid. */
+  boughtConId?: string;
+  boughtMarketCents?: number | null;
   /** Raw cards only, e.g. "near mint". */
   condition?: string;
   paidCents: number | null;
