@@ -216,39 +216,35 @@ export default function Home() {
       {' this month'}
     </>
   ) : null;
+  // Line above the number: what it is, and how many slabs it counts.
+  const label = `${VALUE_LABEL[filter]} · ${plural(total, 'slab')}`;
+  // Line under the number: how that value moved (or, for sale and sold, the number that matters there).
   const subline: ReactNode =
-    filter === 'all' ? (
-      <>
-        {plural(total, 'slab')}
-        {month ? ' · ' : null}
-        {month}
-      </>
-    ) : filter === 'hold' ? (
+    filter === 'sell' ? (
       total ? (
-        <>
-          {plural(total, 'hold')}
-          {month ? ' · ' : null}
-          {month}
-        </>
-      ) : (
-        'No holds'
-      )
-    ) : filter === 'sell' ? (
-      total ? (
-        `${total} for sale · floor ${money(stats.floorTotalCents)}`
+        `Floor ${money(stats.floorTotalCents)}`
       ) : (
         'Nothing for sale'
       )
-    ) : total ? (
-      <>
-        {`${total} sold · `}
-        <Text style={{ color: stats.profitCents >= 0 ? color.gain : color.loss }}>
-          {money(Math.abs(stats.profitCents))}
-        </Text>
-        {stats.profitCents >= 0 ? ' over paid' : ' under paid'}
-      </>
+    ) : filter === 'sold' ? (
+      total ? (
+        <>
+          <Text style={{ color: stats.profitCents >= 0 ? color.gain : color.loss }}>
+            {`${stats.profitCents >= 0 ? '+' : '−'}${money(Math.abs(stats.profitCents))}`}
+          </Text>
+          {stats.profitCents >= 0 ? ' over what you paid' : ' under what you paid'}
+        </>
+      ) : (
+        'Nothing sold yet'
+      )
+    ) : !total ? (
+      filter === 'hold' ? (
+        'No holds yet'
+      ) : (
+        'Nothing here yet'
+      )
     ) : (
-      'Nothing sold'
+      (month ?? 'Flat this month')
     );
 
   return (
@@ -286,7 +282,7 @@ export default function Home() {
           <>
             <View style={styles.value}>
               <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                {VALUE_LABEL[filter]}
+                {label}
               </Text>
               <Text numberOfLines={1} style={[type.displayS, { color: total ? color.ink : color.secondary }]}>
                 {money(stats.totalCents)}
