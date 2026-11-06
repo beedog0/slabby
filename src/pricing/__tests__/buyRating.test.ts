@@ -39,3 +39,14 @@ describe('conBuySummary', () => {
     expect(conBuySummary(rows, 'con-1')).toEqual({ spentCents: 10_000, count: 1, underMarketCents: 4_000 });
   });
 });
+
+import { ratingHistory } from '../rules';
+
+describe('ratingHistory', () => {
+  it('rates a fixed price against each day', () => {
+    // target 85%, max 95% of each day's market
+    const limits = (m: number) => ({ targetCents: Math.round(m * 0.85), maxCents: Math.round(m * 0.95) });
+    const h = ratingHistory(9_000, [10_000, 11_000, 9_000, 8_000, 0], limits);
+    expect(h).toEqual({ steal: 1, good: 1, fair: 1, over: 1 });
+  });
+});

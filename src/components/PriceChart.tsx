@@ -24,6 +24,8 @@ type Props = {
   /** Hand the pressed price and date to the parent (home shows them in its big number) instead of
    * drawing the readout above the plot. Called with null on release. */
   onScrub?: (point: { cents: number; date?: string } | null) => void;
+  /** Label for the dashed line; "paid" unless the line is something else, like a wishlist price. */
+  lineLabel?: string;
 };
 
 const PAD = 8;
@@ -105,7 +107,7 @@ export function ease(vals: number[]): number[] {
   return out;
 }
 
-export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false, onScrub }: Props) {
+export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false, onScrub, lineLabel = 'paid' }: Props) {
   // A gently eased line (moving average, today exact) so daily noise doesn't zigzag.
   const values = useMemo(() => ease(raw), [raw]);
   const [scrub, setScrub] = useState<number | null>(null); // index into raw
@@ -200,7 +202,7 @@ export function PriceChart({ values: raw, paidCents, width, height = 160, tint =
 
         {paidY != null && s == null ? (
           <Text style={[labelStyle, { position: 'absolute', right: PAD, top: paidTop, fontVariant: ['tabular-nums'] }]}>
-            paid {money(paidCents as number)}
+            {lineLabel} {money(paidCents as number)}
           </Text>
         ) : null}
 

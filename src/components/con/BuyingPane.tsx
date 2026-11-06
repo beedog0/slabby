@@ -10,6 +10,12 @@ import { boughtIn, buyMarket, conBuySummary, type CardRow } from '../../pricing/
 import { color, radius, size, space, type } from '../../theme/tokens';
 import { CardThumb } from '../CardThumb';
 import { Hairline, PrimaryButton, ScanIcon } from '../ui';
+import { ArtImage } from '../ArtImage';
+import { openMenu } from '../menu/Menu';
+import { BUY_RATING_LABEL, buyRating } from '../../pricing/rules';
+import { buyPrices, gradeLabel as searchGrade } from '../../services/search';
+import { useRules } from '../../store/rules';
+import { useWishlist, type WishItem } from '../../store/wishlist';
 
 type Props = {
   rows: CardRow[];
@@ -23,6 +29,7 @@ const lookUp = () => router.push('/search?con=1');
 export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
   const sum = conBuySummary(rows, conId);
   const bought = boughtIn(rows, conId);
+  const wishes = useWishlist((s) => s.items);
 
   return (
     <View style={{ flex: 1 }}>
@@ -61,6 +68,18 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
       </Pressable>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.l, paddingBottom: space.xxl }}>
+        {wishes.length ? (
+          <>
+            <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.xs }]}>Wishlist</Text>
+            {wishes.map((w) => (
+              <View key={w.key}>
+                <WishRow item={w} />
+                <Hairline inset={size.thumbW + space.m} />
+              </View>
+            ))}
+            <View style={{ height: space.xl }} />
+          </>
+        ) : null}
         {bought.length ? (
           <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.xs }]}>Bought today</Text>
         ) : null}
@@ -99,9 +118,10 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
             </View>
           );
         })}
-        {bought.length === 0 ? (
+        {bought.length === 0 && wishes.length === 0 ? (
           <Text style={[type.text, { color: color.secondary, paddingTop: space.s }]}>
-            Nothing bought yet. Look up a card, type what they're asking, and Slabby rates it against your buying rules.
+            Nothing bought yet. Look up a card, type what they're asking, and Slabby rates it against your buying rules. Cards
+            you're hunting can go on your wishlist with the price you want.
           </Text>
         ) : null}
       </ScrollView>
@@ -121,7 +141,57 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
   );
 }
 
+/** A wanted card: your price, how it rates against the last market seen, tap to rate their price. */
+function WishRow({ item }: { item: WishItem }) {
+  const rules = useRules((s) => s.rules);
+  const remove = useWishlist((s) => s.remove);
+  const b = buyPrices(item.marketCents, rules);
+  const rating =
+    b && item.marketCents
+      ? buyRating(item.targetCents, { targetCents: b.target, maxCents: b.max, marketCents: item.marketCents })
+      : null;
+  const params = { id: String(item.productId), grade: item.grade };
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityHint="Rate what they're asking"
+      onPress={() => router.push({ pathname: '/con/buy/[id]', params })}
+      onLongPress={() =>
+        openMenu({
+          title: item.name,
+          subtitle: searchGrade(item.grade),
+          items: [
+            { label: "They're asking…", onPress: () => router.push({ pathname: '/con/buy/[id]', params }) },
+            { label: 'Change my price', onPress: () => router.push({ pathname: '/con/want/[id]', params }) },
+            { label: 'Remove from wishlist', onPress: () => remove(item.key) },
+          ],
+        })
+      }
+      style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+    >
+      <View style={styles.thumb}>
+        {item.imageUrl ? <ArtImage uri={item.imageUrl} recyclingKey={item.key} style={{ flex: 1 }} /> : null}
+      </View>
+      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+        <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
+          {item.name}
+        </Text>
+        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+          {searchGrade(item.grade)}
+          {item.marketCents ? ` · market ${money(item.marketCents)}` : ''}
+          {rating ? ` · ${BUY_RATING_LABEL[rating.kind].toLowerCase()}` : ''}
+        </Text>
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+        <Text style={[type.rowPrice, { color: color.ink }]}>{money(item.targetCents)}</Text>
+        <Text style={[type.secondary, { color: color.secondary }]}>{item.autoTarget ? 'your max' : 'want'}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  thumb: { width: size.thumbW, height: size.thumbH, borderRadius: 3, overflow: 'hidden', backgroundColor: color.well },
   totals: { paddingHorizontal: space.gutter, paddingTop: space.xl, gap: 2 },
   search: {
     height: size.touch,
