@@ -1,13 +1,14 @@
-// Scan: point at the front label and tap "Read label". The photo is read on device (Apple Vision)
-// → sheet → "Add to vault". No PSA call on this path: PSA's API is closed to us for now, so label
-// reading is the default. The QR → PSA lookup only runs where the label reader isn't built in
+// Scan: point at the front label. Slabby reads a frame about once a second on device (Apple Vision)
+// and opens the sheet once two reads in a row agree (label in frame, held steady); "Read label"
+// reads right away as the manual fallback. → sheet → "Add to vault". No PSA call on this path:
+// PSA's API is closed to us for now, so label reading is the default. The QR → PSA lookup only runs where the label reader isn't built in
 // (web, Expo Go). Reference: 02-scan.png. Comps never run on this path.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { CardThumb } from '../src/components/CardThumb';
@@ -16,13 +17,17 @@ import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
 import { matchNewCard, priceFor, refreshPrices } from '../src/services/comps';
-import { parseLabel } from '../src/services/label';
+import { parseLabel, steadyKey, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
 import { LabelReader } from '../modules/label-reader';
 import { color, radius, size, space, type } from '../src/theme/tokens';
 
 const LANG_NAME: Record<string, string> = { ja: 'Japanese', en: 'English', ko: 'Korean', zh: 'Chinese' };
 const SCAN_BG = '#2A2A2C'; // camera chrome only; never used on app UI
+const AUTO_START_MS = 700; // let exposure and focus settle first
+const AUTO_GAP_MS = 350; // between auto reads; each read itself takes ~0.5–1 s
+const NAV_H = 44;
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function Scan() {
   const insets = useSafeAreaInsets();
@@ -40,6 +45,14 @@ export default function Scan() {
   const [reading, setReading] = useState(false);
   const [labelMiss, setLabelMiss] = useState(false);
   const [seen, setSeen] = useState('');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [active, setActive] = useState(AppState.currentState === 'active');
+  // A label was read once and we're waiting for a second matching read.
+  const [spotted, setSpotted] = useState(false);
+  const inFlight = useRef(false);
+  const manualAsk = useRef(false);
+  const lastKey = useRef<string | null>(null);
+  const win = useWindowDimensions();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
 
@@ -72,36 +85,78 @@ export default function Scan() {
 
   const rescan = () => {
     lastCert.current = null;
+    lastKey.current = null;
+    setSpotted(false);
     setLabelMiss(false);
     setResult(null);
   };
 
-  // Photograph the front label and read it on device. A cert from the back's code wins over OCR.
-  const readLabel = async () => {
-    if (!LabelReader || !camera.current || reading) return;
-    setReading(true);
+  const accept = (parsed: ParsedLabel) => {
+    const cert = result?.cert ?? lastCert.current ?? parsed.payload.PSACert.CertNumber;
+    parsed.payload.PSACert.CertNumber = cert ?? '';
+    lastCert.current = cert || null;
+    lastKey.current = null;
+    setSpotted(false);
     setLabelMiss(false);
+    setResult({ status: 'found', cert: cert ?? '', payload: parsed.payload, source: 'label' });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  };
+
+  // Photograph the front label and read it on device. A cert from the back's code wins over OCR.
+  // Auto reads are silent and only act on two matching reads; a tap acts on one read and says so
+  // when it can't find a label. A tap during an auto read takes that read over.
+  const capture = async (manual: boolean) => {
+    if (!LabelReader || !camera.current) return;
+    if (manual) {
+      setReading(true);
+      setLabelMiss(false);
+      manualAsk.current = true;
+    }
+    if (inFlight.current) return;
+    inFlight.current = true;
+    let uri: string | undefined;
     try {
-      const photo = await camera.current.takePictureAsync({ quality: 0.9, skipProcessing: false });
-      const lines = photo ? await LabelReader.recognize(photo.uri) : [];
+      const photo = await camera.current.takePictureAsync({ quality: manual ? 0.9 : 0.7, shutterSound: false });
+      uri = photo?.uri;
+      const lines = uri ? await LabelReader.recognize(uri) : [];
       const parsed = parseLabel(lines);
-      setSeen(lines.slice(0, 4).map((l) => l.text).join(' · '));
-      if (!parsed || !parsed.payload.PSACert.Subject) {
+      const asked = manualAsk.current;
+      if (asked) {
+        if (parsed?.payload.PSACert.Subject) return accept(parsed);
+        setSeen(lines.slice(0, 4).map((l) => l.text).join(' · '));
         setLabelMiss(true);
+        lastKey.current = null;
+        setSpotted(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         return;
       }
-      const cert = result?.cert ?? lastCert.current ?? parsed.payload.PSACert.CertNumber;
-      parsed.payload.PSACert.CertNumber = cert ?? '';
-      lastCert.current = cert || null;
-      setResult({ status: 'found', cert: cert ?? '', payload: parsed.payload, source: 'label' });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      const key = steadyKey(parsed);
+      if (!key || !parsed) {
+        lastKey.current = null;
+        setSpotted(false);
+      } else if (key === lastKey.current) {
+        accept(parsed);
+      } else {
+        if (!lastKey.current) Haptics.selectionAsync().catch(() => {});
+        lastKey.current = key;
+        setSpotted(true);
+        setLabelMiss(false);
+      }
     } catch {
-      setLabelMiss(true);
+      if (manualAsk.current) setLabelMiss(true);
     } finally {
+      if (uri) {
+        try {
+          LabelReader.discard?.(uri);
+        } catch {}
+      }
+      manualAsk.current = false;
+      inFlight.current = false;
       setReading(false);
     }
   };
+  const captureRef = useRef(capture);
+  captureRef.current = capture;
 
   // From a failed lookup: close the sheet but keep the cert, so the label read can use it.
   const toLabel = () => {
@@ -117,6 +172,48 @@ export default function Scan() {
   const canUseCamera = Platform.OS !== 'web' && permission?.granted;
   const denied = Platform.OS !== 'web' && !!permission && !permission.granted && !permission.canAskAgain;
 
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => setActive(s === 'active'));
+    return () => sub.remove();
+  }, []);
+
+  // Auto read: while the camera is up and no sheet is open, read a frame, pause, repeat.
+  const autoOn = labelMode && !!canUseCamera && cameraReady && active && !result;
+  useEffect(() => {
+    if (!autoOn) return;
+    let alive = true;
+    (async () => {
+      await wait(AUTO_START_MS);
+      while (alive) {
+        await captureRef.current(false);
+        await wait(AUTO_GAP_MS);
+      }
+    })();
+    return () => {
+      alive = false;
+      lastKey.current = null;
+      setSpotted(false);
+    };
+  }, [autoOn]);
+
+  // Label-shaped window (PSA labels are about 3:1). The picture outside it is dimmed.
+  const frameW = labelMode ? Math.min(win.width - space.xxxl * 2 + space.l, 340) : 240;
+  const frameH = labelMode ? Math.round(frameW / 2.9) : frameW;
+  const frameTop = insets.top + space.s + NAV_H + space.xxxl;
+  const hint = busy
+    ? 'Checking with PSA'
+    : reading
+      ? 'Reading the label'
+      : labelMiss
+        ? seen
+          ? `Couldn’t find a PSA label in “${seen.slice(0, 80)}”. Fit the label in the frame and hold steady.`
+          : 'Couldn’t read any text. Move closer so the label fills the frame.'
+        : spotted
+          ? 'Hold still'
+          : labelMode
+            ? 'Fit the front label in the frame'
+            : 'Line up the QR or barcode on the back of the slab';
+
   return (
     <View style={{ flex: 1, backgroundColor: SCAN_BG }}>
       {canUseCamera ? (
@@ -125,10 +222,27 @@ export default function Scan() {
           style={StyleSheet.absoluteFill}
           facing="back"
           enableTorch={torch}
+          onCameraReady={() => setCameraReady(true)}
           barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'code39'] }}
           onBarcodeScanned={result || labelMode ? undefined : ({ data }) => handle(data)}
         />
       ) : null}
+
+      {/* Scrim: four flat panels around the label window, so the picture behind the hint is dimmed. */}
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <View style={[styles.scrim, { height: frameTop }]} />
+        <View style={{ flexDirection: 'row', height: frameH }}>
+          <View style={[styles.scrim, { flex: 1 }]} />
+          <View style={{ width: frameW, height: frameH }}>
+            {spotted ? <View style={styles.frameLocked} /> : null}
+            {['tl', 'tr', 'bl', 'br'].map((c) => (
+              <View key={c} style={[styles.corner, corner(c)]} />
+            ))}
+          </View>
+          <View style={[styles.scrim, { flex: 1 }]} />
+        </View>
+        <View style={[styles.scrim, { flex: 1 }]} />
+      </View>
 
       <View style={[styles.nav, { paddingTop: insets.top + space.s }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={styles.navBtn}>
@@ -144,25 +258,10 @@ export default function Scan() {
         </Pressable>
       </View>
 
-      <View style={styles.viewfinder}>
-        <View style={styles.frame}>
-          {['tl', 'tr', 'bl', 'br'].map((c) => (
-            <View key={c} style={[styles.corner, corner(c)]} />
-          ))}
+      <View style={[styles.below, { top: frameTop + frameH + space.xl }]}>
+        <View style={styles.hint}>
+          <Text style={[type.text, { color: color.onInk, textAlign: 'center' }]}>{hint}</Text>
         </View>
-        <Text style={[type.text, { color: 'rgba(255,255,255,0.75)', textAlign: 'center', paddingTop: space.xl }]}>
-          {busy
-            ? 'Checking with PSA'
-            : reading
-              ? 'Reading the label'
-              : labelMiss
-                ? seen
-                  ? `Couldn’t find a PSA label in “${seen.slice(0, 80)}”. Fill the frame with the label and hold steady.`
-                  : 'Couldn’t read any text. Move closer so the label fills the frame, and hold steady.'
-                : labelMode
-                  ? 'Fill the frame with the front label, then tap Read label'
-                  : 'Line up the QR or barcode on the back of the slab'}
-        </Text>
         {!canUseCamera ? (
           <View style={styles.manual}>
             {Platform.OS !== 'web' && permission && !permission.granted ? (
@@ -192,7 +291,7 @@ export default function Scan() {
         <View style={[styles.capture, { paddingBottom: insets.bottom + space.l }]}>
           <Pressable
             accessibilityRole="button"
-            onPress={readLabel}
+            onPress={() => capture(true)}
             disabled={reading}
             style={({ pressed }) => [styles.lightButton, (pressed || reading) && { opacity: 0.7 }]}
           >
@@ -322,10 +421,18 @@ const styles = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center', marginTop: space.s },
   navBtn: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
-  viewfinder: { flex: 1, alignItems: 'center', paddingTop: space.xxxl },
-  frame: { width: 240, height: 110 },
-  corner: { position: 'absolute', width: 28, height: 28, borderColor: color.conFill, borderRadius: 4 },
-  manual: { width: '100%', paddingHorizontal: space.gutter, paddingTop: space.xxl, gap: space.m },
+  scrim: { backgroundColor: color.scanScrim },
+  below: { position: 'absolute', left: 0, right: 0, alignItems: 'center', paddingHorizontal: space.gutter },
+  hint: {
+    maxWidth: '100%',
+    backgroundColor: color.scanHint,
+    borderRadius: radius.button,
+    paddingHorizontal: space.l,
+    paddingVertical: space.s,
+  },
+  corner: { position: 'absolute', width: 24, height: 24, borderColor: color.conFill, borderRadius: 4 },
+  frameLocked: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderWidth: 2, borderColor: color.conFill, borderRadius: 6 },
+  manual: { width: '100%', paddingTop: space.xxl, gap: space.m },
   manualInput: {
     height: size.button,
     borderRadius: radius.field,

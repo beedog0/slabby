@@ -5,6 +5,10 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 
 export type RecognizedLine = { text: string; x: number; y: number };
 
-type LabelReaderModule = { recognize(uri: string): Promise<RecognizedLine[]> };
+type LabelReaderModule = {
+  recognize(uri: string): Promise<RecognizedLine[]>;
+  /** Delete a photo after reading it. Missing on builds made before it existed. */
+  discard?(uri: string): void;
+};
 
 export const LabelReader = requireOptionalNativeModule<LabelReaderModule>('LabelReader');

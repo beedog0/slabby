@@ -1,4 +1,4 @@
-import { parseLabel } from '../label';
+import { parseLabel, steadyKey } from '../label';
 import { cardFromCert } from '../psa';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -63,5 +63,26 @@ describe('parseLabel', () => {
     expect(r?.payload.PSACert).toMatchObject({ Year: '2023', CardNumber: '205', Subject: 'MEW ex', CardGrade: 'GEM MT 10', CertNumber: '81234560' });
     expect(r?.payload.PSACert.Brand).toBe('POKEMON JAPANESE SV2a-POKEMON CARD 151');
     expect(r?.complete).toBe(true);
+  });
+});
+
+describe('steadyKey', () => {
+  const label = ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', 'FULL ART', '10', '138092551'];
+
+  it('matches two reads of the same label despite spacing noise', () => {
+    const a = steadyKey(parseLabel(label));
+    const b = steadyKey(parseLabel(label.map((l) => l.replace(/ /g, '  '))));
+    expect(a).not.toBeNull();
+    expect(a).toBe(b);
+  });
+
+  it('needs a name and a grade before reading on its own', () => {
+    expect(steadyKey(parseLabel(['2021 POKEMON CELEBRATIONS #009']))).toBeNull();
+    expect(steadyKey(parseLabel(['Surfing Pikachu VMAX', 'HP 310', 'Max Surfer']))).toBeNull();
+    expect(steadyKey(null)).toBeNull();
+  });
+
+  it('tells a misread cert apart', () => {
+    expect(steadyKey(parseLabel(label))).not.toBe(steadyKey(parseLabel([...label.slice(0, 5), '138092557'])));
   });
 });

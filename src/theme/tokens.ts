@@ -21,6 +21,9 @@ export const color = {
   shelfFront: '#8C6239',
   /** Empty-state slab outline. */
   ghost: '#D8D8DE',
+  // Camera screen only: dims the picture outside the label window, and backs the hint.
+  scanScrim: 'rgba(0,0,0,0.55)',
+  scanHint: 'rgba(0,0,0,0.6)',
 } as const;
 
 export const space = {
