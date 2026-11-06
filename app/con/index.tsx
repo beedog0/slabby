@@ -8,10 +8,14 @@
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { SearchSort } from '../../src/components/collection/SearchSort';
+import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
+import { ConGrid } from '../../src/components/con/ConGrid';
+import { useDisplay } from '../../src/store/display';
+import type { CardRow } from '../../src/pricing/portfolio';
 import { Segmented } from '../../src/components/Segmented';
 import { openConStatusMenu, takeScanAdded } from '../../src/components/conStatusMenu';
 import { BuyingPane } from '../../src/components/con/BuyingPane';
@@ -41,6 +45,9 @@ export default function ConMode() {
   const selling = mode !== 'buy';
   const [tab, setTab] = useState<Tab>('sale');
   const [query, setQuery] = useState('');
+  const { width } = useWindowDimensions();
+  const layout = useDisplay((s) => s.conLayout);
+  const setLayout = useDisplay((s) => s.setConLayout);
   const [sort, setSort] = useState<SortKey>('value');
   const [sheet, setSheet] = useState<TableSheetOpen | null>(null);
   const [flash, setFlash] = useState<{ ids: string[]; at: number }>({
@@ -120,6 +127,17 @@ export default function ConMode() {
     return c.status === 'owned' && c.plan === 'sell';
   });
   const visible = arrange(onTab, { sort, query });
+
+  // Same taps in the list and the grid: open the slab, long-press for status.
+  const openRow = (r: CardRow) => router.push(r.card.status === 'owned' ? `/con/table/${r.card.id}` : `/con/offer/${r.card.id}`);
+  const longPressRow = (r: CardRow) =>
+    r.card.status === 'owned'
+      ? () =>
+          openConStatusMenu(r.card, {
+            onChanged: (s) => landOn([{ id: r.card.id, status: s }]),
+            onSold: () => setSheet({ step: 'price', id: r.card.id }),
+          })
+      : undefined;
 
   const done = () => {
     end();
@@ -201,8 +219,11 @@ export default function ConMode() {
             ]}
           />
 
-          <View style={{ marginHorizontal: space.gutter, marginTop: space.s }}>
-            <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} sorts={CON_SORTS} />
+          <View style={styles.controls}>
+            <View style={{ flex: 1 }}>
+              <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} sorts={CON_SORTS} />
+            </View>
+            <ViewSwitch value={layout} onChange={setLayout} modes={SEARCH_MODES} />
           </View>
 
           <ScrollView
@@ -215,25 +236,25 @@ export default function ConMode() {
             }}
             refreshControl={<RefreshControl refreshing={refreshing > 0} onRefresh={pull} tintColor={color.secondary} />}
           >
-            {visible.map((r) => (
-              <View key={r.card.id}>
-                <Flash on={flash.ids.includes(r.card.id)} at={flash.at} />
-                <ConRow
-                  row={r}
-                  onPress={() => router.push(r.card.status === 'owned' ? `/con/table/${r.card.id}` : `/con/offer/${r.card.id}`)}
-                  onLongPress={
-                    r.card.status === 'owned'
-                      ? () =>
-                          openConStatusMenu(r.card, {
-                            onChanged: (s) => landOn([{ id: r.card.id, status: s }]),
-                            onSold: () => setSheet({ step: 'price', id: r.card.id }),
-                          })
-                      : undefined
-                  }
+            {layout === 'grid' ? (
+              <View style={{ paddingTop: space.l }}>
+                <ConGrid
+                  rows={visible}
+                  width={width - space.gutter * 2}
+                  onPress={openRow}
+                  onLongPress={longPressRow}
+                  flash={(id) => <Flash on={flash.ids.includes(id)} at={flash.at} />}
                 />
-                <Hairline inset={size.thumbW + space.m} />
               </View>
-            ))}
+            ) : (
+              visible.map((r) => (
+                <View key={r.card.id}>
+                  <Flash on={flash.ids.includes(r.card.id)} at={flash.at} />
+                  <ConRow row={r} onPress={() => openRow(r)} onLongPress={longPressRow(r)} />
+                  <Hairline inset={size.thumbW + space.m} />
+                </View>
+              ))
+            )}
             {visible.length === 0 ? (
               <Text style={[type.text, { color: color.secondary, paddingTop: space.xl }]}>
                 {query.trim() && onTab.length
@@ -301,6 +322,7 @@ function Flash({ on, at }: { on: boolean; at: number }) {
 }
 
 const styles = StyleSheet.create({
+  controls: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginHorizontal: space.gutter, marginTop: space.s },
   modes: { flexDirection: 'row', gap: space.xl, paddingHorizontal: space.gutter, paddingTop: space.l },
   modeBar: { height: 2, borderRadius: 1, marginTop: space.xs },
   header: {
