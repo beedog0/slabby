@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { CardThumb } from '../src/components/CardThumb';
+import { SlabView } from '../src/components/SlabView';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
@@ -222,6 +222,10 @@ export default function Scan() {
           style={StyleSheet.absoluteFill}
           facing="back"
           enableTorch={torch}
+          // Auto-read takes a photo about once a second: no shutter blink over the preview and no
+          // auto flash in dim light, or the screen flickers before anything is scanned.
+          animateShutter={false}
+          flash="off"
           onCameraReady={() => setCameraReady(true)}
           barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'code39'] }}
           onBarcodeScanned={result || labelMode ? undefined : ({ data }) => handle(data)}
@@ -315,7 +319,8 @@ export default function Scan() {
                     : `✓ Cert ${result.cert} verified with PSA`}
               </Text>
               <View style={styles.cardRow}>
-                <CardThumb card={preview} />
+                {/* The real slab, label and all (the 36×50 row thumb's grey strip read as a cut-off top). */}
+                <SlabView card={preview} width={size.sheetSlabW} posed={false} />
                 <View style={{ flex: 1 }}>
                   <Text numberOfLines={1} style={[type.title, { color: color.ink }]}>
                     {rowTitle(preview)}
