@@ -67,7 +67,8 @@ Deno.serve(async (req) => {
         (r) => ({ ...r, updated_on: today }),
       );
       for (let i = 0; i < rows.length; i += 500) {
-        const { error: upErr } = await admin.from('catalog').upsert(rows.slice(i, i + 500));
+        // upsert_catalog (0010) also appends tonight's price to each card's 31-night history.
+        const { error: upErr } = await admin.rpc('upsert_catalog', { rows: rows.slice(i, i + 500) });
         if (upErr) throw upErr;
       }
       cards += rows.length;

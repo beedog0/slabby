@@ -93,3 +93,10 @@ export function saleLine(s: { source: string; kind: string | null }): string {
 export function salesWord(n: number): string {
   return `${n} ${n === 1 ? 'sale' : 'sales'}`;
 }
+
+/** 1 → "1st", 2 → "2nd", 11 → "11th", 23 → "23rd". */
+export function ordinal(n: number): string {
+  const t = n % 100;
+  const s = t >= 11 && t <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${s}`;
+}
