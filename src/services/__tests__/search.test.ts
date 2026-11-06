@@ -1,4 +1,4 @@
-import { addParams, cardNumber, displayName, matches, openPrices, searchCards, terms } from '../search';
+import { addParams, arrange, buyPrices, cardNumber, displayName, matches, openPrices, searchCards, terms } from '../search';
 
 describe('search helpers', () => {
   it('splits numbers out of a search', () => {
@@ -39,5 +39,29 @@ describe('mock search', () => {
     expect(addParams(c, 'raw')).toMatchObject({ grader: 'raw', grade: '' });
     const [luffy] = await searchCards('luffy', null);
     expect(addParams(luffy, 'raw').game).toBe('onepiece');
+  });
+});
+
+describe('arrange', () => {
+  const c = (productId: number, name: string, marketCents: number | null, language = 'en') =>
+    ({ productId, name, marketCents, language, game: 'pokemon', number: null, rarity: null, setName: 'S', setCode: null, imageUrl: null, lowCents: null }) as const;
+  const list = [c(1, 'Mew', 500), c(2, 'Abra', null), c(3, 'Zubat', 900, 'ja')];
+  it('keeps best match order', () => expect(arrange(list, 'best', 'all').map((x) => x.productId)).toEqual([1, 2, 3]));
+  it('sorts by price with unpriced last', () => {
+    expect(arrange(list, 'priceHigh', 'all').map((x) => x.productId)).toEqual([3, 1, 2]);
+    expect(arrange(list, 'priceLow', 'all').map((x) => x.productId)).toEqual([1, 3, 2]);
+  });
+  it('sorts by name and filters language', () => {
+    expect(arrange(list, 'name', 'all').map((x) => x.productId)).toEqual([2, 1, 3]);
+    expect(arrange(list, 'best', 'ja').map((x) => x.productId)).toEqual([3]);
+  });
+});
+
+describe('buyPrices', () => {
+  it('uses the buying rules and needs a price', () => {
+    const { DEFAULT_RULES } = require('../../types');
+    // Defaults: target −15%, max −5%, rounded to $5.
+    expect(buyPrices(10000, DEFAULT_RULES)).toEqual({ target: 8500, max: 9500 });
+    expect(buyPrices(null, DEFAULT_RULES)).toBeNull();
   });
 });
