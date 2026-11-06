@@ -3,8 +3,7 @@
 // service role key. Graded → eBay/Fanatics sold for that grade; raw → TCGplayer market.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { gradeKey, gradedDaily, rawDaily, type DailySales } from '../_shared/comps-math.ts';
-import { fetchComps } from '../_shared/ppt.ts';
+import { refreshProduct } from '../_shared/comps-write.ts';
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -59,20 +58,7 @@ Deno.serve(async (req) => {
   const failed: string[] = [];
   for (const [id, { language, keys }] of byProduct) {
     try {
-      const card = await fetchComps(id, language);
-      for (const key of keys) {
-        const [grader, grade] = key.split(':');
-        const gk = gradeKey(grader, grade ? Number(grade) : null);
-        const rows = gk
-          ? gradedDaily((card.ebay?.priceHistory?.[gk] ?? {}) as DailySales, today)
-          : rawDaily(card.priceHistory?.conditions?.['Near Mint']?.history ?? [], today);
-        if (!rows.length) continue;
-        const { error: upErr } = await admin
-          .from('price_daily')
-          .upsert(rows.map((r) => ({ card_key: key, ...r })));
-        if (upErr) throw upErr;
-        written += rows.length;
-      }
+      written += (await refreshProduct(admin, id, language, keys, today)).rows;
     } catch (e) {
       failed.push(`${id}: ${(e as Error).message}`);
       if ((e as Error).message === 'ppt_rate_limited') await sleep(61_000);
