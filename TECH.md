@@ -107,6 +107,8 @@ create table con_sessions (
 
 > **Decision (2026-11-05):** comps come from the PokemonPriceTracker API (Bryan's API-plan key, 20k credits/day) instead of a direct eBay integration. Graded = eBay + Fanatics Collect sold per grade, as daily `{average, count}`; raw = TCGplayer market daily. It does not return individual listings, so `comps-nightly` writes `price_daily` directly (median and 10th/90th percentile of the trailing 30 days, weighted by sale count) and `price_points` stays unused for now. Cards map to TCGplayer product ids once via `card-match` into `card_refs`. Key: `PPT_API_KEY` Edge Function secret.
 
+> **Freshness (0007):** `price_daily` can't say when a sale happened, so every comps write (`_shared/comps-write.ts`, used by `comps-nightly`, `card-match` and `comps-refresh`) also stamps `card_refs.comps_refreshed_at` and the source's `last_sale_day`/`last_sale_cents`. `comps-refresh` refreshes one card on demand: the card screen calls it when comps are older than 6 h, pull-to-refresh forces it. `claim_comps_refresh` holds the cooldown (6 h, 1 h forced) and the daily budgets (30 per user, 10 for guests, 1500 overall) in one transaction. The app reads the freshness columns separately and falls back to the `price_daily` day when they aren't there.
+
 
 - Graded: eBay sold listings for the card_key over 30 days. Use the eBay Browse/Marketplace Insights API where access is granted; otherwise a scheduled scraper in an Edge Function with a 24 h cache. Store every sale as a `price_points` row. Market = median; low/high = 10th/90th percentile to drop outliers.
 - Raw: TCGplayer market price via their API or the pokemontcg.io proxy. One row per day.
