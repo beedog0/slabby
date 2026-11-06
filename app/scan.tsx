@@ -1,6 +1,7 @@
-// Scan: camera decodes the PSA label QR on device → cert → cache-first lookup → sheet →
-// "Add to vault". When PSA can't answer, "Read front label" photographs the label and reads it on
-// device (Apple Vision), so no typing is needed. Reference: 02-scan.png. Comps never run on this path.
+// Scan: point at the front label and tap "Read label". The photo is read on device (Apple Vision)
+// → sheet → "Add to vault". No PSA call on this path: PSA's API is closed to us for now, so label
+// reading is the default. The QR → PSA lookup only runs where the label reader isn't built in
+// (web, Expo Go). Reference: 02-scan.png. Comps never run on this path.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -39,6 +40,8 @@ export default function Scan() {
   const [reading, setReading] = useState(false);
   const [labelMiss, setLabelMiss] = useState(false);
   const [seen, setSeen] = useState('');
+  // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
+  const labelMode = !!LabelReader;
 
   const handle = async (data: string) => {
     const cert = parseCertFromQr(data);
@@ -123,7 +126,7 @@ export default function Scan() {
           facing="back"
           enableTorch={torch}
           barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'code39'] }}
-          onBarcodeScanned={result ? undefined : ({ data }) => handle(data)}
+          onBarcodeScanned={result || labelMode ? undefined : ({ data }) => handle(data)}
         />
       ) : null}
 
@@ -156,8 +159,8 @@ export default function Scan() {
                 ? seen
                   ? `Couldn’t find a PSA label in “${seen.slice(0, 80)}”. Fill the frame with the label and hold steady.`
                   : 'Couldn’t read any text. Move closer so the label fills the frame, and hold steady.'
-                : LabelReader
-                  ? 'Scan the code on the back, or point at the front label and tap Read'
+                : labelMode
+                  ? 'Fill the frame with the front label, then tap Read label'
                   : 'Line up the QR or barcode on the back of the slab'}
         </Text>
         {!canUseCamera ? (
@@ -193,7 +196,7 @@ export default function Scan() {
             disabled={reading}
             style={({ pressed }) => [styles.lightButton, (pressed || reading) && { opacity: 0.7 }]}
           >
-            <Text style={[type.button, { color: color.ink }]}>{reading ? 'Reading…' : 'Read front label'}</Text>
+            <Text style={[type.button, { color: color.ink }]}>{reading ? 'Reading…' : 'Read label'}</Text>
           </Pressable>
         </View>
       ) : null}
