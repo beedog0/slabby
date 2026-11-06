@@ -7,7 +7,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type React from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CardRow } from '../../pricing/portfolio';
 import { color, size, space, type } from '../../theme/tokens';
@@ -126,6 +126,38 @@ export function ScrollDisplay({
     prefetchArt(rows.map((r) => r.card.imageFrontUrl));
   }, [rows]);
 
+  // Put slab n in the middle and tell the lean/dim/caption animations so directly. The scroll
+  // position only reaches `x` through scroll events, and iOS sends none when the list re-sorts,
+  // re-filters or changes size under a resting finger, so `x` could keep an old offset and draw
+  // the centred slab as a dimmed, leaning neighbour (the "1 of 3" slab sitting off to one side).
+  const settle = useCallback(
+    (n: number) => {
+      const k = Math.max(0, Math.min(rows.length - 1, n));
+      indexRef.current = k;
+      setIndex(k);
+      list.current?.scrollToOffset({ offset: k * step, animated: false });
+      x.setValue(k * step);
+    },
+    [rows.length, step, x],
+  );
+
+  // A new sort, filter or search gives a new order: start again from its first slab.
+  const order = rows.map((r) => r.card.id).join('|');
+  const lastOrder = useRef(order);
+  useLayoutEffect(() => {
+    if (order === lastOrder.current) return;
+    lastOrder.current = order;
+    settle(0);
+  }, [order, settle]);
+
+  // The slab is resized once the room below the tabs is known; keep the same slab centred.
+  const lastStep = useRef(step);
+  useLayoutEffect(() => {
+    if (step === lastStep.current) return;
+    lastStep.current = step;
+    settle(indexRef.current);
+  }, [step, settle]);
+
   const onPress = useCallback(
     (n: number) => {
       if (n === indexRef.current) router.push(`/card/${rows[n].card.id}`);
@@ -161,6 +193,9 @@ export function ScrollDisplay({
           },
         })}
         scrollEventThrottle={16}
+        // Fires on mount and whenever the slabs change width or count, with no scroll event of
+        // its own: re-centre so the animations match what's on screen.
+        onContentSizeChange={() => settle(indexRef.current)}
         getItemLayout={(_, n) => ({ length: step, offset: step * n, index: n })}
         renderItem={({ item, index: n }) => (
           <Item
