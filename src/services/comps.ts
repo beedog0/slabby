@@ -19,6 +19,13 @@ export type CardPrice = {
   asOf: string;
   /** Daily market, oldest first, up to 90 points. */
   series90: number[];
+  // Freshness (0007). Optional so prices persisted before it still load; null = known missing.
+  /** When the server last wrote comps for this card (ISO time). */
+  refreshedAt?: string | null;
+  /** Latest day with a sale (graded) or a market point (raw), "YYYY-MM-DD". */
+  lastSaleDay?: string | null;
+  /** Sales over 90 days: sales_30d on the last day, 30 and 60 days before it. */
+  sales90d?: number;
 };
 
 const mock = pricesJson as Record<string, CardPrice>;
@@ -36,6 +43,8 @@ export function fromDaily(rows: DailyRow[]): CardPrice | null {
   if (!rows.length) return null;
   const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day)).slice(-90);
   const last = sorted[sorted.length - 1];
+  const byDay = new Map(sorted.map((r) => [r.day, r.sales_30d]));
+  const sales90d = [0, 30, 60].reduce((sum, back) => sum + (byDay.get(dayBefore(last.day, back)) ?? 0), 0);
   return {
     marketCents: last.market_cents,
     lowCents: last.low_cents,
@@ -43,8 +52,17 @@ export function fromDaily(rows: DailyRow[]): CardPrice | null {
     sales30d: last.sales_30d,
     asOf: last.day,
     series90: sorted.map((r) => r.market_cents),
+    sales90d,
   };
 }
+
+function dayBefore(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+type Freshness = { card_key: string; comps_refreshed_at: string | null; last_sale_day: string | null };
 
 /** Load the last 90 days of price_daily for these cards into the price store. */
 export async function refreshPrices(cards: Card[]): Promise<void> {
@@ -59,14 +77,117 @@ export async function refreshPrices(cards: Card[]): Promise<void> {
     .gte('day', since)
     .limit(keys.length * 90);
   if (error || !data) return;
+  const fresh = await freshnessFor(keys);
   const grouped = new Map<string, DailyRow[]>();
   for (const r of data as DailyRow[]) grouped.set(r.card_key, [...(grouped.get(r.card_key) ?? []), r]);
   const next: Record<string, CardPrice> = {};
   for (const [k, rows] of grouped) {
     const p = fromDaily(rows);
-    if (p) next[k] = p;
+    if (!p) continue;
+    const f = fresh?.get(k);
+    next[k] = f ? { ...p, refreshedAt: f.comps_refreshed_at, lastSaleDay: f.last_sale_day } : p;
   }
   usePrices.getState().merge(next);
+}
+
+/**
+ * Freshness columns from card_refs, in their own query so a project without 0007 (42703,
+ * PGRST204) still gets its prices. Null on any error.
+ */
+async function freshnessFor(keys: string[]): Promise<Map<string, Freshness> | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('card_refs')
+      .select('card_key, comps_refreshed_at, last_sale_day')
+      .in('card_key', keys);
+    if (error || !data) return null;
+    return new Map((data as Freshness[]).map((r) => [r.card_key, r]));
+  } catch {
+    return null;
+  }
+}
+
+const SIX_HOURS = 6 * 3_600_000;
+
+/** True when comps were written more than `maxMs` ago, or it isn't known when. */
+export function isStale(refreshedAt: string | null | undefined, now = Date.now(), maxMs = SIX_HOURS): boolean {
+  if (!refreshedAt) return true;
+  const t = Date.parse(refreshedAt);
+  return Number.isNaN(t) || now - t > maxMs;
+}
+
+export type RefreshStatus = 'refreshed' | 'fresh' | 'failed' | 'skipped';
+type RefreshAnswer = { status: 'refreshed' | 'fresh' | 'throttled' | 'no_match' | 'error' };
+
+/** Set when comps-refresh isn't deployed (404); the app then stops asking for this run. */
+let refreshUnavailable = false;
+const inFlight = new Map<string, Promise<RefreshStatus>>();
+
+/**
+ * Ask the server to refresh one card's comps, then reload its prices. Skipped without Supabase
+ * or a session, and (unless forced) while the comps are fresh. One call per card_key at a time.
+ * Never throws. 'failed' = the update didn't happen (offline, server error); 'fresh' = nothing
+ * newer to get right now (cooldown, budget spent).
+ */
+export function refreshCard(card: Card, opts: { force?: boolean; now?: number } = {}): Promise<RefreshStatus> {
+  const key = cardKey(card);
+  const running = inFlight.get(key);
+  if (running) return running;
+  const p = runRefresh(card, key, opts).finally(() => inFlight.delete(key));
+  inFlight.set(key, p);
+  return p;
+}
+
+async function runRefresh(card: Card, key: string, { force = false, now = Date.now() }: { force?: boolean; now?: number }): Promise<RefreshStatus> {
+  if (!supabase || refreshUnavailable) return 'skipped';
+  if (!force && !isStale(usePrices.getState().byKey[key]?.refreshedAt, now)) return 'fresh';
+  try {
+    if (!(await supabase.auth.getSession()).data.session) return 'skipped';
+    const { data, error } = await supabase.functions.invoke<RefreshAnswer>('comps-refresh', { body: { cardKey: key, force } });
+    if (error) {
+      const status = (error as { context?: { status?: number } }).context?.status;
+      if (status === 404) {
+        refreshUnavailable = true;
+        return 'skipped';
+      }
+      return 'failed';
+    }
+    await refreshPrices([card]);
+    switch (data?.status) {
+      case 'refreshed':
+        return 'refreshed';
+      case 'fresh':
+      case 'throttled':
+        return 'fresh';
+      case 'no_match':
+        return 'skipped';
+      default:
+        return 'failed';
+    }
+  } catch {
+    return 'failed';
+  }
+}
+
+/** Refresh several cards, three at a time. Resolves to each card's status, in order. */
+export async function refreshCards(cards: Card[], opts: { force?: boolean } = {}): Promise<RefreshStatus[]> {
+  const out: RefreshStatus[] = new Array(cards.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < cards.length) {
+      const i = next++;
+      out[i] = await refreshCard(cards[i], opts);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return out;
+}
+
+/** Test hook: forget that comps-refresh was missing. */
+export function resetRefreshForTests() {
+  refreshUnavailable = false;
+  inFlight.clear();
 }
 
 type CardRef = { card_key: string; tcgplayer_id: string | null; image_url: string | null };

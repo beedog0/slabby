@@ -113,3 +113,27 @@ describe('last sale', () => {
     expect(lastRawDay([])).toBeNull();
   });
 });
+
+describe('fromDaily 90-day sales', () => {
+  const row = (day: string, sales_30d: number) => ({ card_key: 'k', day, market_cents: 100, low_cents: 90, high_cents: 110, sales_30d });
+  it('sums sales_30d on the last day and 30 and 60 days before, by date', () => {
+    const p = fromDaily([row('2026-11-05', 9), row('2026-10-06', 7), row('2026-09-06', 4), row('2026-09-07', 100)])!;
+    expect(p.sales90d).toBe(20);
+  });
+  it('counts a missing day as zero', () => {
+    expect(fromDaily([row('2026-11-05', 9), row('2026-10-07', 7)])!.sales90d).toBe(9);
+  });
+});
+
+import { isStale } from '../../services/comps';
+
+describe('isStale', () => {
+  const now = Date.parse('2026-11-06T12:00:00Z');
+  it('is stale past six hours or when unknown', () => {
+    expect(isStale('2026-11-06T07:00:00Z', now)).toBe(false);
+    expect(isStale('2026-11-06T05:59:00Z', now)).toBe(true);
+    expect(isStale(null, now)).toBe(true);
+    expect(isStale(undefined, now)).toBe(true);
+    expect(isStale('2026-11-06T11:00:00Z', now, 30 * 60_000)).toBe(true);
+  });
+});
