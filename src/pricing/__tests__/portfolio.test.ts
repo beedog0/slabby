@@ -106,7 +106,7 @@ describe('collection value line', () => {
   });
 });
 
-import { chartRange, indexAtX } from '../../components/PriceChart';
+import { chartRange, indexAtX, paidOnChart } from '../../components/PriceChart';
 
 describe('chart scale and scrub', () => {
   it('keeps a real range and widens a flat one to 4% of the value', () => {
@@ -114,6 +114,14 @@ describe('chart scale and scrub', () => {
     const flat = chartRange([10_000, 10_100]);
     expect(flat.hi - flat.lo).toBeCloseTo(404);
     expect((flat.hi + flat.lo) / 2).toBe(10_050);
+  });
+
+  it('draws the paid line only when it sits near the price range', () => {
+    const series = [10_000, 9_500, 9_000, 8_300]; // $100 down to $83
+    expect(paidOnChart(series, 9_000)).toBe(true); // inside
+    expect(paidOnChart(series, 7_600)).toBe(true); // just under the low
+    expect(paidOnChart(series, 6_000)).toBe(false); // paid $60: far below, header says it
+    expect(paidOnChart(series, null)).toBe(false);
   });
 
   it('maps a finger position to the day under it, clamped to the ends', () => {

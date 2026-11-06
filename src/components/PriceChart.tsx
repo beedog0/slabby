@@ -1,5 +1,5 @@
 // Price chart: one calm, smooth, full-width line with a dot on today. On the card page the paid
-// price is a dashed line labeled "paid $650", with start and end dates underneath; on home
+// price is a dashed line labeled "paid $650" (only when it is near the line's range), with start and end dates underneath; on home
 // (compact) it sits over one hairline baseline. No gridlines, no price gutter, no extra markers.
 // Press and hold anywhere to read that day's price and date.
 // Reference: 03-slab-detail.png.
@@ -54,6 +54,15 @@ export function chartRange(vals: number[], minShare = MIN_SPAN): { lo: number; h
   return { lo, hi };
 }
 
+/** Whether the paid price earns a dashed line: only when it sits in or near the drawn range. Far
+ * outside it would squash the line flat to make room; the header already says what was paid. */
+export function paidOnChart(vals: number[], paidCents: number | null): boolean {
+  if (paidCents == null || vals.length < 2) return false;
+  const { lo, hi } = chartRange(vals);
+  const reach = (hi - lo) * 0.5;
+  return paidCents >= lo - reach && paidCents <= hi + reach;
+}
+
 /** Day index under a finger `px` points from the chart's left edge, on a plot `plotW` wide with `n` days. */
 export function indexAtX(px: number, plotW: number, n: number): number {
   if (n <= 1) return 0;
@@ -84,10 +93,12 @@ export function smoothPath(pts: [number, number][]): string {
   return d;
 }
 
-/** Centered 5-day average; the last point stays the real latest value. */
+/** Centered moving average (5 days on a month, about 11 on 90 days, so a longer window doesn't
+ * read as noise); the last point stays the real latest value. */
 export function ease(vals: number[]): number[] {
+  const r = Math.max(2, Math.round(vals.length / 18));
   const out = vals.map((_, i) => {
-    const w = vals.slice(Math.max(0, i - 2), i + 3);
+    const w = vals.slice(Math.max(0, i - r), i + r + 1);
     return w.reduce((a, b) => a + b, 0) / w.length;
   });
   if (out.length) out[out.length - 1] = vals[vals.length - 1];
@@ -95,12 +106,12 @@ export function ease(vals: number[]): number[] {
 }
 
 export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false, onScrub }: Props) {
-  // A gently eased line (5-day average, today exact) so daily noise doesn't zigzag.
+  // A gently eased line (moving average, today exact) so daily noise doesn't zigzag.
   const values = useMemo(() => ease(raw), [raw]);
   const [scrub, setScrub] = useState<number | null>(null); // index into raw
   const plotW = width;
   const plotH = height - (asOf ? DATES_H : 0);
-  const showPaid = paidCents != null && !compact;
+  const showPaid = !compact && paidOnChart(raw, paidCents);
 
   const geo = useMemo(() => {
     const { lo, hi } = chartRange(showPaid ? [...raw, paidCents as number] : raw);

@@ -80,13 +80,18 @@ export default function SlabDetail() {
             <Text style={[type.text, { color: color.secondary }]}>{subtitle}</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={[type.title, { color: detail ? trendTint(detail.series) : color.ink }]}>
+            {/* The price stays ink: the market's direction is told by the chart and the trend line
+                below it, so the only colored number here is your own gain or loss. */}
+            <Text style={[type.title, { color: color.ink, fontVariant: ['tabular-nums'] }]}>
               {price ? money(price.marketCents) : '—'}
             </Text>
             {detail?.gainCents != null && card.paidCents != null ? (
-              <Text style={[type.text, { color: detail.gainCents >= 0 ? color.gain : color.loss }]}>
-                {detail.gainCents >= 0 ? '+' : ''}
-                {money(detail.gainCents)} · paid {money(card.paidCents)}
+              <Text style={[type.text, { color: color.secondary, fontVariant: ['tabular-nums'] }]}>
+                <Text style={{ color: detail.gainCents >= 0 ? color.gain : color.loss }}>
+                  {detail.gainCents >= 0 ? '+' : '−'}
+                  {money(Math.abs(detail.gainCents))}
+                </Text>
+                {' · '}paid {money(card.paidCents)}
               </Text>
             ) : card.paidCents != null ? (
               <Text style={[type.text, { color: color.secondary }]}>paid {money(card.paidCents)}</Text>
