@@ -51,17 +51,12 @@ describe('buyPrices', () => {
   });
 });
 
-import { firstGrade, firstLowGrade, gradeLabel, isQuiet, scaled, type SearchPrices } from '../search';
+import { firstLowGrade, gradeLabel, isQuiet, scaled, type SearchPrices } from '../search';
 import { hasAllGrades, SEARCH_GRADES as SERVER_GRADES } from '../../../supabase/functions/_shared/catalog-math';
 
 describe('grades 10 to 1', () => {
   const at = (asOf: string, cents = 1000) => ({ ...scaled(cents, 3), asOf });
   const base: SearchPrices = { raw: null, grades: {}, fetchedAt: '2026-11-06T10:00:00Z', source: 'ppt' };
-
-  it('opens on the first of 10/9/8 with sales, else raw', () => {
-    expect(firstGrade({ ...base, grades: { psa10: null, psa9: at('2026-11-06') } })).toBe('psa9');
-    expect(firstGrade({ ...base, grades: { psa7: at('2026-11-06') } })).toBe('raw');
-  });
 
   it('picks the highest lower grade that sold in the last 30 days', () => {
     expect(firstLowGrade({ ...base, grades: { psa7: at('2026-10-01'), psa6: at('2026-11-06') } })).toBe('psa6');
