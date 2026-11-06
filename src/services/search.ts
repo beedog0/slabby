@@ -7,7 +7,8 @@ import pricesJson from '../mocks/prices.json';
 import type { CardPrice } from './comps';
 import { supabase } from './supabase';
 
-export type Game = 'pokemon' | 'onepiece' | 'riftbound';
+export type { Game } from '../types';
+import type { Game } from '../types';
 
 export type CatalogCard = {
   productId: number;
@@ -169,6 +170,7 @@ export function cardNumber(n: string | null): string {
 /** Params for the Add a slab screen, prefilled from a searched card at the chosen grade. */
 export function addParams(c: CatalogCard, grade: SearchGrade | 'raw'): Record<string, string> {
   return {
+    game: c.game,
     name: displayName(c.name),
     set: c.setName,
     setCode: c.setCode ?? '',

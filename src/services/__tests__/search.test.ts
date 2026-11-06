@@ -37,5 +37,7 @@ describe('mock search', () => {
     const [c] = await searchCards('mew ex 205', null);
     expect(addParams(c, 'psa9')).toMatchObject({ name: 'Mew ex', number: '205', language: 'ja', grader: 'psa', grade: '9', setCode: 'SV2a', productId: '9000004' });
     expect(addParams(c, 'raw')).toMatchObject({ grader: 'raw', grade: '' });
+    const [luffy] = await searchCards('luffy', null);
+    expect(addParams(luffy, 'raw').game).toBe('onepiece');
   });
 });

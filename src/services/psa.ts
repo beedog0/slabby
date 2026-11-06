@@ -207,7 +207,8 @@ export type ManualDetails = {
   language: string;
   paidCents: number | null;
   plan: Card['plan'];
-  /** From card search: the set code and the card photo are already known. */
+  /** From card search: the game, set code and card photo are already known. */
+  game?: Card['game'];
   setCode?: string | null;
   imageFrontUrl?: string | null;
 };
@@ -217,6 +218,7 @@ export function cardFromDetails(d: ManualDetails): Card {
   const now = new Date().toISOString();
   return {
     id: uuid(),
+    ...(d.game && d.game !== 'pokemon' ? { game: d.game } : {}),
     certNumber: d.cert,
     grader: d.grader,
     grade: d.grade,

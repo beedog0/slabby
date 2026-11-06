@@ -12,12 +12,14 @@ import { matchNewCard, refreshPrices } from '../src/services/comps';
 import { cardFromDetails } from '../src/services/psa';
 import { useVault } from '../src/store/vault';
 import { color, space, type } from '../src/theme/tokens';
+import type { Card } from '../src/types';
 
 type Grader = 'psa' | 'bgs' | 'cgc' | 'raw';
 
 export default function AddByHand() {
   const p = useLocalSearchParams<{
     cert?: string;
+    game?: Card['game'];
     name?: string;
     set?: string;
     setCode?: string;
@@ -61,6 +63,7 @@ export default function AddByHand() {
       // The set code only fits while the set is the one search picked.
       setCode: p.setCode && setTitle === p.set ? p.setCode : null,
       imageFrontUrl: p.image || null,
+      game: p.game,
     });
     const saved = grader === 'raw' ? { ...card, grade: null } : card;
     add(saved);
