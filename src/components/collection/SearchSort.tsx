@@ -14,15 +14,17 @@ type Props = {
   onQuery: (q: string) => void;
   sort: SortKey;
   onSort: (s: SortKey) => void;
+  /** Which sorts to offer; con mode leaves out "My order". Defaults to all of them. */
+  sorts?: SortKey[];
 };
 
-export function SearchSort({ query, onQuery, sort, onSort }: Props) {
+export function SearchSort({ query, onQuery, sort, onSort, sorts = SORTS }: Props) {
   // Opens right under the sort button, like the home … menu.
   const sortRef = useRef<ComponentRef<typeof View>>(null);
   const pickSort = () =>
     openDropdown(
       sortRef,
-      SORTS.map((s) => ({ label: SORT_LABEL[s], selected: s === sort, onPress: () => onSort(s) })),
+      sorts.map((s) => ({ label: SORT_LABEL[s], selected: s === sort, onPress: () => onSort(s) })),
     );
   return (
     <View style={styles.row}>
