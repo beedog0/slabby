@@ -71,25 +71,35 @@ export function Stepper({
   onMinus,
   onPlus,
   label,
+  minusDisabled,
 }: {
   value: string;
   onMinus: () => void;
   onPlus: () => void;
   label: string;
+  /** At the lowest allowed value: the − glyph goes secondary and does nothing. */
+  minusDisabled?: boolean;
 }) {
   return (
     <View style={styles.stepper}>
-      <StepButton glyph={'−'} onPress={onMinus} label={`Decrease ${label}`} />
+      <StepButton glyph={'−'} onPress={onMinus} label={`Decrease ${label}`} disabled={minusDisabled} />
       <Text style={[type.rowPrice, styles.stepValue]}>{value}</Text>
       <StepButton glyph="+" onPress={onPlus} label={`Increase ${label}`} />
     </View>
   );
 }
 
-function StepButton({ glyph, onPress, label }: { glyph: string; onPress: () => void; label: string }) {
+function StepButton({ glyph, onPress, label, disabled }: { glyph: string; onPress: () => void; label: string; disabled?: boolean }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.stepBtn}>
-      <Text style={[type.numberM, { color: color.ink }]}>{glyph}</Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={styles.stepBtn}
+    >
+      <Text style={[type.numberM, { color: disabled ? color.secondary : color.ink }]}>{glyph}</Text>
     </Pressable>
   );
 }
