@@ -4,6 +4,7 @@
 
 import pricesJson from '../mocks/prices.json';
 import { cardKey } from '../pricing/cardKey';
+import { nameFromMatch } from './psa';
 import { usePrices } from '../store/prices';
 import { useVault } from '../store/vault';
 import type { Card } from '../types';
@@ -240,7 +241,7 @@ export function resetRefreshForTests() {
   lastAttemptAt.clear();
 }
 
-export type CardRef = { card_key: string; tcgplayer_id: string | null; image_url: string | null };
+export type CardRef = { card_key: string; tcgplayer_id: string | null; image_url: string | null; matched_name?: string | null };
 
 /** The card photo for a matched product: PPT's CDN copy, else TCGplayer's own image server. */
 export function artFor(ref: Pick<CardRef, 'tcgplayer_id' | 'image_url'> | null | undefined): string | null {
@@ -254,6 +255,17 @@ function saveArt(key: string, url: string | null) {
   if (!url) return;
   const vault = useVault.getState();
   for (const c of vault.cards) if (!c.imageFrontUrl && cardKey(c) === key) vault.update(c.id, { imageFrontUrl: url });
+}
+
+/** Replace label misreads ("Pza") with the matched card's name on every card with this card_key. */
+function saveName(key: string, matched: string | null | undefined) {
+  if (!matched) return;
+  const vault = useVault.getState();
+  for (const c of vault.cards) {
+    if (cardKey(c) !== key) continue;
+    const name = nameFromMatch(c.name, matched);
+    if (name) vault.update(c.id, { name });
+  }
 }
 
 /** card_keys card-match has answered for this app run. A miss costs a search credit, so ask once. */
@@ -282,27 +294,40 @@ export async function matchNewCard(card: Card, tcgPlayerId?: string): Promise<Ca
   if (error || !data) return null;
   retried.add(cardKey(card));
   saveArt(cardKey(card), artFor(data));
+  saveName(cardKey(card), data.matched_name);
   return data;
 }
 
 /**
- * Fill in photos for cards that don't have one: from card_refs when the card is already matched,
- * otherwise ask card-match again (once per app run, since a miss costs a search credit).
+ * Fill in photos and names from card_refs: a missing photo, or a name the label misread. When a
+ * card has no match yet (or was matched before names were kept), ask card-match again, once per
+ * app run, since a miss costs a search credit.
  */
 export async function fillArt(cards: Card[]): Promise<void> {
   if (!supabase) return;
   // Before the guest session exists, RLS hides card_refs and card-match answers 401.
   if (!(await supabase.auth.getSession()).data.session) return;
-  const missing = cards.filter((c) => !c.imageFrontUrl && c.status === 'owned');
-  if (!missing.length) return;
-  const keys = [...new Set(missing.map(cardKey))];
-  const { data } = await supabase.from('card_refs').select('card_key, tcgplayer_id, image_url').in('card_key', keys);
-  const refs = new Map((data as CardRef[] | null)?.map((r) => [r.card_key, r]) ?? []);
+  const owned = cards.filter((c) => c.status === 'owned');
+  if (!owned.length) return;
+  const keys = [...new Set(owned.map(cardKey))];
+  const named = await supabase.from('card_refs').select('card_key, tcgplayer_id, image_url, matched_name').in('card_key', keys);
+  const error = named.error;
+  // A project without 0014 has no matched_name: still fill photos.
+  const data: CardRef[] | null = error
+    ? (await supabase.from('card_refs').select('card_key, tcgplayer_id, image_url').in('card_key', keys)).data
+    : named.data;
+  const refs = new Map(data?.map((r) => [r.card_key, r]) ?? []);
   for (const key of keys) {
-    const art = artFor(refs.get(key));
-    if (art) saveArt(key, art);
-    else if (!retried.has(key)) {
-      const card = missing.find((c) => cardKey(c) === key)!;
+    const ref = refs.get(key);
+    const needsArt = owned.some((c) => cardKey(c) === key && !c.imageFrontUrl);
+    saveName(key, ref?.matched_name);
+    const art = artFor(ref);
+    if (art && needsArt) saveArt(key, art);
+    // No row at all: a new card_key (cardKey() now keys set-code-less Pokémon cards by set name),
+    // so match it once to get its photo and prices under the new key.
+    const ask = !ref || (needsArt && !art) || (!error && !!ref.tcgplayer_id && !ref.matched_name);
+    if (ask && !retried.has(key)) {
+      const card = owned.find((c) => cardKey(c) === key)!;
       // Only a real answer counts as tried; a failed call is retried on the next refresh.
       const answer = await matchNewCard(card).catch(() => null);
       if (answer) retried.add(key);

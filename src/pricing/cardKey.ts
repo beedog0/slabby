@@ -10,8 +10,13 @@ const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
  * Pokémon keys stay as they were so existing price history still lines up. Edge Functions read grader and grade from the
  * front, so the game must never go first.
  */
-export function cardKey(c: Pick<Card, 'grader' | 'grade' | 'setCode' | 'number' | 'language' | 'game' | 'variety'>): string {
-  const parts = [c.grader, c.grade ?? '', c.setCode ?? '', c.number ?? '', c.language || 'en'];
+export function cardKey(c: Pick<Card, 'grader' | 'grade' | 'setCode' | 'number' | 'language' | 'game' | 'variety'> & { setName?: string | null }): string {
+  // A Pokémon card with no set code ("2016 POKEMON XY EVOLUTIONS", "2021 POKEMON JPN 25TH
+  // ANNIV-GOLDEN BOX") is keyed by its set name instead, or every #11 PSA 10 in the language would
+  // share one match and one price.
+  const pokemon = !c.game || c.game === 'pokemon';
+  const set = c.setCode || (pokemon ? slug(c.setName ?? '') : '');
+  const parts = [c.grader, c.grade ?? '', set, c.number ?? '', c.language || 'en'];
   if (c.game && c.game !== 'pokemon') {
     parts.push(c.game);
     const v = slug(c.variety ?? '');

@@ -96,6 +96,7 @@ export default function AddByHand() {
     grader,
     grade: grader === 'raw' ? null : grade,
     setCode: p.setCode && setTitle === p.set ? p.setCode : null,
+    setName: setTitle.trim() || null,
     number: number.trim().replace(/^#/, '') || null,
     language,
   });

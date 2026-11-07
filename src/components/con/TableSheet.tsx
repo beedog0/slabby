@@ -26,7 +26,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CON_STATUS_LABEL, CON_STATUS_ORDER, CON_STATUSES, conStatusOf, planPatch, type ConStatus } from '../../lib/conStatus';
-import { gradeLabel, money, rowTitle } from '../../lib/format';
+import { cardLabel, money, rowTitle } from '../../lib/format';
 import { rowFor } from '../../pricing/portfolio';
 import { DEFAULT_CON_NAME, useCon } from '../../store/con';
 import { usePrices } from '../../store/prices';
@@ -276,7 +276,7 @@ function ListStep({
                       {rowTitle(r.card)}
                     </Text>
                     <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                      {gradeLabel(r.card.grader, r.card.grade, r.card.condition)} ·{' '}
+                      {cardLabel(r.card)} ·{' '}
                       <Text style={{ color: s === 'hold' ? color.secondary : color.ink }}>{CON_STATUS_LABEL[s]}</Text>
                     </Text>
                   </View>
@@ -404,7 +404,7 @@ function PriceStep({
             {rowTitle(card)}
           </Text>
           <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-            {gradeLabel(card.grader, card.grade, card.condition)}
+            {cardLabel(card)}
           </Text>
         </View>
       </View>

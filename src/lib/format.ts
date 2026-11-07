@@ -36,6 +36,19 @@ export function gradeLabel(grader: string, grade: number | null, condition?: str
   return `${grader.toUpperCase()} ${grade ?? ''}`.trim();
 }
 
+const LANG_SHORT: Record<string, string> = { ja: 'JP', ko: 'KR', zh: 'CN' };
+
+/** "JP" for a Japanese card, "" for English, so lists can tell the two printings apart. */
+export function langTag(language: string | null | undefined): string {
+  if (!language || language === 'en') return '';
+  return LANG_SHORT[language] ?? language.toUpperCase();
+}
+
+/** Row subtitle: "JP · PSA 10", "PSA 10", "Raw · near mint". */
+export function cardLabel(c: { language: string; grader: string; grade: number | null; condition?: string }): string {
+  return [langTag(c.language), gradeLabel(c.grader, c.grade, c.condition)].filter(Boolean).join(' · ');
+}
+
 /** "Up $640 this month" / "Down $120 this month" / "Flat this month". */
 export function monthLine(deltaCents: number): string {
   if (Math.abs(deltaCents) < 100) return 'Flat this month';

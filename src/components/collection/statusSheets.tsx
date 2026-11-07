@@ -6,7 +6,7 @@
 import * as Haptics from 'expo-haptics';
 import { useState, type ReactNode } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
+import { cardLabel, money, pct, rowTitle } from '../../lib/format';
 import { splitTotal } from '../../pricing/split';
 import { useCardRow, useCardRows } from '../../pricing/useCardRow';
 import { useCon } from '../../store/con';
@@ -40,7 +40,7 @@ export function openStatusSheet(card: Card, kind: Kind, after?: () => void) {
     sold: <SoldBody id={card.id} />,
     remove: <RemoveBody id={card.id} after={after} />,
   };
-  openMenu({ card, title: rowTitle(card), subtitle: gradeLabel(card.grader, card.grade, card.condition), items: [], body: body[kind] });
+  openMenu({ card, title: rowTitle(card), subtitle: cardLabel(card), items: [], body: body[kind] });
 }
 
 /** Remove several at once (Select mode): the count, what they're worth, one button. */

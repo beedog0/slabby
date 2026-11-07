@@ -35,6 +35,34 @@ const YEAR_ONLY = /^((?:19|20)\d{2})$/;
 const CERT = /^\d{8,10}$/;
 const VARIETY = /^(HOLO|REVERSE HOLO|1ST EDITION|SHADOWLESS|FULL ART|ALT(?:ERNATE)? ART|SPECIAL ART RARE|ILLUSTRATION RARE|SPECIAL ILLUSTRATION RARE|SECRET|RAINBOW|GOLD|PROMO|STAFF|ART RARE|SUPER RARE|ULTRA RARE|HYPER RARE|PARALLEL|MANGA|SP|SPECIAL|1ST ANNIVERSARY|TREASURE RARE|SIGNATURE|OVERNUMBERED|SHOWCASE|FOIL)\b/i;
 
+// Product and event lines PSA prints where a set or variety goes, never a card name:
+// "25TH ANNIV-GOLDEN BOX", "METAMONG PROJECT STMP RLY", "PRIZE PACK SERIES".
+const SET_LINE = /\b(?:ANNIV(?:ERSARY)?|BOX|COLLECTION|PROMO|DECK|STMP|STAMP|PROJECT|TOURNAMENT|PRIZE|CHAMPIONSHIPS?|PREMIUM|GIFT|TIN|BLISTER|STARTER|SERIES|PACK)\b|\b\d+(?:ST|ND|RD|TH)\b/i;
+
+// Short words real card names use: "M CHARIZARD EX", "MR. MIME", "N", "PIKACHU V".
+const SHORT_WORDS = new Set(['EX', 'GX', 'V', 'M', 'MR', 'DR', 'JR', 'LV', 'X', 'Y', 'N', 'OF', 'UP', 'ON', 'TO', 'DE']);
+
+/** A misread line: mostly one- and two-letter fragments ("TT TH AN NY - COLDEN BOX"). */
+function garbled(t: string): boolean {
+  const words = t.split(/[\s-]+/).filter((w) => /[A-Z]/i.test(w));
+  if (words.length < 3) return false;
+  const frags = words.filter((w) => {
+    const l = w.replace(/[^A-Z]/gi, '').toUpperCase();
+    return l.length <= 2 && !SHORT_WORDS.has(l);
+  }).length;
+  return frags >= 2 && frags * 2 >= words.length;
+}
+
+/** A product or event line ("25TH ANNIV-GOLDEN BOX"): it names the set when the brand line doesn't. */
+export function setLine(t: string | null | undefined): boolean {
+  return !!t && SET_LINE.test(t);
+}
+
+/** Whether a line can be a card name, not a set/product line or an OCR misread. */
+export function nameLike(t: string): boolean {
+  return !!t && !SET_LINE.test(t) && !garbled(t);
+}
+
 export type ParsedLabel = {
   payload: PsaCertPayload;
   /** True when name, grade and cert were all found. */
@@ -75,7 +103,7 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
       const after = yb[2].match(/#\s*[A-Z0-9-]+\s+(.+)$/i)?.[1];
       if (after) {
         const nameOnly = after.split(GRADE_WORDS)[0].replace(/\b\d{8,10}\b/, '').trim();
-        if (nameOnly) name = nameOnly;
+        if (nameOnly && nameLike(nameOnly)) name = nameOnly;
       }
     }
 
@@ -138,22 +166,37 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
 
   // Pass 2: the name is the first free-text line after the year/brand line that isn't a grade,
   // number, cert or variety. Labels put it directly under the brand line.
+  // OCR can join the right column on: "SURFING PIKACHU VMAX GEM MT", "FULL ART 10".
+  const freeText = (text: string) => {
+    const t = text
+      .replace(/#\s*[A-Z0-9-]+/i, '')
+      .replace(JOINED_GRADE, '')
+      .replace(/\s(10|[1-9](?:\.5)?)$/, '')
+      .trim();
+    const skip = !t || YEAR_ONLY.test(t) || t === gradeWord || (gradeWord && t.startsWith(gradeWord + ' ')) || CERT.test(t) || /^(10|[1-9](?:\.5)?)$/.test(t);
+    return skip ? null : t;
+  };
+  let nameIndex = -1;
   if (!name && brandIndex >= 0) {
-    for (const l of lines.slice(brandIndex + 1)) {
-      // OCR can join the right column on: "SURFING PIKACHU VMAX GEM MT", "FULL ART 10".
-      const t = l.text
-        .replace(/#\s*[A-Z0-9-]+/i, '')
-        .replace(JOINED_GRADE, '')
-        .replace(/\s(10|[1-9](?:\.5)?)$/, '')
-        .trim();
-      if (!t || YEAR_ONLY.test(t) || t === gradeWord || (gradeWord && t.startsWith(gradeWord + ' ')) || CERT.test(t) || /^(10|[1-9](?:\.5)?)$/.test(t)) continue;
-      if (VARIETY.test(t)) {
+    for (let i = brandIndex + 1; i < lines.length; i++) {
+      const t = freeText(lines[i].text);
+      if (!t) continue;
+      if (VARIETY.test(t) || SET_LINE.test(t)) {
         variety ??= t.replace(/\s(10|[1-9](?:\.5)?)$/, '');
         continue;
       }
+      // A misread name line: better no name (the next frame tries again) than a wrong one.
+      if (garbled(t)) break;
       name = t;
+      nameIndex = i;
       break;
     }
+  }
+  // The line under the name is the variety when it isn't a known word: promo stamps and events
+  // ("METAMONG PROJECT STMP RLY", "POKEMON CENTER STAMP").
+  if (!variety && nameIndex >= 0) {
+    const next = lines.slice(nameIndex + 1).map((l) => freeText(l.text)).find(Boolean);
+    if (next && !BRAND_ONLY.test(next) && /[A-Z]{3,}/.test(next)) variety = next;
   }
   if (!variety) variety = lines.map((l) => l.text).find((t) => VARIETY.test(t) && t !== name)?.replace(/\s(10|[1-9](?:\.5)?)$/, '');
 

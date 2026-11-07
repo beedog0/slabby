@@ -29,7 +29,8 @@ export function useSync() {
       useVault.setState({ cards: repaired });
       if (remote.rules) useRules.setState({ rules: remote.rules });
       else await pushRules(useRules.getState().rules);
-      await pushCards([...toPush.filter((c) => !fixed.some((f) => f.id === c.id)), ...fixed]);
+      const stale = repaired.filter((c) => remote.staleKeys.includes(c.id) && !fixed.includes(c));
+      await pushCards([...toPush.filter((c) => !fixed.some((f) => f.id === c.id)), ...fixed, ...stale]);
       ready = true;
       flushRemoved();
       // Prices and photos need the session, so load them now rather than only on first render.

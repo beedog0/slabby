@@ -8,6 +8,7 @@ import {
   gradeKey,
   gradedDaily,
   percentile,
+  productName,
   rawDaily,
 } from '../../../supabase/functions/_shared/comps-math';
 
@@ -86,6 +87,19 @@ describe('fromDaily', () => {
   });
   it('is null with no rows', () => {
     expect(fromDaily([])).toBeNull();
+  });
+});
+
+describe('productName', () => {
+  it('drops the printed number and rarity tags from catalog titles', () => {
+    expect(productName('Pikachu ex - 236/187')).toBe('Pikachu ex');
+    expect(productName('Pikachu - 120/SV-P')).toBe('Pikachu');
+    expect(productName('Charizard (Secret)')).toBe('Charizard');
+    expect(productName('Mew ex')).toBe('Mew ex');
+  });
+  it('is null for nothing', () => {
+    expect(productName(null)).toBeNull();
+    expect(productName('')).toBeNull();
   });
 });
 
@@ -241,5 +255,20 @@ describe('parseSoldListings', () => {
   });
   it('returns nothing for garbage input', () => {
     for (const g of [null, undefined, 42, 'sales', {}, { listings: [] }, [null, 1, 'x', [], true]]) expect(parseSoldListings(g)).toEqual([]);
+  });
+});
+
+import { nameAgrees } from '../../../supabase/functions/_shared/comps-math';
+
+describe('nameAgrees', () => {
+  it('refuses a number match that is another card', () => {
+    expect(nameAgrees('DITTO', 'Eevee - 173/SV-P')).toBe(false);
+  });
+  it('accepts a match that shares a name word', () => {
+    expect(nameAgrees('MEW ex', 'Mew ex - 205/165')).toBe(true);
+    expect(nameAgrees('CHARIZARD-HOLO', 'Charizard (Secret)')).toBe(true);
+  });
+  it('trusts the number when the label name is a short code', () => {
+    expect(nameAgrees('PZA', 'Pikachu ex - 236/187')).toBe(true);
   });
 });

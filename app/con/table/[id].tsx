@@ -13,7 +13,7 @@ import { Segmented } from '../../../src/components/Segmented';
 import { SoldState } from '../../../src/components/SoldState';
 import { TrendSentence } from '../../../src/components/TrendSentence';
 import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, Stepper } from '../../../src/components/ui';
-import { gradeLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
+import { cardLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
 import { minFloorOverride } from '../../../src/pricing/rules';
 import { freshnessLine, freshnessWorthShowing, trendSentence, trendVerdict } from '../../../src/pricing/trend';
 import { useCardRow } from '../../../src/pricing/useCardRow';
@@ -72,7 +72,7 @@ export default function BeforeTheTable() {
           {rowTitle(card)}
         </Text>
         <Text style={[type.text, { color: color.secondary }]}>
-          {gradeLabel(card.grader, card.grade, card.condition)}
+          {cardLabel(card)}
           {price ? ` · market ${money(price.marketCents)}` : ''}
         </Text>
         {fresh && card.status !== 'sold' ? (

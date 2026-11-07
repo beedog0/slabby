@@ -26,7 +26,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { gradeLabel, rowTitle } from '../../lib/format';
+import { cardLabel, rowTitle } from '../../lib/format';
 import { color, motion, radius, size, space, type } from '../../theme/tokens';
 import type { Card } from '../../types';
 import { SlabView } from '../SlabView';
@@ -291,5 +291,5 @@ const styles = StyleSheet.create({
 
 /** A slab's menu: its thumbnail, name and grade on top, so you know which slab you're acting on. */
 export function openSlabMenu(card: Card, items: MenuSpec['items']) {
-  openMenu({ card, title: rowTitle(card), subtitle: gradeLabel(card.grader, card.grade, card.condition), items });
+  openMenu({ card, title: rowTitle(card), subtitle: cardLabel(card), items });
 }

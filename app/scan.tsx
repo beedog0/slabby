@@ -591,7 +591,13 @@ export default function Scan() {
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{price ? money(price.marketCents) : '—'}</Text>
                   <Text style={[type.secondary, { color: color.secondary }]}>
-                    {price ? 'market' : matching ? 'finding comps' : 'no comps yet'}
+                    {price
+                      ? 'market'
+                      : gameOf(preview) === 'pokemon' && preview.language !== 'en' && preview.language !== 'ja'
+                        ? 'no price source yet'
+                        : matching
+                          ? 'finding comps'
+                          : 'no comps yet'}
                   </Text>
                 </View>
               </View>

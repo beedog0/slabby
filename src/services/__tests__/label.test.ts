@@ -1,5 +1,6 @@
-import { parseLabel, stepAutoRead } from '../label';
+import { nameLike, parseLabel, stepAutoRead } from '../label';
 import { cardFromCert } from '../psa';
+import { cardKey } from '../../pricing/cardKey';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -142,4 +143,60 @@ describe('two-column labels joined by OCR', () => {
 it('keeps EX in a name when OCR joins the grade onto it', () => {
   const r = parseLabel(['2023 POKEMON SV #199', 'MEW EX GEM MT', 'SPECIAL ART RARE 10', '81234560']);
   expect(r?.payload.PSACert).toMatchObject({ Subject: 'MEW EX', CardGrade: 'GEM MT 10', CertNumber: '81234560' });
+});
+
+describe('Korean promo label', () => {
+  // 2025 SV-P KO Ditto, Metamong Project stamp rally, cert 120864973.
+  const lines = ['2025 POKEMON SV-P KO', '#173', 'DITTO', 'GEM MT', 'METAMONG PROJECT STMP RLY', '10', '120864973'];
+  it('reads the name, the promo line as the variety, grade and cert', () => {
+    const p = parseLabel(lines)!.payload.PSACert;
+    expect(p.Subject).toBe('DITTO');
+    expect(p.Variety).toBe('METAMONG PROJECT STMP RLY');
+    expect(p.CardNumber).toBe('173');
+    expect(p.CardGrade).toBe('GEM MT 10');
+    expect(p.CertNumber).toBe('120864973');
+  });
+  it('is a Korean SV-P card', () => {
+    const p = parseLabel(lines)!.payload;
+    const card = cardFromCert(p, { paidCents: null, plan: 'hold' });
+    expect(card.language).toBe('ko');
+    expect(card.setCode).toBe('SV-P');
+    expect(card.name).toBe('Ditto');
+  });
+});
+
+describe('Golden Box label (set printed on its own line)', () => {
+  // 2021 POKEMON JPN / 25TH ANNIV-GOLDEN BOX / PIKACHU, #003, GEM MT 10, cert 166947927.
+  const lines = ['2021 POKEMON JPN', '#003', '25TH ANNIV-GOLDEN BOX', 'GEM MT', 'PIKACHU', '10', '166947927'];
+  it('takes the name past the set line', () => {
+    const p = parseLabel(lines)!.payload.PSACert;
+    expect(p.Subject).toBe('PIKACHU');
+    expect(p.Variety).toBe('25TH ANNIV-GOLDEN BOX');
+    expect(p.CardNumber).toBe('3');
+  });
+  it('names the set from that line and keys the card by it', () => {
+    const card = cardFromCert(parseLabel(lines)!.payload, { paidCents: null, plan: 'hold' });
+    expect(card).toMatchObject({ name: 'Pikachu', language: 'ja', setCode: null, setName: '25th Anniv-golden Box' });
+    expect(cardKey(card)).toBe('psa:10:25th-anniv-golden-box:3:ja');
+  });
+  it('gives no name, rather than the set, when the name line is missed', () => {
+    const p = parseLabel(['2021 POKEMON JPN', '#003', '25TH ANNIV-GOLDEN BOX', 'GEM MT 10', '166947927'])!.payload.PSACert;
+    expect(p.Subject).toBeUndefined();
+  });
+  it('gives no name for a garbled read', () => {
+    const p = parseLabel(['2021 POKEMON JPN', '#003', 'TT TH AN NY - COLDEN BOX', 'GEM MT 10', '166947927'])!.payload.PSACert;
+    expect(p.Subject).toBeUndefined();
+    const q = parseLabel(['2021 POKEMON JPN', 'TT TH AN NY - CO', 'GEM MT 10', '166947927'])!.payload.PSACert;
+    expect(q.Subject).toBeUndefined();
+  });
+});
+
+describe('nameLike', () => {
+  it('accepts real names and refuses product lines and fragments', () => {
+    expect(nameLike('PIKACHU')).toBe(true);
+    expect(nameLike('MR. MIME')).toBe(true);
+    expect(nameLike('M CHARIZARD EX')).toBe(true);
+    expect(nameLike('25TH ANNIV-GOLDEN BOX')).toBe(false);
+    expect(nameLike('TT TH AN NY - CO')).toBe(false);
+  });
 });
