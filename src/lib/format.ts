@@ -65,6 +65,13 @@ export function rowTitle(c: { name: string; setName: string | null }): string {
   return c.setName && /^\d+$/.test(c.setName) ? `${c.name} ${c.setName}` : c.name;
 }
 
+/** "8:02 am" for an ISO time, local clock. */
+export function clockTime(iso: string): string {
+  const d = new Date(iso);
+  const h = d.getHours();
+  return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+}
+
 /** "3h 12m" / "12m" since an ISO time. */
 export function elapsed(sinceIso: string, now = Date.now()): string {
   const mins = Math.max(0, Math.floor((now - Date.parse(sinceIso)) / 60000));

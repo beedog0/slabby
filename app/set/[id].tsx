@@ -21,7 +21,7 @@ const fmtDate = (d: string) => new Date(d.replace(/\//g, '-') + 'T12:00:00').toL
 const titleOf = (name: string) => name.replace(/^[A-Za-z0-9.\- ]{1,10}:\s+/, '');
 
 export default function SetPage() {
-  const p = useLocalSearchParams<{ id: string; name?: string; language?: string; game?: string }>();
+  const p = useLocalSearchParams<{ id: string; name?: string; language?: string; game?: string; trade?: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [cards, setCards] = useState<Found[] | null | 'error'>(null);
@@ -149,7 +149,7 @@ export default function SetPage() {
             {cards === null ? 'Loading the set…' : cards === 'error' ? 'Can’t load this set right now.' : sort === 'rising' || sort === 'falling' ? 'No price moves this week yet.' : picked.length ? 'No cards with those rarities.' : 'No cards here.'}
           </Text>
         }
-        renderItem={({ item }) => <Tile card={item} w={cellW} />}
+        renderItem={({ item }) => <Tile card={item} w={cellW} trade={p.trade === '1'} />}
       />
       <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setSortOpen(false)} accessibilityLabel="Close" />
@@ -192,12 +192,12 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
   );
 }
 
-function Tile({ card, w }: { card: Found; w: number }) {
+function Tile({ card, w, trade }: { card: Found; w: number; trade?: boolean }) {
   const no = cardNumber(card.number);
   return (
     <Pressable
       style={{ width: w }}
-      onPress={() => router.push(`/search/${card.productId}`)}
+      onPress={() => router.push(`/search/${card.productId}${trade ? '?trade=1' : ''}`)}
       accessibilityRole="button"
       accessibilityLabel={`${displayName(card.name)}${no ? ` number ${no}` : ''}, ${card.marketCents != null ? money(card.marketCents) : 'no price'}`}
     >

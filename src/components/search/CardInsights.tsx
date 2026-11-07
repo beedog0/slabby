@@ -100,7 +100,7 @@ export function RangeMeter({ low, high, now, days }: { low: number; high: number
 }
 
 /** The set's priciest other singles, raw TCGplayer market with the 7-day move. */
-export function SetRow({ setName, cards, onAll, con }: { setName: string; cards: Found[]; onAll?: () => void; con?: boolean }) {
+export function SetRow({ setName, cards, onAll, con, trade }: { setName: string; cards: Found[]; onAll?: () => void; con?: boolean; trade?: boolean }) {
   if (!cards.length) return null;
   return (
     <Section title={`More from ${setName}`} note="Raw TCGplayer market · 7-day change" action={onAll ? { label: 'See all', onPress: onAll } : undefined}>
@@ -108,7 +108,7 @@ export function SetRow({ setName, cards, onAll, con }: { setName: string; cards:
         {cards.map((c) => (
           <Pressable
             key={c.productId}
-            onPress={() => router.push(`/search/${c.productId}${con ? '?con=1' : ''}`)}
+            onPress={() => router.push(`/search/${c.productId}${trade ? '?trade=1' : con ? '?con=1' : ''}`)}
             accessibilityRole="button"
             accessibilityLabel={`${displayName(c.name)}, ${c.marketCents != null ? money(c.marketCents) : 'no price'}`}
             style={styles.setCard}

@@ -32,9 +32,12 @@ export const rangeText = (p: CardPrice) =>
 const times = (r: number | null) => (r == null ? null : `${r >= 10 ? Math.round(r) : r.toFixed(1)}×`);
 
 /** Open the set page for a catalog card. */
-export function openSetPage(card: CatalogCard, groupId: number | null) {
+export function openSetPage(card: CatalogCard, groupId: number | null, opts: { trade?: boolean } = {}) {
   if (groupId == null) return;
-  router.push({ pathname: '/set/[id]', params: { id: String(groupId), name: card.setName, language: card.language, game: card.game } });
+  router.push({
+    pathname: '/set/[id]',
+    params: { id: String(groupId), name: card.setName, language: card.language, game: card.game, ...(opts.trade ? { trade: '1' } : {}) },
+  });
 }
 
 /**
@@ -49,6 +52,7 @@ export function CardAnalyticsView({
   onPick,
   onAll,
   con,
+  trade,
 }: {
   pick: Choice;
   prices: SearchPrices | null | undefined;
@@ -57,6 +61,8 @@ export function CardAnalyticsView({
   onPick: (c: Choice) => void;
   onAll?: () => void;
   con?: boolean;
+  /** From the trade calculator: cards opened from here keep "Add to their side". */
+  trade?: boolean;
 }) {
   const price = !prices ? null : pick === 'raw' ? prices.raw : prices.grades[pick];
   const live = !!price && !!prices && (pick === 'raw' || !isQuiet(price, prices.fetchedAt));
@@ -66,7 +72,7 @@ export function CardAnalyticsView({
       {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} /> : null}
       {hist && price ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
       {prices ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}
-      <SetRow setName={setTitle(setName)} cards={more} onAll={onAll} con={con} />
+      <SetRow setName={setTitle(setName)} cards={more} onAll={onAll} con={con} trade={trade} />
     </>
   );
 }
