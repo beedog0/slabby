@@ -7,6 +7,7 @@ import { bare, gradeLabel, money, rowTitle } from '../../lib/format';
 import type { CardRow } from '../../pricing/portfolio';
 import { color, space, type } from '../../theme/tokens';
 import { SlabView } from '../SlabView';
+import { SelectOutline } from '../collection/SelectOutline';
 
 const COLS = 2;
 const GAP = space.l;
@@ -17,25 +18,31 @@ type Props = {
   onPress: (r: CardRow) => void;
   onLongPress: (r: CardRow) => (() => void) | undefined;
   /** A brief wash behind a tile that just changed. */
-  flash: (id: string) => ReactNode;
+  flash?: (id: string) => ReactNode;
+  /** Picking cards (bundle, trade): the picked ones get the select outline. */
+  selected?: Set<string>;
 };
 
-export function ConGrid({ rows, width, onPress, onLongPress, flash }: Props) {
+export function ConGrid({ rows, width, onPress, onLongPress, flash, selected }: Props) {
   const cellW = Math.floor((width - GAP * (COLS - 1)) / COLS);
   const slabW = Math.floor(cellW * 0.82);
   return (
     <View style={styles.grid}>
       {rows.map((r) => (
         <View key={r.card.id} style={{ width: cellW }}>
-          {flash(r.card.id)}
+          {flash?.(r.card.id)}
           <Pressable
             accessibilityRole="button"
+            accessibilityState={selected ? { selected: selected.has(r.card.id) } : undefined}
             onPress={() => onPress(r)}
             onLongPress={onLongPress(r)}
             style={({ pressed }) => [pressed && { opacity: 0.85 }]}
           >
             <View style={styles.slab}>
-              <SlabView card={r.card} width={slabW} posed={false} />
+              <View>
+                <SlabView card={r.card} width={slabW} posed={false} />
+                {selected ? <SelectOutline on={selected.has(r.card.id)} slabW={slabW} /> : null}
+              </View>
             </View>
             <View style={{ width: slabW, alignSelf: 'center', gap: 2 }}>
               <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>

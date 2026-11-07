@@ -9,8 +9,13 @@ export type ConSession = { id: string; name: string; startedAt: string };
 /** What you're doing right now at the con. One switch drives con mode and Before the table. */
 export type ConMode = 'sell' | 'buy';
 
+/** The last con-day prep: which session, when it finished, and whether anything failed. */
+export type ConPrep = { conId: string; at: string | null; failed: boolean };
+
 type ConState = {
   session: ConSession | null;
+  prep: ConPrep | null;
+  setPrep: (p: ConPrep | null) => void;
   mode: ConMode;
   setMode: (m: ConMode) => void;
   start: (name: string) => void;
@@ -21,11 +26,13 @@ export const useCon = create<ConState>()(
   persist(
     (set) => ({
       session: null,
+      prep: null,
+      setPrep: (prep) => set({ prep }),
       mode: 'sell',
       setMode: (mode) => set({ mode }),
       start: (name) =>
         set({ session: { id: `con-${Date.now()}`, name, startedAt: new Date().toISOString() }, mode: 'sell' }),
-      end: () => set({ session: null }),
+      end: () => set({ session: null, prep: null }),
     }),
     { name: 'slabby.con', storage: createJSONStorage(() => AsyncStorage) },
   ),

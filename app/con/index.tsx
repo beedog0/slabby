@@ -4,6 +4,10 @@
 // Hold, For sale, Trade only or Sold without leaving con mode, or scan a new one. Long-press a row
 // for the same choices. Whatever changed is flashed on the tab it landed on. Search and sort sit
 // under the tabs, like on home.
+//
+// The … beside Done holds the table tools: Price a bundle (/con/bundle), Trade calculator
+// (/con/trade), Last-day prices (rule floors drop by a set percent until midnight) and Refresh
+// prices. Starting a con runs con-day prep once (src/services/conPrep.ts).
 
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -20,13 +24,16 @@ import { Segmented } from '../../src/components/Segmented';
 import { openConStatusMenu, takeScanAdded } from '../../src/components/conStatusMenu';
 import { BuyingPane } from '../../src/components/con/BuyingPane';
 import { TableSheet, type TableSheetOpen } from '../../src/components/con/TableSheet';
-import { Hairline, PlusIcon, PrimaryButton } from '../../src/components/ui';
+import { openMenu } from '../../src/components/menu/Menu';
+import { Hairline, IconButton, MoreIcon, PlusIcon, PrimaryButton } from '../../src/components/ui';
 import { conTabFor, type ConStatus } from '../../src/lib/conStatus';
-import { elapsed, money } from '../../src/lib/format';
+import { clockTime, elapsed, money, rulePct } from '../../src/lib/format';
 import { arrange, type SortKey } from '../../src/pricing/arrange';
 import { conSummary, rowFor } from '../../src/pricing/portfolio';
 import { conFreshnessLine } from '../../src/pricing/trend';
-import { CON_MIN_AGE_MS, refreshCards } from '../../src/services/comps';
+import { LAST_DAY_CUT_PCT, lastDayActive } from '../../src/pricing/rules';
+import { prepCon } from '../../src/services/conPrep';
+import { useWishlist } from '../../src/store/wishlist';
 import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
 import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
@@ -41,7 +48,9 @@ export default function ConMode() {
   const insets = useSafeAreaInsets();
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
-  const { session, start, end, mode, setMode } = useCon();
+  const { session, start, end, mode, setMode, prep, setPrep } = useCon();
+  const startLastDay = useRules((s) => s.startLastDay);
+  const stopLastDay = useRules((s) => s.stopLastDay);
   const selling = mode !== 'buy';
   const [tab, setTab] = useState<Tab>('sale');
   const [query, setQuery] = useState('');
@@ -92,6 +101,16 @@ export default function ConMode() {
     }
   }, [session, start]);
 
+  // Con-day prep, once per con: fresh prices for the table and the wishlist, photos cached.
+  const runPrep = useCallback(async (conId: string) => {
+    setPrep({ conId, at: null, failed: false });
+    const r = await prepCon(useVault.getState().cards, useWishlist.getState().items, useWishlist.getState().seeMarket);
+    if (useCon.getState().session?.id === conId) setPrep({ conId, ...r });
+  }, [setPrep]);
+  useEffect(() => {
+    if (session && prep?.conId !== session.id) runPrep(session.id);
+  }, [session, prep?.conId, runPrep]);
+
   // Keep the session clock current.
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
@@ -111,14 +130,42 @@ export default function ConMode() {
   );
 
   const pull = async () => {
-    const list = onTable.map((r) => r.card);
-    if (!list.length) return;
-    setRefreshing(list.length);
-    // Cards written in the last hour aren't worth a call.
-    const statuses = await refreshCards(list, { force: true, minAgeMs: CON_MIN_AGE_MS });
-    setRefreshFailed(statuses.some((s) => s === 'failed'));
+    setRefreshing(1);
+    // Same as con-day prep: the table and the wishlist. Cards written in the last hour are skipped.
+    setPrep({ conId: session.id, at: null, failed: false });
+    const r = await prepCon(useVault.getState().cards, useWishlist.getState().items, useWishlist.getState().seeMarket);
+    setPrep({ conId: session.id, ...r });
+    setRefreshFailed(r.failed);
     setRefreshing(0);
   };
+  const lastDay = lastDayActive(rules);
+  const cutPct = rules.lastDayCutPct ?? LAST_DAY_CUT_PCT;
+  // Under the totals: last-day prices when on, else a stale/failed warning, else prep status.
+  const prepLine =
+    prep?.conId !== session.id ? null : !prep.at ? 'Getting prices ready for the con' : `Prices ready · ${clockTime(prep.at)}`;
+  const statusLine = freshness ?? prepLine;
+
+  const more = () =>
+    openMenu({
+      title: session.name,
+      items: [
+        [
+          { label: 'Price a bundle', onPress: () => router.push('/con/bundle') },
+          { label: 'Trade calculator', onPress: () => router.push('/con/trade') },
+        ],
+        [
+          {
+            label: lastDay ? 'Turn off last-day prices' : 'Last-day prices',
+            detail: lastDay ? 'On until midnight' : `Floors ${rulePct(-cutPct)}`,
+            onPress: () => {
+              Haptics.selectionAsync().catch(() => {});
+              lastDay ? stopLastDay() : startLastDay();
+            },
+          },
+          { label: 'Refresh prices', detail: prep?.at ? clockTime(prep.at) : undefined, onPress: pull },
+        ],
+      ],
+    });
 
   const onTab = rows.filter((r) => {
     const c = r.card;
@@ -141,6 +188,7 @@ export default function ConMode() {
 
   const done = () => {
     end();
+    stopLastDay();
     router.canGoBack() ? router.back() : router.replace('/');
   };
 
@@ -164,6 +212,9 @@ export default function ConMode() {
             {session.name}
           </Text>
         </View>
+        <IconButton label="Con tools" onPress={more}>
+          <MoreIcon />
+        </IconButton>
         <Pressable accessibilityRole="button" onPress={done} style={styles.done}>
           <Text style={[type.text, { color: color.ink, fontWeight: '500' }]}>Done</Text>
         </Pressable>
@@ -202,10 +253,16 @@ export default function ConMode() {
               <Text style={[type.secondary, { color: color.secondary }]}>left at floor</Text>
             </View>
           </View>
-          {freshness ? (
-            <Text numberOfLines={1} style={[type.secondary, styles.freshness, { color: color.secondary }]}>
-              {freshness}
-            </Text>
+          {lastDay ? (
+            <Pressable accessibilityRole="button" accessibilityHint="Turns last-day prices off" onPress={stopLastDay} style={styles.lastDay}>
+              <View style={styles.dot} />
+              <Text style={[type.secondary, { color: color.conText, fontWeight: '500', flexShrink: 1 }]}>
+                Last-day prices · floors {rulePct(-cutPct)} until midnight
+              </Text>
+            </Pressable>
+          ) : null}
+          {statusLine ? (
+            <Text style={[type.secondary, styles.freshness, { color: color.secondary }]}>{statusLine}</Text>
           ) : null}
 
           <Segmented<Tab>
@@ -362,6 +419,7 @@ const styles = StyleSheet.create({
     paddingTop: space.s,
   },
   freshness: { paddingHorizontal: space.gutter, paddingTop: space.s },
+  lastDay: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.gutter, paddingTop: space.s, minHeight: size.touch - space.l },
   add: {
     width: size.button,
     height: size.button,

@@ -14,7 +14,7 @@ import { SoldState } from '../../../src/components/SoldState';
 import { TrendSentence } from '../../../src/components/TrendSentence';
 import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, Stepper } from '../../../src/components/ui';
 import { cardLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
-import { minFloorOverride } from '../../../src/pricing/rules';
+import { LAST_DAY_CUT_PCT, minFloorOverride } from '../../../src/pricing/rules';
 import { freshnessLine, freshnessWorthShowing, trendSentence, trendVerdict } from '../../../src/pricing/trend';
 import { useCardRow } from '../../../src/pricing/useCardRow';
 import { useCardRefresh } from '../../../src/services/useRefresh';
@@ -143,6 +143,10 @@ export default function BeforeTheTable() {
       <>floor = what you paid</>
     ) : row.floorBasis === 'ask' ? (
       <>floor = ask</>
+    ) : row.floorBasis === 'lastDay' ? (
+      <>
+        last-day floor {em(rulePct(-(rules.lastDayCutPct ?? LAST_DAY_CUT_PCT)))}
+      </>
     ) : (
       <>
         floor = {raw ? 'low' : '30d low'} {em(rulePct(rules.floorPct))}
