@@ -16,7 +16,6 @@ import {
   Animated,
   Easing,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -30,6 +29,7 @@ import { cardLabel, rowTitle } from '../../lib/format';
 import { color, motion, radius, size, space, type } from '../../theme/tokens';
 import type { Card } from '../../types';
 import { SlabView } from '../SlabView';
+import { SheetScope, useSheetDrag } from '../sheet/useSheetDrag';
 import { Hairline } from '../ui';
 
 export type MenuItem = {
@@ -81,7 +81,10 @@ export function MenuHost() {
   // Sheet offset (its height when hidden, 0 when shown) and scrim opacity, both on the native driver.
   const offset = useRef(new Animated.Value(screenH)).current;
   const fade = useRef(new Animated.Value(0)).current;
-  const drag = useRef(new Animated.Value(0)).current; // pull-down offset
+  // Pull down anywhere on the sheet to close it (shared with every sheet; see sheet/sheetGesture.ts).
+  const closeRef = useRef(() => {});
+  const sheet = useSheetDrag(() => closeRef.current());
+  const drag = sheet.drag;
   // One animated node for the whole life of the host, so nothing is re-attached mid-animation.
   const translateY = useRef(Animated.add(offset, drag)).current;
   const sheetH = useRef(screenH);
@@ -92,7 +95,7 @@ export function MenuHost() {
     request = (s) => {
       closing.current = false;
       opened.current = false;
-      drag.setValue(0);
+      sheet.reset();
       fade.setValue(0);
       offset.setValue(screenH);
       setSpec(s);
@@ -123,32 +126,13 @@ export function MenuHost() {
       Animated.timing(fade, { toValue: 0, duration: motion.sheetOut, useNativeDriver: native }),
     ]).start(() => {
       setSpec(null);
-      drag.setValue(0);
+      sheet.reset();
       then?.();
     });
   };
 
-  const closeRef = useRef(() => {});
   closeRef.current = () => close();
   closer = close;
-
-  // Pull the sheet down to dismiss it, like any iOS sheet.
-  const pan = useRef(
-    PanResponder.create({
-      // Capture, not bubble: a drag that starts on a row, the keypad or a button must still pull
-      // the sheet down. Bubbling only fired on the bare header, so most of the sheet ignored it.
-      onMoveShouldSetPanResponderCapture: (_, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 80 || g.vy > 0.8) closeRef.current();
-        else Animated.spring(drag, { toValue: 0, useNativeDriver: native, bounciness: 0 }).start();
-      },
-      onPanResponderTerminate: () => {
-        Animated.spring(drag, { toValue: 0, useNativeDriver: native, bounciness: 0 }).start();
-      },
-    }),
-  ).current;
 
   if (!spec) return null;
   const groups = groupsOf(spec.items);
@@ -165,8 +149,9 @@ export function MenuHost() {
         accessibilityViewIsModal
         onLayout={(e) => onSheetLayout(e.nativeEvent.layout.height)}
         style={[styles.sheet, { paddingBottom: insets.bottom + space.s, transform: [{ translateY }] }]}
-        {...pan.panHandlers}
+        {...sheet.panHandlers}
       >
+        <SheetScope value={sheet.scope}>
         <View style={styles.grabber} />
 
         {hasHeader ? (
@@ -229,6 +214,7 @@ export function MenuHost() {
         >
           <Text style={[type.body, { color: color.secondary }]}>Cancel</Text>
         </Pressable>
+        </SheetScope>
       </Animated.View>
     </Modal>
   );

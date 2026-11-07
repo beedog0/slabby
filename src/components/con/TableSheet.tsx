@@ -4,9 +4,9 @@
 // sheet to a price step with the keypad. "Scan a new slab" is the only way out to another screen.
 //
 // The dropdown is drawn inside this sheet (not through a second Modal, which iOS can refuse to
-// present over a Modal). Pull down anywhere to dismiss, like any iOS sheet: the sheet takes the
-// gesture in the capture phase when it's a downward drag and the list is already at its top, so
-// scrolling the list still works.
+// present over a Modal). Pull down anywhere to dismiss, like any iOS sheet (useSheetDrag): the sheet
+// takes a downward drag in the capture phase when the list is already at its top, so scrolling the
+// list still works.
 
 import * as Haptics from 'expo-haptics';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
@@ -14,10 +14,8 @@ import {
   Animated,
   Easing,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -37,6 +35,7 @@ import type { Card } from '../../types';
 import { CardThumb } from '../CardThumb';
 import { Keypad } from '../Keypad';
 import { Check } from '../menu/Menu';
+import { SheetScope, SheetScrollView, useSheetDrag } from '../sheet/useSheetDrag';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../ui';
 
 export type TableSheetOpen = { step: 'list' } | { step: 'price'; id: string };
@@ -55,7 +54,9 @@ export function TableSheet({ open, onClose, onScan }: Props) {
   const insets = useSafeAreaInsets();
   const { height: screenH } = useWindowDimensions();
   const progress = useRef(new Animated.Value(0)).current;
-  const drag = useRef(new Animated.Value(0)).current;
+  const closeRef = useRef(() => {});
+  const sheet = useSheetDrag(() => closeRef.current());
+  const drag = sheet.drag;
   const closing = useRef(false);
   const changed = useRef<{ id: string; status: ConStatus }[]>([]);
   const [step, setStep] = useState<TableSheetOpen | null>(null);
@@ -67,9 +68,8 @@ export function TableSheet({ open, onClose, onScan }: Props) {
     closing.current = false;
     changed.current = [];
     priceOnly.current = open.step === 'price';
-    drag.setValue(0);
+    sheet.reset();
     progress.setValue(0);
-    atTop.current = true;
     setStep(open);
     Animated.timing(progress, { toValue: 1, duration: motion.sheetIn, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
   }, [open, progress, drag]);
@@ -82,26 +82,7 @@ export function TableSheet({ open, onClose, onScan }: Props) {
       onClose(changed.current);
     });
   };
-  const closeRef = useRef(close);
   closeRef.current = close;
-
-  /** The list's scroll offset is at the top, so a downward drag means "dismiss", not "scroll". */
-  const atTop = useRef(true);
-  const pullingDown = (g: { dy: number; dx: number }) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5;
-
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => pullingDown(g),
-      onMoveShouldSetPanResponderCapture: (_, g) => atTop.current && pullingDown(g),
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_, g) => drag.setValue(Math.max(0, g.dy)),
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 80 || g.vy > 0.8) closeRef.current();
-        else Animated.spring(drag, { toValue: 0, useNativeDriver: native, bounciness: 0 }).start();
-      },
-      onPanResponderTerminate: () => Animated.spring(drag, { toValue: 0, useNativeDriver: native, bounciness: 0 }).start(),
-    }),
-  ).current;
 
   if (!step) return null;
   // Tall enough for the keypad step; full height on small phones.
@@ -120,12 +101,12 @@ export function TableSheet({ open, onClose, onScan }: Props) {
       <Animated.View
         accessibilityViewIsModal
         style={[styles.sheet, { height: sheetH, transform: [{ translateY }] }]}
-        {...pan.panHandlers}
+        {...sheet.panHandlers}
       >
+        <SheetScope value={sheet.scope}>
         <View style={styles.grabber} />
         {step.step === 'list' ? (
           <ListStep
-            onScrollTop={(top) => (atTop.current = top)}
             bottomInset={insets.bottom}
             onDone={close}
             onScan={() => {
@@ -140,7 +121,6 @@ export function TableSheet({ open, onClose, onScan }: Props) {
               record(card.id, s);
             }}
             onSold={(card) => {
-              atTop.current = true;
               setStep({ step: 'price', id: card.id });
             }}
           />
@@ -150,7 +130,6 @@ export function TableSheet({ open, onClose, onScan }: Props) {
             bottomInset={insets.bottom}
             onBack={() => {
               if (priceOnly.current) return close();
-              atTop.current = true;
               setStep({ step: 'list' });
             }}
             onSold={(id) => {
@@ -159,20 +138,19 @@ export function TableSheet({ open, onClose, onScan }: Props) {
             }}
           />
         )}
+        </SheetScope>
       </Animated.View>
     </Modal>
   );
 }
 
 function ListStep({
-  onScrollTop,
   bottomInset,
   onDone,
   onScan,
   onSet,
   onSold,
 }: {
-  onScrollTop: (top: boolean) => void;
   bottomInset: number;
   onDone: () => void;
   onScan: () => void;
@@ -252,12 +230,10 @@ function ListStep({
       />
 
       <View ref={listBox} collapsable={false} style={{ flex: 1 }}>
-        <ScrollView
+        <SheetScrollView
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           onScrollBeginDrag={() => setMenu(null)}
-          onScroll={(e) => onScrollTop(e.nativeEvent.contentOffset.y <= 0)}
-          scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: bottomInset + space.xxl }}
         >
           {rows.map((r) => {
@@ -291,7 +267,7 @@ function ListStep({
               {q ? 'Nothing in your collection matches.' : 'Nothing in your collection yet. Scan a slab to add one.'}
             </Text>
           ) : null}
-        </ScrollView>
+        </SheetScrollView>
 
         {menu ? (
           <>
