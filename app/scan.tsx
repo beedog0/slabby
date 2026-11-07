@@ -33,13 +33,14 @@ import { CostField, EMPTY_COST, paidCentsOf, toCost, type CostInput } from '../s
 import { ask as ruleAsk } from '../src/pricing/rules';
 import { useRules } from '../src/store/rules';
 import { useSellDraft, type SellDraft } from '../src/store/sellDraft';
+import { ScanPills } from '../src/components/scan/ScanPills';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
 import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
-import { cardFromCert, cardFromDetails, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
+import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
 import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, parseCardText, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
 import { cardNumber, displayName, mockProductId, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
@@ -296,7 +297,10 @@ export default function Scan() {
     auto.current = null;
     lastRead.current = readId(parsed);
     setSpotted(false);
-    setProgress(autoProgress(null));
+    // Light every pill with what was read while the frame shows the lock.
+    const c = parsed.payload.PSACert;
+    const field = (value?: string) => (value ? { state: 'done' as const, value } : { state: 'none' as const });
+    setProgress({ name: field(c.Subject), grade: field(c.CardGrade), cert: field(c.CertNumber) });
     setLabelMiss(false);
     setLocked(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
@@ -542,24 +546,17 @@ export default function Scan() {
       <View style={[styles.below, { top: frameTop + frameH + space.xl }]}>
         <View style={styles.hint}>
           <Text style={[type.text, { color: color.onInk, textAlign: 'center' }]}>{hint}</Text>
-          {spotted && !locked ? (
-            // What the read has so far, so a stuck scan shows what it can't make out.
-            <View style={styles.progress}>
-              {(
-                [
-                  ['Name', progress.name === 'sure', progress.name === 'seen'],
-                  ['Grade', progress.grade, false],
-                  ['Cert', progress.cert, false],
-                ] as const
-              ).map(([label, done, partly]) => (
-                <View key={label} style={styles.progressItem}>
-                  <View style={[styles.dot, done ? styles.dotDone : partly ? styles.dotPartly : null]} />
-                  <Text style={[type.secondary, { color: done ? color.onInk : color.scanGuide }]}>{label}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
         </View>
+        {labelMode && canUseCamera && !result ? (
+          // What the read has so far: each pill lights up with its value once confirmed.
+          <ScanPills
+            pills={[
+              { key: 'name', label: 'Name', ...progress.name, value: progress.name.value && titleName(progress.name.value) },
+              { key: 'grade', label: 'Grade', ...progress.grade, value: progress.grade.value && `PSA ${gradeFrom(progress.grade.value) ?? progress.grade.value}` },
+              { key: 'cert', label: 'Cert', ...progress.cert },
+            ]}
+          />
+        ) : null}
         {added ? (
           <Pressable
             accessibilityRole="button"
@@ -567,7 +564,7 @@ export default function Scan() {
             onPress={() => router.push(`/card/${added.id}`)}
             style={({ pressed }) => [styles.added, pressed && { opacity: 0.7 }]}
           >
-            <Text numberOfLines={1} style={[type.text, { color: color.onInk, flex: 1 }]}>
+            <Text style={[type.text, { color: color.onInk, flexShrink: 1 }]}>
               Added · {added.title}
             </Text>
             <Text style={[type.text, { color: color.onInk, fontWeight: '600' }]}>View</Text>
@@ -1142,11 +1139,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.s,
   },
   corner: { position: 'absolute', width: 24, height: 24, borderColor: color.conFill, borderRadius: 4 },
-  progress: { flexDirection: 'row', justifyContent: 'center', gap: space.l, paddingTop: space.xs },
-  progressItem: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  dot: { width: 6, height: 6, borderRadius: 3, borderWidth: 1, borderColor: color.scanGuide },
-  dotPartly: { borderColor: color.conFill },
-  dotDone: { backgroundColor: color.conFill, borderColor: color.conFill },
   labelLine: { position: 'absolute', left: space.s, right: space.s, height: size.hairline, backgroundColor: color.scanGuide },
   frameDone: { borderWidth: 3, backgroundColor: color.scanLocked },
   check: {
