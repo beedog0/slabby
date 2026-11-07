@@ -17,6 +17,7 @@ import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
 import { buyPrices, cardNumber, displayName, type Game } from '../../src/services/search';
+import { sealedLabel, typeLabel, type TypeFilter } from '../../src/lib/sealed';
 import {
   catalogProgress,
   changeOf,
@@ -126,7 +127,7 @@ export default function Search() {
   const changeKey = changeOf(f.sort);
   const hint =
     state === 'idle'
-      ? `Search any card by name, set or number.${loadingLine}`
+      ? `Search any card or sealed product by name, set or number.${loadingLine}`
       : state === 'error'
         ? 'Search isn’t reachable right now.'
         : state === 'done' && !results.length
@@ -219,7 +220,7 @@ export default function Search() {
               </Pressable>
             ))}
             {filterCount(f) > 1 ? (
-              <Pressable accessibilityRole="button" onPress={() => set({ languages: [], sets: [], rarities: [] })} hitSlop={8} style={styles.chipClear}>
+              <Pressable accessibilityRole="button" onPress={() => set({ languages: [], sets: [], rarities: [], types: [] })} hitSlop={8} style={styles.chipClear}>
                 <Text style={[type.secondary, { color: color.secondary }]}>Clear</Text>
               </Pressable>
             ) : null}
@@ -356,6 +357,17 @@ function FilterSheet({
   // Keep picked sets and rarities visible even when they fall out of the facet list.
   const setRows = [...f.sets.filter((x) => !sets.some((s) => s.id === x.id)).map((x) => ({ ...x, n: 0 })), ...sets];
   const rarityRows = [...f.rarities.filter((r) => !rarities.some((x) => x.key === r)).map((key) => ({ key, n: 0 })), ...rarities];
+  // Type: Cards, then All sealed (once there's more than one kind), then each kind of sealed.
+  const picked = f.types ?? [];
+  const kinds = facets?.types ?? [];
+  const sealedKinds = kinds.filter((t) => t.key !== 'card');
+  const sealedN = sealedKinds.reduce((sum, t) => sum + t.n, 0);
+  const typeRows: { key: TypeFilter; n: number }[] = [
+    ...kinds.filter((t) => t.key === 'card'),
+    ...(sealedKinds.length > 1 || picked.includes('sealed') ? [{ key: 'sealed' as TypeFilter, n: sealedN }] : []),
+    ...sealedKinds,
+    ...picked.filter((t) => !kinds.some((x) => x.key === t) && t !== 'sealed').map((key) => ({ key, n: 0 })),
+  ];
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
@@ -378,12 +390,27 @@ function FilterSheet({
         <View style={styles.sheetHead}>
           <Text style={[type.section, { color: color.ink }]}>Filter</Text>
           {filterCount(f) ? (
-            <Pressable accessibilityRole="button" onPress={() => onChange({ languages: [], sets: [], rarities: [] })} hitSlop={8}>
+            <Pressable accessibilityRole="button" onPress={() => onChange({ languages: [], sets: [], rarities: [], types: [] })} hitSlop={8}>
               <Text style={[type.text, { color: color.secondary }]}>Clear</Text>
             </Pressable>
           ) : null}
         </View>
         <SheetScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: space.l }}>
+          {typeRows.length > 1 || picked.length ? (
+            <View style={styles.sheetSection}>
+              <Text style={[type.body, styles.sectionTitle]}>Type</Text>
+              {typeRows.map((t) => (
+                <CheckRow
+                  key={t.key}
+                  label={typeLabel(t.key)}
+                  detail={t.n ? String(t.n) : undefined}
+                  on={picked.includes(t.key)}
+                  onPress={() => onChange({ types: toggle(picked, t.key) })}
+                />
+              ))}
+            </View>
+          ) : null}
+
           {showLanguage ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Language</Text>
@@ -434,7 +461,7 @@ function FilterSheet({
           ) : null}
         </SheetScrollView>
         <View style={styles.gutter}>
-          <PrimaryButton title={`Show ${count} ${count === 1 ? 'card' : 'cards'}`} onPress={onClose} />
+          <PrimaryButton title={`Show ${count} ${count === 1 ? 'result' : 'results'}`} onPress={onClose} />
         </View>
         </SheetScope>
       </Animated.View>
@@ -478,20 +505,24 @@ function ResultTile({ card, width, con, trade, rules, change, days }: ResultProp
   const styles = useStyles();
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
+  const sealed = card.sealedType;
   return (
     <Pressable accessibilityRole="button" onPress={() => openCard(card, con, trade)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
-      <View style={[styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
-        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}
+      {/* A box photo sits on the canvas, whole; a card fills its card-shaped tile. */}
+      <View style={[sealed ? styles.tileSealed : styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
+        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} /> : null}
       </View>
       <View style={{ gap: 2, paddingTop: space.m }}>
-        <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
-          {displayName(card.name)}
+        <Text numberOfLines={sealed ? 3 : 1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
+          {sealed ? card.name : displayName(card.name)}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-          {[no && `#${no}`, card.language === 'ja' ? 'JP' : null, card.setName].filter(Boolean).join(' · ')}
+          {(sealed ? [sealedLabel(sealed), card.language === 'ja' ? 'JP' : null] : [no && `#${no}`, card.language === 'ja' ? 'JP' : null, card.setName])
+            .filter(Boolean)
+            .join(' · ')}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-          raw <Text style={{ color: color.ink }}>{card.marketCents != null ? money(card.marketCents) : '—'}</Text>
+          {sealed ? 'market' : 'raw'} <Text style={{ color: color.ink }}>{card.marketCents != null ? money(card.marketCents) : '—'}</Text>
           {change != null ? <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{`  ${pct(change)} ${days}d`}</Text> : null}
         </Text>
         {buy ? (
@@ -509,24 +540,29 @@ function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
   const styles = useStyles();
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
-  const sub = [card.setName, no && `#${no}`, card.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
+  const sealed = card.sealedType;
+  const sub = (sealed ? [sealedLabel(sealed), card.language === 'ja' ? 'JP' : null] : [card.setName, no && `#${no}`, card.language === 'ja' ? 'JP' : null])
+    .filter(Boolean)
+    .join(' · ');
   return (
     <Pressable
       accessibilityRole="button"
       onPress={() => openCard(card, con, trade)}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.5 }]}
     >
-      <View style={styles.thumb}>{card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}</View>
+      <View style={sealed ? styles.thumbSealed : styles.thumb}>
+        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} /> : null}
+      </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
-          {displayName(card.name)}
+        <Text numberOfLines={sealed ? 2 : 1} style={[type.body, { color: color.ink }]}>
+          {sealed ? card.name : displayName(card.name)}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {sub}
         </Text>
         {buy ? (
           <Text numberOfLines={1} style={[type.secondary, { color: color.ink, paddingTop: 2 }]}>
-            Raw: open {money(buy.target)} · pay up to {money(buy.max)}
+            {sealed ? 'Open' : 'Raw: open'} {money(buy.target)} · pay up to {money(buy.max)}
           </Text>
         ) : null}
       </View>
@@ -539,7 +575,7 @@ function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
             {pct(change)} {days}d
           </Text>
         ) : (
-          <Text style={[type.caption, { color: color.secondary }]}>raw</Text>
+          <Text style={[type.caption, { color: color.secondary }]}>{sealed ? 'market' : 'raw'}</Text>
         )}
       </View>
     </Pressable>
@@ -626,4 +662,6 @@ const useStyles = themed((color) => StyleSheet.create({
   gridRow: { gap: GRID_GAP, paddingHorizontal: space.gutter, paddingBottom: space.xxl },
   tileArt: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
   thumb: { width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, backgroundColor: color.well, overflow: 'hidden' },
+  tileSealed: { borderRadius: radius.thumb * 2, overflow: 'hidden' },
+  thumbSealed: { width: size.thumbW, height: size.thumbH },
 }));

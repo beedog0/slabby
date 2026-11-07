@@ -31,7 +31,7 @@ export default function Sell() {
   );
   if (!draft) return <View style={{ flex: 1, backgroundColor: color.canvas }}>{back}</View>;
 
-  const grade = gradeLabel(draft.card.grader, draft.card.grade);
+  const grade = gradeLabel(draft.card.grader, draft.card.grade, undefined, draft.card.sealed);
   // A pull with no catalog card has no pack price to look up: it's rated as $0 cost.
   const putUp = () => {
     const saved = saveDraft(draft, { cost: draft.cost, marketCents: draft.marketCents, rules });

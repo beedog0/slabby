@@ -45,3 +45,28 @@ describe('mergeVault', () => {
     expect(toPush).toEqual([]);
   });
 });
+
+describe('sealed product', () => {
+  const box: Card = {
+    ...(cards[0] as unknown as Card),
+    id: uuid(),
+    grader: 'raw',
+    grade: null,
+    certNumber: null,
+    number: null,
+    name: 'Evolving Skies Booster Box',
+    sealed: 'booster_box',
+    productId: 9100001,
+  };
+  it('keys sealed by product id and round-trips its kind', () => {
+    const row = toRow(box, 'u1');
+    expect(row.card_key).toBe('sealed:9100001');
+    expect(row.sealed_type).toBe('booster_box');
+    const back = fromRow(row);
+    expect(back.sealed).toBe('booster_box');
+    expect(back.productId).toBe(9100001);
+  });
+  it('leaves the column off card rows', () => {
+    expect('sealed_type' in toRow(cards[0] as unknown as Card, 'u1')).toBe(false);
+  });
+});

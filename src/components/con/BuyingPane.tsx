@@ -108,7 +108,7 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
                     {rowTitle(c)}
                   </Text>
                   <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                    {gradeLabel(c.grader, c.grade, c.condition)}
+                    {gradeLabel(c.grader, c.grade, c.condition, c.sealed)}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>

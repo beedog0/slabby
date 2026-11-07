@@ -53,7 +53,7 @@ export function ConGrid({ rows, width, onPress, onLongPress, flash, selected, ma
                 {rowTitle(r.card)}
               </Text>
               <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                {gradeLabel(r.card.grader, r.card.grade, r.card.condition)}
+                {gradeLabel(r.card.grader, r.card.grade, r.card.condition, r.card.sealed)}
                 {' · '}
                 <PriceText row={r} market={market} />
               </Text>

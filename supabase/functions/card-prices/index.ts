@@ -1,11 +1,12 @@
 // card-prices: prices for a card opened from search. Body: { productId }.
 // Pokémon: one PokemonPriceTracker call (3 credits) gives raw plus PSA 10 to 1 with history; the
 // answer is cached for 24 hours in search_cache and spends from the "search" bucket's own daily
-// cap, so browsing can't starve scans or the nightly vault refresh. Other games (and Pokémon once
-// the cap is hit with nothing cached) answer with tonight's TCGplayer market from `catalog`.
+// cap, so browsing can't starve scans or the nightly vault refresh. Other games, sealed product
+// (0015_sealed.sql), and Pokémon once the cap is hit with nothing cached, answer from `catalog`:
+// tonight's TCGplayer market with its last 31 nightly prices as the chart. No credits.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { hasAllGrades, isFresh, realDays, SEARCH_GRADES, summarize, withPoints, type Summary } from '../_shared/catalog-math.ts';
+import { catalogSummary, hasAllGrades, isFresh, realDays, SEARCH_GRADES, summarize, withPoints, type Summary } from '../_shared/catalog-math.ts';
 import { gradedDaily, rawDaily, type DailySales } from '../_shared/comps-math.ts';
 import { fetchComps } from '../_shared/ppt.ts';
 
@@ -35,35 +36,22 @@ Deno.serve(async (req) => {
 
   const { data: card } = await admin
     .from('catalog')
-    .select('product_id, game, language, market_cents, low_cents, updated_on')
+    .select('*')
     .eq('product_id', productId)
     .maybeSingle();
   if (!card) return json({ error: 'Unknown card' }, 404);
 
   const fallback = (capped = false): Answer => ({
     productId,
-    raw:
-      card.market_cents != null
-        ? {
-            marketCents: card.market_cents,
-            lowCents: card.low_cents ?? card.market_cents,
-            highCents: card.market_cents,
-            sales30d: 0,
-            asOf: card.updated_on,
-            series90: [card.market_cents],
-            points: 1,
-            since: card.updated_on,
-            lastReal: card.updated_on,
-          }
-        : null,
+    raw: catalogSummary(card),
     grades: Object.fromEntries(SEARCH_GRADES.map((g) => [g, null])),
     fetchedAt: new Date().toISOString(),
     source: 'catalog',
     ...(capped ? { capped } : {}),
   });
 
-  // PokemonPriceTracker only covers Pokémon.
-  if (card.game !== 'pokemon') return json(fallback());
+  // PokemonPriceTracker only covers Pokémon singles; sealed has no grades to look up.
+  if (card.game !== 'pokemon' || card.sealed_type) return json(fallback());
 
   const { data: cached } = await admin.from('search_cache').select('payload, fetched_at').eq('product_id', productId).maybeSingle();
   if (cached && isFresh(cached.fetched_at) && hasAllGrades(cached.payload)) return json(cached.payload);

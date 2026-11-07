@@ -45,7 +45,47 @@ export type CatalogRow = {
   low_cents: number | null;
   /** Every priced printing (Normal, Holofoil, Reverse Holofoil, 1st Edition…), the base one first. */
   printings: Printing[];
+  /** Sealed product (0015_sealed.sql): what kind, e.g. "booster_box". Null for a single card. */
+  sealed_type: SealedType | null;
 };
+
+/** Kinds of sealed product, in the order the filter lists them. */
+export const SEALED_TYPES = [
+  'booster_box',
+  'etb',
+  'booster_bundle',
+  'booster_pack',
+  'blister',
+  'tin',
+  'collection',
+  'deck',
+  'case',
+] as const;
+export type SealedType = (typeof SEALED_TYPES)[number];
+
+/** Accessories and codes: not something collectors hold sealed for its value. */
+const NOT_SEALED =
+  /code card|online code|\bcodes?\b|jumbo|oversize|card sleeves|\bsleeves\b|binder|portfolio|playmat|deck box|\bdice\b|damage counter|storage|album|poster|\bcoin\b(?!.*\b(collection|box|tin)\b)|\bpins?\b(?!.*\b(collection|box)\b)|\bfigure\b(?!.*\b(collection|box)\b)/i;
+
+/**
+ * What kind of sealed product a TCGplayer product is, from its name, or null when it is a single
+ * card or an accessory. Only products with no card number and no rarity get here. Order matters:
+ * "Booster Box Case" is a case, "Elite Trainer Box" an ETB, "Sleeved Booster Pack" a pack.
+ */
+export function sealedType(name: string): SealedType | null {
+  const n = name.toLowerCase();
+  if (NOT_SEALED.test(n)) return null;
+  if (/\bcase\b/.test(n)) return 'case';
+  if (/elite trainer box|\betb\b/.test(n)) return 'etb';
+  if (/booster box|booster display|display box|\bdisplay\b/.test(n)) return 'booster_box';
+  if (/booster bundle/.test(n)) return 'booster_bundle';
+  if (/blister|checklane|check lane/.test(n)) return 'blister';
+  if (/booster pack|\bpack\b/.test(n)) return 'booster_pack';
+  if (/\btins?\b/.test(n)) return 'tin';
+  if (/\bdeck\b/.test(n)) return 'deck';
+  if (/collection|\bbox\b|premium|bundle|\bkit\b|toolkit|stadium|gift set|\bchest\b/.test(n)) return 'collection';
+  return null;
+}
 
 export type Printing = { name: string; market_cents: number | null; low_cents: number | null };
 
@@ -83,8 +123,9 @@ export function printings(prices: TcgPrice[]): Printing[] {
 }
 
 /**
- * Catalog rows for one set. Only singles are kept: sealed product (booster boxes, ETBs, code
- * cards) has no card number on TCGplayer.
+ * Catalog rows for one set: every single, plus sealed product (booster boxes, ETBs, packs, tins,
+ * collection boxes) tagged with its sealed_type. Sealed product has no card number or rarity on
+ * TCGplayer; code cards and accessories are dropped.
  */
 export function catalogRows(
   category: { id: number; game: string; language: string },
@@ -97,7 +138,9 @@ export function catalogRows(
   const rows: CatalogRow[] = [];
   for (const p of products) {
     const number = ext(p, 'Number');
-    if (!number) continue;
+    const rarity = ext(p, 'Rarity');
+    const sealed = !number && !rarity ? sealedType(p.name) : null;
+    if (!number && !sealed) continue;
     rows.push({
       product_id: p.productId,
       category_id: category.id,
@@ -106,12 +149,13 @@ export function catalogRows(
       language: category.language,
       name: p.name.trim(),
       number,
-      rarity: ext(p, 'Rarity'),
+      rarity,
       set_name: group.name,
       set_code: group.abbreviation?.trim() || null,
       image_url: `https://tcgplayer-cdn.tcgplayer.com/product/${p.productId}_400w.jpg`,
       ...primaryPrice(byProduct.get(p.productId) ?? []),
-      printings: printings(byProduct.get(p.productId) ?? []),
+      printings: sealed ? [] : printings(byProduct.get(p.productId) ?? []),
+      sealed_type: sealed,
     });
   }
   return rows;
@@ -135,6 +179,36 @@ export type Summary = {
   since?: string;
   lastReal?: string;
 };
+
+/**
+ * A Summary from the catalog's own nightly TCGplayer prices (catalog.market_hist, up to 31 nights,
+ * newest last). No paid API: this is what sealed product and non-Pokémon cards chart from. The
+ * nights are taken as consecutive days ending on updated_on. Null without a price.
+ */
+export function catalogSummary(row: {
+  market_cents: number | null;
+  low_cents: number | null;
+  market_hist?: number[] | null;
+  updated_on: string;
+}): Summary | null {
+  if (row.market_cents == null) return null;
+  const hist = (row.market_hist ?? []).filter((v) => v != null && v > 0);
+  const series = hist.length ? hist : [row.market_cents];
+  series[series.length - 1] = row.market_cents;
+  const first = new Date(`${row.updated_on}T00:00:00Z`);
+  first.setUTCDate(first.getUTCDate() - (series.length - 1));
+  return {
+    marketCents: row.market_cents,
+    lowCents: row.low_cents ?? row.market_cents,
+    highCents: row.market_cents,
+    sales30d: 0,
+    asOf: row.updated_on,
+    series90: series,
+    points: series.length,
+    since: first.toISOString().slice(0, 10),
+    lastReal: row.updated_on,
+  };
+}
 
 /** Days in the last `days` that have real data, oldest first. */
 export function realDays(dates: string[], today: string, days = 90): string[] {
