@@ -9,10 +9,10 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CardThumb } from '../../src/components/CardThumb';
 import { Keypad } from '../../src/components/Keypad';
 import { PriceLine, type Tick } from '../../src/components/PriceLine';
 import { ConGrid } from '../../src/components/con/ConGrid';
+import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, IconButton, PrimaryButton } from '../../src/components/ui';
 import { money, rowTitle } from '../../src/lib/format';
 import { inputsFor, rowFor, type CardRow } from '../../src/pricing/portfolio';
@@ -41,7 +41,7 @@ export default function Bundle() {
   const [counter, setCounter] = useState<number | null>(null);
   /** A sale at a loss waiting for its second tap: the price. */
   const [confirm, setConfirm] = useState<number | null>(null);
-  const [sold, setSold] = useState<{ cards: CardRow['card'][]; cents: number; paidCents: number } | null>(null);
+  const [sold, setSold] = useState<{ cards: CardRow['card'][]; shares: number[]; cents: number; paidCents: number } | null>(null);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (confirmTimer.current) clearTimeout(confirmTimer.current);
@@ -160,7 +160,7 @@ export default function Bundle() {
     const before = chosen.map((r) => r.card);
     chosen.forEach((r, i) => update(r.card.id, { status: 'sold', soldCents: shares[i], soldAt: at, soldWhere: where }));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    setSold({ cards: before, cents, paidCents: q.paidCents });
+    setSold({ cards: before, shares, cents, paidCents: q.paidCents });
   };
 
   const undo = () => {
@@ -176,8 +176,11 @@ export default function Bundle() {
         {nav('Bundle sold')}
         <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: 'center', alignItems: 'center', gap: space.s }}>
           <View style={styles.thumbs}>
-            {sold.cards.map((c) => (
-              <CardThumb key={c.id} card={c} />
+            {sold.cards.map((c, i) => (
+              <View key={c.id} style={{ width: 72, alignItems: 'center', gap: 2 }}>
+                <SlabView card={c} width={72} posed={false} />
+                <Text style={[type.secondary, { color: color.ink, paddingTop: space.xs }]}>{money(sold.shares[i])}</Text>
+              </View>
             ))}
           </View>
           <Text style={[type.text, { color: color.secondary, paddingTop: space.l }]}>Sold {sold.cards.length} cards for</Text>
@@ -228,6 +231,9 @@ export default function Bundle() {
       quiet = { title: `Counter ${money(v.counterAt)}`, onPress: () => makeCounter(v.counterAt) };
     }
   }
+  // Small slabs, about four across; more scroll sideways at the same size.
+  const slabW = Math.min(80, Math.floor((width - space.gutter * 2 - space.l * 3) / 4));
+
   const ticks: Tick[] = [];
   if (q.paidCents) ticks.push({ value: q.paidCents, label: 'Paid', color: color.ink });
   ticks.push({ value: q.floorCents, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 });
@@ -240,11 +246,22 @@ export default function Bundle() {
     <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
       {nav('Bundle')}
       <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: 'space-evenly' }}>
-        <View style={{ gap: 2 }}>
-          <Text style={[type.body, { color: color.ink }]}>{chosen.map((r) => rowTitle(r.card)).join(' + ')}</Text>
+        <View style={{ gap: space.m }}>
+          {/* The cards themselves, each with its market price: what the total is made of. */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.slabs}>
+            {chosen.map((r) => (
+              <View key={r.card.id} style={{ width: slabW, gap: 2 }}>
+                <View style={{ alignItems: 'center', paddingBottom: space.s }}>
+                  <SlabView card={r.card} width={slabW} posed={false} />
+                </View>
+                <Text style={[type.numberM, { color: color.ink }]}>{r.price ? money(r.price.marketCents) : '—'}</Text>
+                <Text style={[type.secondary, { color: color.secondary }]}>{rowTitle(r.card)}</Text>
+              </View>
+            ))}
+          </ScrollView>
           <Text style={[type.secondary, { color: color.secondary }]}>
-            {q.count} cards · ask {money(q.askCents)} ·{' '}
-            {q.floorBasis === 'paid' ? 'floor = what they cost you' : q.floorBasis === 'ask' ? 'floor = ask' : 'floor = their floors added up'}
+            Ask {money(q.askCents)} for all {q.count}
+            {q.floorBasis === 'paid' ? ' · floor is what they cost you' : q.floorBasis === 'ask' ? ' · floor is the ask' : ''}
           </Text>
         </View>
         <View style={{ alignItems: 'center' }}>
@@ -296,6 +313,7 @@ const styles = StyleSheet.create({
   },
   footer: { paddingHorizontal: space.gutter, paddingTop: space.s },
   hint: { textAlign: 'center', minHeight: size.button, textAlignVertical: 'center', paddingTop: space.l },
+  slabs: { gap: space.l, paddingRight: space.gutter },
   thumbs: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space.s },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center' },
 });
