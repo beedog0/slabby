@@ -1,7 +1,9 @@
 // 56×24 sparkline. Color by 30-day trend: gain above +3%, loss below −3%, secondary otherwise.
 
 import Svg, { Path } from 'react-native-svg';
-import { color, size, trendThreshold } from '../theme/tokens';
+import { size, trendThreshold } from '../theme/tokens';
+import { useColors } from '../theme/theme';
+import type { Palette } from '../theme/tokens';
 
 export function sparkPath(values: number[], w: number, h: number, pad = 2): string {
   if (values.length < 2) return '';
@@ -24,17 +26,18 @@ export function downsample(values: number[], n: number): number[] {
   return Array.from({ length: n }, (_, i) => values[Math.round(i * step)]);
 }
 
-export function trendColor(change: number): string {
+export function trendColor(change: number, color: Palette): string {
   if (change > trendThreshold) return color.gain;
   if (change < -trendThreshold) return color.loss;
   return color.secondary;
 }
 
 export function Sparkline({ values, change }: { values: number[]; change: number }) {
+  const color = useColors();
   const d = sparkPath(downsample(values, 8), size.sparkW, size.sparkH);
   return (
     <Svg width={size.sparkW} height={size.sparkH}>
-      <Path d={d} stroke={trendColor(change)} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d={d} stroke={trendColor(change, color)} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </Svg>
   );
 }

@@ -7,7 +7,9 @@ import { money, pct } from '../../lib/format';
 import { ebayNet, floor } from '../../pricing/rules';
 import { SELL_RATING_LABEL, costBasis, sellRating, sellRead, vsMarket, type Cost } from '../../pricing/sell';
 import { KEYBOARD_DONE } from '../KeyboardDone';
-import { color, space, type } from '../../theme/tokens';
+import { space, type } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
+import type { Palette } from '../../theme/tokens';
 import type { PricingRules } from '../../types';
 import { PriceLine, type Tick } from '../PriceLine';
 import { Hairline } from '../ui';
@@ -27,6 +29,7 @@ type Props = {
 };
 
 export function SellSummary({ askCents, onAsk, marketCents, lowCents, gradeName, cost, packName, rules }: Props) {
+  const color = useColors();
   const [text, setText] = useState<string | null>(null);
   const m = vsMarket(askCents, marketCents);
   const basis = costBasis(cost);
@@ -63,7 +66,7 @@ export function SellSummary({ askCents, onAsk, marketCents, lowCents, gradeName,
         accessibilityHint="Tap to change it"
         style={[type.displayM, { color: color.ink, padding: 0 }]}
       />
-      <Text style={[type.body, { color: color.ink, paddingTop: space.xs }]}>{marketLine(m, gradeName)}</Text>
+      <Text style={[type.body, { color: color.ink, paddingTop: space.xs }]}>{marketLine(m, gradeName, color)}</Text>
 
       {ticks.length > 1 && marketCents ? (
         <View style={{ paddingTop: space.xl }}>
@@ -76,7 +79,7 @@ export function SellSummary({ askCents, onAsk, marketCents, lowCents, gradeName,
       </View>
       <View style={{ paddingTop: space.l }} accessible>
         <Text style={[type.title, { color: color.ink }]}>{SELL_RATING_LABEL[rating.kind]}</Text>
-        <Text style={[type.text, { color: color.secondary, paddingTop: space.xs }]}>{whyLine(rating, cost, packName)}</Text>
+        <Text style={[type.text, { color: color.secondary, paddingTop: space.xs }]}>{whyLine(rating, cost, packName, color)}</Text>
         {read.length ? <Text style={[type.text, { color: color.secondary, paddingTop: 2 }]}>{read.join(' · ')}</Text> : null}
         <Text style={[type.caption, { color: color.secondary, paddingTop: space.m }]}>
           Cash at a table. On eBay you’d keep {money(ebayNet(askCents))} after fees.
@@ -87,7 +90,7 @@ export function SellSummary({ askCents, onAsk, marketCents, lowCents, gradeName,
 }
 
 /** "$30 above PSA 10 market (+12%)" with only the numbers in color. */
-function marketLine(m: ReturnType<typeof vsMarket>, gradeName: string): ReactNode {
+function marketLine(m: ReturnType<typeof vsMarket>, gradeName: string, color: Palette): ReactNode {
   if (!m) return <Text style={{ color: color.secondary }}>No {gradeName} market price yet</Text>;
   if (m.place === 'at') return `At ${gradeName} market`;
   const tint = m.place === 'above' ? color.gain : color.loss;
@@ -98,7 +101,7 @@ function marketLine(m: ReturnType<typeof vsMarket>, gradeName: string): ReactNod
   );
 }
 
-function whyLine(r: ReturnType<typeof sellRating>, cost: Cost | null, packName?: string | null): ReactNode {
+function whyLine(r: ReturnType<typeof sellRating>, cost: Cost | null, packName: string | null | undefined, color: Palette): ReactNode {
   if (r.kind === 'unknown')
     return cost?.kind === 'unknown' ? 'You weren’t sure what you paid, so there’s nothing to rate it against.' : 'Add what you paid on the scan to see your profit.';
   const p = r.profitCents!;

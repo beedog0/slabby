@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import { color, radius, space, type } from '../theme/tokens';
+import { radius, space, type } from '../theme/tokens';
+import { themed, useColors } from '../theme/theme';
 
 type Props<T extends string> = {
   options: { value: T; label: string }[];
@@ -9,6 +10,8 @@ type Props<T extends string> = {
 };
 
 export function Segmented<T extends string>({ options, value, onChange, style }: Props<T>) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <View accessibilityRole="tablist" style={[styles.track, style]}>
       {options.map((o) => {
@@ -29,7 +32,7 @@ export function Segmented<T extends string>({ options, value, onChange, style }:
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   track: {
     height: 36,
     borderRadius: radius.segmented,
@@ -40,10 +43,10 @@ const styles = StyleSheet.create({
   },
   seg: { flex: 1, borderRadius: radius.segmented - 2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xs },
   on: {
-    backgroundColor: color.canvas,
+    backgroundColor: color.raised,
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
   },
-});
+}));

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { color, space, type } from '../theme/tokens';
+import { space, type } from '../theme/tokens';
+import { themed, useColors } from '../theme/theme';
 
 type Props = { onDigit: (d: string) => void; onBackspace: () => void; onClear?: () => void; bottomInset?: number };
 
@@ -12,6 +13,8 @@ const ROWS = [
 ];
 
 export function Keypad({ onDigit, onBackspace, onClear, bottomInset = 0 }: Props) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <View style={[styles.pad, { paddingBottom: space.s + bottomInset }]}>
       {ROWS.map((row, r) => (
@@ -51,14 +54,14 @@ export function Keypad({ onDigit, onBackspace, onClear, bottomInset = 0 }: Props
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   pad: { backgroundColor: color.well, paddingTop: space.s, paddingHorizontal: 6, gap: 6 },
   row: { flexDirection: 'row', gap: 6 },
   key: {
     flex: 1,
     height: 52,
     borderRadius: 8,
-    backgroundColor: color.canvas,
+    backgroundColor: color.raised,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -67,4 +70,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
   },
   blank: { flex: 1, height: 52, alignItems: 'center', justifyContent: 'center' },
-});
+}));

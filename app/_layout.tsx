@@ -5,13 +5,16 @@ import { DropdownHost } from '../src/components/menu/Dropdown';
 import { MenuHost } from '../src/components/menu/Menu';
 import { ShareCardHost } from '../src/components/share/ShareCard';
 import { useSync } from '../src/services/useSync';
-import { color } from '../src/theme/tokens';
+import { useColors, useNativeAppearance, useScheme } from '../src/theme/theme';
 
 export default function RootLayout() {
+  const color = useColors();
+  const scheme = useScheme();
+  useNativeAppearance();
   useSync();
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.canvas } }} />
       <ShareCardHost />
       <MenuHost />

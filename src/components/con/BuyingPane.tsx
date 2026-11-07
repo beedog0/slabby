@@ -7,7 +7,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { gradeLabel, money, rowTitle } from '../../lib/format';
 import { boughtIn, buyMarket, conBuySummary, type CardRow } from '../../pricing/portfolio';
-import { color, radius, size, space, type } from '../../theme/tokens';
+import { radius, size, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import { CardThumb } from '../CardThumb';
 import { Hairline, PrimaryButton, ScanIcon } from '../ui';
 import { ArtImage } from '../ArtImage';
@@ -27,6 +28,8 @@ type Props = {
 const lookUp = () => router.push('/search?con=1');
 
 export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
+  const color = useColors();
+  const styles = useStyles();
   const sum = conBuySummary(rows, conId);
   const bought = boughtIn(rows, conId);
   const wishes = useWishlist((s) => s.items);
@@ -143,6 +146,8 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
 
 /** A wanted card: your price, how it rates against the last market seen, tap to rate their price. */
 function WishRow({ item }: { item: WishItem }) {
+  const color = useColors();
+  const styles = useStyles();
   const rules = useRules((s) => s.rules);
   const remove = useWishlist((s) => s.remove);
   const b = buyPrices(item.marketCents, rules);
@@ -191,7 +196,7 @@ function WishRow({ item }: { item: WishItem }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   thumb: { width: size.thumbW, height: size.thumbH, borderRadius: 3, overflow: 'hidden', backgroundColor: color.well },
   totals: { paddingHorizontal: space.gutter, paddingTop: space.xl, gap: 2 },
   search: {
@@ -215,4 +220,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

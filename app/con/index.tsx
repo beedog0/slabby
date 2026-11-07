@@ -31,13 +31,16 @@ import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
 import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
 import { useVault } from '../../src/store/vault';
-import { color, radius, size, space, type } from '../../src/theme/tokens';
+import { radius, size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 
 type Tab = 'sale' | 'sold' | 'trade';
 
 const CON_SORTS: SortKey[] = ['value', 'gain', 'newest', 'name'];
 
 export default function ConMode() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
@@ -307,6 +310,7 @@ export default function ConMode() {
 
 /** A brief well-colored wash behind a row that just changed, so you can see where it went. */
 function Flash({ on, at }: { on: boolean; at: number }) {
+  const styles = useStyles();
   const o = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!on) return;
@@ -321,7 +325,7 @@ function Flash({ on, at }: { on: boolean; at: number }) {
   return <Animated.View pointerEvents="none" style={[styles.flash, { opacity: o }]} />;
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   controls: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginHorizontal: space.gutter, marginTop: space.s },
   modes: { flexDirection: 'row', gap: space.xl, paddingHorizontal: space.gutter, paddingTop: space.l },
   modeBar: { height: 2, borderRadius: 1, marginTop: space.xs },
@@ -370,4 +374,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

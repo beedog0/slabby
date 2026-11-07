@@ -29,11 +29,13 @@ import { useCon } from '../../../src/store/con';
 import { useWishlist, wishKey, type WishGrade } from '../../../src/store/wishlist';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
-import { color, size, space, type } from '../../../src/theme/tokens';
+import { size, space, type } from '../../../src/theme/tokens';
+import { useColors } from '../../../src/theme/theme';
 
 const MAX_DIGITS = 6;
 
 export default function TheyreAsking() {
+  const color = useColors();
   const { id, grade: gradeParam } = useLocalSearchParams<{ id: string; grade?: string }>();
   const grade = (gradeParam || 'psa10') as SearchGrade | 'raw';
   const insets = useSafeAreaInsets();

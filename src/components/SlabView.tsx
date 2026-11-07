@@ -11,6 +11,7 @@ import { size, slabPose } from '../theme/tokens';
 import { Slab3D } from './slab/Slab3D';
 import { Sleeve } from './slab/Sleeve';
 import { SlabViewer } from './slab/SlabViewer';
+import { Spotlight } from './slab/Spotlight';
 import type { Card } from '../types';
 
 export { labelNameLine, labelSetLine } from './slab/label';
@@ -26,6 +27,10 @@ type Props = {
   interactive?: boolean;
   /** Tells the screen a tilt drag is under way, so it can hold its scroll still. */
   onDragChange?: (dragging: boolean) => void;
+  /** Dark mode: a soft pool of light behind it. For a slab shown on its own (card page, swipe view). */
+  spotlight?: boolean;
+  /** Where a raw single sits in the slab-sized box. Bottom lets it stand on a reflection. */
+  anchor?: 'center' | 'bottom';
 };
 
 const REST_YAW = parseFloat(slabPose.rotateY);
@@ -35,13 +40,14 @@ const UPRIGHT = 0;
 const TILT_YAW = 28;
 const TILT_PITCH = 22;
 
-export function SlabView({ card, width = size.heroW, posed = true, shadow: floorShadow, interactive = false, onDragChange }: Props) {
+export function SlabView({ card, width = size.heroW, posed = true, shadow: floorShadow, interactive = false, onDragChange, spotlight = false, anchor = 'center' }: Props) {
   const label = `${card.name}, ${card.grader === 'raw' ? 'raw' : `${card.grader.toUpperCase()} ${card.grade}`}`;
   const height = (width * size.heroH) / size.heroW;
 
   if (card.grader === 'raw' && !interactive) {
     return (
-      <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel={label}>
+      <View style={{ width, height, alignItems: 'center', justifyContent: anchor === 'bottom' ? 'flex-end' : 'center' }} accessibilityLabel={label}>
+        {spotlight ? <Spotlight width={width} height={height} /> : null}
         <Sleeve card={card} width={width} transform={posed ? [{ perspective: slabPose.perspective }, { rotateY: slabPose.rotateY }, { rotateX: slabPose.rotateX }] : undefined} />
       </View>
     );
@@ -50,15 +56,16 @@ export function SlabView({ card, width = size.heroW, posed = true, shadow: floor
   if (!interactive) {
     return (
       <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel={label}>
+        {spotlight ? <Spotlight width={width} height={height} /> : null}
         <Slab3D card={card} width={width} yaw={posed ? REST_YAW : 0} pitch={posed ? REST_PITCH : 0} shadow={floorShadow ?? posed} />
       </View>
     );
   }
-  return <TiltSlab card={card} width={width} height={height} label={label} onDragChange={onDragChange} />;
+  return <TiltSlab card={card} width={width} height={height} label={label} onDragChange={onDragChange} spotlight={spotlight} />;
 }
 
 
-function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; width: number; height: number; label: string; onDragChange?: (d: boolean) => void }) {
+function TiltSlab({ card, width, height, label, onDragChange, spotlight }: { card: Card; width: number; height: number; label: string; onDragChange?: (d: boolean) => void; spotlight?: boolean }) {
   const yaw = useRef(new Animated.Value(UPRIGHT)).current;
   const pitch = useRef(new Animated.Value(UPRIGHT)).current;
   const [open, setOpen] = useState(false);
@@ -114,6 +121,7 @@ function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; wi
       onAccessibilityTap={() => setOpen(true)}
       {...pan.panHandlers}
     >
+      {spotlight ? <Spotlight width={width} height={height} /> : null}
       {raw ? (
         <Sleeve
           card={card}

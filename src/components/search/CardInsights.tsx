@@ -8,12 +8,14 @@ import { money, pct } from '../../lib/format';
 import type { CardPrice } from '../../services/comps';
 import { displayName, gradeLabel, isQuiet, SEARCH_GRADES, type SearchGrade, type SearchPrices } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
-import { color, radius, shadow, space, type } from '../../theme/tokens';
+import { radius, shadow, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import { ArtImage } from '../ArtImage';
 
 type Choice = 'raw' | SearchGrade;
 
 export function Section({ title, note, action, children }: { title: string; note?: string; action?: { label: string; onPress: () => void }; children: React.ReactNode }) {
+  const color = useColors();
   return (
     <View style={{ paddingTop: space.section }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -37,6 +39,8 @@ export function Section({ title, note, action, children }: { title: string; note
  * at a glance, and taps through to that grade. Grades with no sale in 30 days go gray.
  */
 export function GradeLadder({ prices, pick, onPick }: { prices: SearchPrices; pick: Choice; onPick: (c: Choice) => void }) {
+  const color = useColors();
+  const styles = useStyles();
   const rows: { key: Choice; p: CardPrice; quiet: boolean }[] = [];
   for (const g of SEARCH_GRADES) {
     const p = prices.grades[g];
@@ -75,6 +79,8 @@ export function GradeLadder({ prices, pick, onPick }: { prices: SearchPrices; pi
 
 /** Today against its 90-day low and high, drawn like the app's price line: hairline rule, ink dot. */
 export function RangeMeter({ low, high, now, days }: { low: number; high: number; now: number; days: number }) {
+  const color = useColors();
+  const styles = useStyles();
   if (!(high > low)) return null;
   const at = Math.min(1, Math.max(0, (now - low) / (high - low)));
   const word = at <= 0.2 ? 'Near its low' : at >= 0.8 ? 'Near its high' : 'Mid-range';
@@ -101,6 +107,8 @@ export function RangeMeter({ low, high, now, days }: { low: number; high: number
 
 /** The set's priciest other singles, raw TCGplayer market with the 7-day move. */
 export function SetRow({ setName, cards, onAll, con }: { setName: string; cards: Found[]; onAll?: () => void; con?: boolean }) {
+  const color = useColors();
+  const styles = useStyles();
   if (!cards.length) return null;
   return (
     <Section title={`More from ${setName}`} note="Raw TCGplayer market · 7-day change" action={onAll ? { label: 'See all', onPress: onAll } : undefined}>
@@ -134,7 +142,7 @@ export function SetRow({ setName, cards, onAll, con }: { setName: string; cards:
 
 const SET_W = 96;
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   ladderRow: { flexDirection: 'row', alignItems: 'center', height: 40, gap: space.m },
   ladderLabel: { width: 60 },
   track: { flex: 1, height: 6, justifyContent: 'center' },
@@ -149,4 +157,4 @@ const styles = StyleSheet.create({
   setRow: { paddingHorizontal: space.gutter, gap: space.l },
   setCard: { width: SET_W },
   setArt: { width: SET_W, height: Math.round(SET_W * (88 / 63)), borderRadius: radius.thumb * 2, backgroundColor: color.well },
-});
+}));

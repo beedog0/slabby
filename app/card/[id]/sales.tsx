@@ -18,7 +18,8 @@ import { useCardRow } from '../../../src/pricing/useCardRow';
 import { refreshCard } from '../../../src/services/comps';
 import type { SalesDays } from '../../../src/services/sales';
 import { useSales } from '../../../src/services/useSales';
-import { color, radius, size, space, type } from '../../../src/theme/tokens';
+import { radius, size, space, type } from '../../../src/theme/tokens';
+import { themed, useColors } from '../../../src/theme/theme';
 import type { Card, Sale, SalesDay } from '../../../src/types';
 
 type Range = '30' | '90';
@@ -26,6 +27,8 @@ type Range = '30' | '90';
 const range = (lo: number, hi: number) => `${money(lo)}–${money(hi).replace('$', '')}`;
 
 export default function SalesScreen() {
+  const color = useColors();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -174,6 +177,8 @@ export default function SalesScreen() {
 }
 
 function SaleRow({ card, sale, flag }: { card: Card; sale: Sale; flag: 'above' | 'below' | null }) {
+  const color = useColors();
+  const styles = useStyles();
   const sub = saleLine(sale) + (flag ? ` · well ${flag} range` : '');
   return (
     <Pressable
@@ -197,6 +202,8 @@ function SaleRow({ card, sale, flag }: { card: Card; sale: Sale; flag: 'above' |
 }
 
 function DayRow({ day, first }: { day: SalesDay; first: boolean }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.dayRow}>
       <View>
@@ -212,6 +219,7 @@ function DayRow({ day, first }: { day: SalesDay; first: boolean }) {
 }
 
 function Skeleton() {
+  const styles = useStyles();
   return (
     <View accessibilityLabel="Loading sales">
       {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -223,7 +231,7 @@ function Skeleton() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter - 10 },
   navTitle: { flex: 1, textAlign: 'center', color: color.ink },
@@ -236,4 +244,4 @@ const styles = StyleSheet.create({
   seeAll: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.xl },
   skeletonRow: { height: size.dayRow, justifyContent: 'center' },
   skeletonBar: { height: size.skeletonBar, borderRadius: radius.thumb, backgroundColor: color.well },
-});
+}));
