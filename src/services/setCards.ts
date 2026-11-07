@@ -68,7 +68,7 @@ export async function setCards(card: CatalogCard, n = 12): Promise<{ groupId: nu
 }
 
 /**
- * One booster pack of a set and its TCGplayer market (0012_pack_prices.sql), for "Pulled it" on
+ * One booster pack of a set and its TCGplayer market (0013_pack_prices.sql), for "Pulled it" on
  * the sell page. Null when the set has none, or before the column exists: a pull is then $0.
  */
 export async function packFor(groupId: number): Promise<{ name: string; cents: number } | null> {

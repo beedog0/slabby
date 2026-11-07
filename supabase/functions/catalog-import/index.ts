@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   const failed: string[] = [];
   for (const g of todo ?? []) {
     const cat = CATEGORIES.find((c) => c.id === g.category_id)!;
-    // One booster pack's price, for "Pulled it" on the sell page (0012_pack_prices.sql).
+    // One booster pack's price, for "Pulled it" on the sell page (0013_pack_prices.sql).
     let pack: { pack_name?: string | null; pack_cents?: number | null } = {};
     try {
       const [products, prices] = await Promise.all([
