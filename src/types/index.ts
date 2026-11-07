@@ -4,6 +4,17 @@ export type Grader = 'psa' | 'bgs' | 'cgc' | 'raw';
 export type Game = 'pokemon' | 'onepiece' | 'riftbound';
 export type Plan = 'hold' | 'sell' | 'trade';
 export type CardStatus = 'owned' | 'sold';
+/** Kinds of sealed product (0015_sealed.sql, src/lib/sealed.ts). */
+export type SealedType =
+  | 'booster_box'
+  | 'etb'
+  | 'booster_bundle'
+  | 'booster_pack'
+  | 'blister'
+  | 'tin'
+  | 'collection'
+  | 'deck'
+  | 'case';
 
 export type Card = {
   id: string;
@@ -29,6 +40,11 @@ export type Card = {
   /** Bought in con mode's Buying: which con session, and the market for that grade when you paid. */
   boughtConId?: string;
   boughtMarketCents?: number | null;
+  /** Sealed product (booster box, ETB, tin…): shown as its photo, priced by productId from the
+   *  catalog. Grader is 'raw' and grade, number and cert are null. See src/lib/sealed.ts. */
+  sealed?: SealedType | null;
+  /** TCGplayer product id. Set for sealed items, which are keyed and priced by it. */
+  productId?: number | null;
   /** Raw cards only, e.g. "near mint". */
   condition?: string;
   paidCents: number | null;

@@ -1,5 +1,7 @@
 // Copy formatting. Uses a true minus sign (U+2212) for negatives, per the reference screens.
 
+import { sealedLabel } from './sealed';
+
 const MINUS = '−';
 
 /** 1248000 → "$12,480". Drops cents unless asked. */
@@ -36,7 +38,9 @@ export function rulePct(n: number): string {
   return `${n > 0 ? '+' : MINUS}${Math.abs(n)}%`;
 }
 
-export function gradeLabel(grader: string, grade: number | null, condition?: string): string {
+/** "PSA 10", "Raw · near mint", or for sealed product its kind ("Booster box"). */
+export function gradeLabel(grader: string, grade: number | null, condition?: string, sealed?: string | null): string {
+  if (sealed) return sealedLabel(sealed);
   if (grader === 'raw') return condition ? `Raw · ${condition}` : 'Raw';
   return `${grader.toUpperCase()} ${grade ?? ''}`.trim();
 }
@@ -49,9 +53,9 @@ export function langTag(language: string | null | undefined): string {
   return LANG_SHORT[language] ?? language.toUpperCase();
 }
 
-/** Row subtitle: "JP · PSA 10", "PSA 10", "Raw · near mint". */
-export function cardLabel(c: { language: string; grader: string; grade: number | null; condition?: string }): string {
-  return [langTag(c.language), gradeLabel(c.grader, c.grade, c.condition)].filter(Boolean).join(' · ');
+/** Row subtitle: "JP · PSA 10", "PSA 10", "Raw · near mint", "JP · Booster box". */
+export function cardLabel(c: { language: string; grader: string; grade: number | null; condition?: string; sealed?: string | null }): string {
+  return [langTag(c.language), c.sealed ? sealedLabel(c.sealed) : gradeLabel(c.grader, c.grade, c.condition)].filter(Boolean).join(' · ');
 }
 
 /** "Up $640 this month" / "Down $120 this month" / "Flat this month". */

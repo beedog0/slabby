@@ -37,7 +37,7 @@ export function matches(r: CardRow, query: string): boolean {
     c.number,
     c.number ? `#${c.number}` : null,
     c.certNumber,
-    gradeLabel(c.grader, c.grade, c.condition),
+    gradeLabel(c.grader, c.grade, c.condition, c.sealed),
     c.year,
   ]
     .filter((v) => v != null)

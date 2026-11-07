@@ -47,6 +47,7 @@ import { useRules } from '../../src/store/rules';
 import { useWishlist, wishKey, type WishGrade } from '../../src/store/wishlist';
 import { color, size, space, type } from '../../src/theme/tokens';
 import type { Card } from '../../src/types';
+import { sealedLabel } from '../../src/lib/sealed';
 
 type Choice = 'raw' | SearchGrade;
 type Tab = 'raw' | 'psa10' | 'psa9' | 'psa8' | 'low';
@@ -166,7 +167,9 @@ export default function SearchedCard() {
   const hist = history(price);
   const change = hist && !quiet ? hist.change : null;
   const no = cardNumber(ready.number);
-  const detail = [no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
+  // Sealed product: one TCGplayer market price with its nightly chart; no grades, no slab.
+  const sealed = ready.sealedType ?? null;
+  const detail = [sealed ? sealedLabel(sealed) : no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
   const openSet = () => openSetPage(ready, groupId);
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
   const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
@@ -191,10 +194,10 @@ export default function SearchedCard() {
 
         <View style={styles.titleRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={2} style={[type.title, { color: color.ink }]}>
-              {displayName(ready.name)}
+            <Text numberOfLines={sealed ? 4 : 2} style={[type.title, { color: color.ink }]}>
+              {sealed ? ready.name : displayName(ready.name)}
             </Text>
-            <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
+            <Text numberOfLines={2} style={[type.text, { color: color.secondary }]}>
               {/* The set name opens the whole set. */}
               <Text onPress={openSet} accessibilityRole="link" style={{ color: color.ink }}>
                 {setTitle(ready.setName)}
@@ -207,7 +210,7 @@ export default function SearchedCard() {
               style={[type.title, { color: quiet ? color.secondary : color.ink }]}
               accessibilityLabel={
                 price
-                  ? `${gradeLabel(pick)} ${money(price.marketCents)}${change != null ? `, ${pct(change)} over ${hist!.days} days` : ''}`
+                  ? `${sealed ? 'Market' : gradeLabel(pick)} ${money(price.marketCents)}${change != null ? `, ${pct(change)} over ${hist!.days} days` : ''}`
                   : undefined
               }
             >
@@ -241,7 +244,7 @@ export default function SearchedCard() {
         ) : null}
 
         <View style={[styles.gutter, { paddingTop: selling ? 0 : space.xl }]}>
-          {selling ? null : (
+          {selling || sealed ? null : (
           <Segmented<Tab>
             value={isLow(pick) ? 'low' : (pick as Tab)}
             onChange={onTab}
@@ -282,14 +285,14 @@ export default function SearchedCard() {
             ) : (
               <>
                 <Text style={[type.text, { color: color.secondary }]}>
-                  {price && !quiet ? thinLine(price) : emptyLine(pick, prices, otherGame, quiet ? price : null)}
+                  {price && !quiet ? thinLine(price) : sealed ? sealedEmpty(prices) : emptyLine(pick, prices, otherGame, quiet ? price : null)}
                 </Text>
                 {prices === null ? <TryAgain onPress={() => setAttempt((n) => n + 1)} /> : null}
               </>
             )}
           </View>
 
-          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} />
+          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} sealed={!!sealed} />
           {prices?.capped ? (
             <Text style={[type.secondary, { color: color.secondary, paddingTop: space.m }]}>
               Graded prices for new cards are paused until tomorrow to save credits for your scans.
@@ -383,6 +386,11 @@ function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string 
   return `No ${gradeLabel(pick)} sales in the last 90 days.`;
 }
 
+function sealedEmpty(prices: SearchPrices | null): string {
+  if (!prices) return 'Prices aren’t reachable right now.';
+  return prices.raw ? 'Price history builds night by night. The chart starts after a few nights.' : 'No TCGplayer price for this yet.';
+}
+
 /** The search page's grade for a vault card: its PSA grade, else raw. */
 function draftGrade(c: Card): Choice {
   if (c.grader === 'psa' && c.grade != null && c.grade >= 1 && c.grade <= 10) return `psa${Math.floor(c.grade)}` as SearchGrade;
@@ -391,6 +399,32 @@ function draftGrade(c: Card): Choice {
 
 /** A stand-in card for the slab render: the searched card at the picked grade, no cert. */
 function slabFor(c: CatalogCard, pick: Choice): Card {
+  if (c.sealedType)
+    return {
+      id: `search-${c.productId}`,
+      certNumber: null,
+      grader: 'raw',
+      grade: null,
+      name: c.name,
+      setName: c.setName,
+      setCode: c.setCode,
+      number: null,
+      language: c.language,
+      year: null,
+      imageFrontUrl: c.imageUrl,
+      sealed: c.sealedType,
+      productId: c.productId,
+      paidCents: null,
+      paidAt: null,
+      plan: 'hold',
+      floorOverrideCents: null,
+      askOverrideCents: null,
+      status: 'owned',
+      soldCents: null,
+      soldAt: null,
+      soldWhere: null,
+      createdAt: new Date(0).toISOString(),
+    };
   return {
     id: `search-${c.productId}`,
     certNumber: null,

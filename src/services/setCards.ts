@@ -82,7 +82,7 @@ export async function packFor(groupId: number): Promise<{ name: string; cents: n
 export async function cardsInSet(groupId: number, limit = 600): Promise<Found[]> {
   if (!supabase) {
     return (catalogJson as Mock[])
-      .filter((c) => setId(c.setName) === groupId)
+      .filter((c) => setId(c.setName) === groupId && !!c.number)
       .sort((a, b) => (b.marketCents ?? -1) - (a.marketCents ?? -1))
       .slice(0, limit)
       .map(mockFound);
@@ -91,6 +91,8 @@ export async function cardsInSet(groupId: number, limit = 600): Promise<Found[]>
     .from('catalog')
     .select(COLS)
     .eq('group_id', groupId)
+    // Singles only: sealed product (0015) has no card number.
+    .not('number', 'is', null)
     .order('market_cents', { ascending: false, nullsFirst: false })
     .limit(limit);
   if (error) throw error;

@@ -20,6 +20,7 @@ import { TrendSentence } from '../../src/components/TrendSentence';
 import { CardAnalytics } from '../../src/components/search/CardAnalytics';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../../src/lib/format';
+import { sealedLabel } from '../../src/lib/sealed';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../../src/lib/games';
 import { detailFor } from '../../src/pricing/portfolio';
 import { freshnessLine, trendSentence, trendVerdict } from '../../src/pricing/trend';
@@ -57,7 +58,9 @@ export default function SlabDetail() {
 
   // Pokémon is the default, so only other games are named.
   const game = gameOf(card) === 'pokemon' ? null : GAMES[gameOf(card)].name;
-  const subtitle = [game, card.grader === 'raw' ? null : LANGUAGE_NAME[card.language] ?? card.language, gradeLabel(card.grader, card.grade, card.condition)]
+  const subtitle = card.sealed
+    ? [game, card.language === 'en' ? null : LANGUAGE_NAME[card.language] ?? card.language, sealedLabel(card.sealed)].filter(Boolean).join(' · ')
+    : [game, card.grader === 'raw' ? null : LANGUAGE_NAME[card.language] ?? card.language, gradeLabel(card.grader, card.grade, card.condition)]
     .filter(Boolean)
     .join(' · ');
 
@@ -86,7 +89,7 @@ export default function SlabDetail() {
 
         <View style={styles.titleRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={1} style={[type.title, { color: color.ink }]}>
+            <Text numberOfLines={card.sealed ? 3 : 1} style={[type.title, { color: color.ink }]}>
               {rowTitle(card)}
             </Text>
             <Text style={[type.text, { color: color.secondary }]}>{subtitle}</Text>
@@ -194,7 +197,7 @@ export default function SlabDetail() {
           </View>
         ) : (
           <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.xxl }]}>
-            No comps yet for this card. Prices fill in when sales come in.
+            {card.sealed ? 'No TCGplayer price yet. It fills in with the nightly catalog update.' : 'No comps yet for this card. Prices fill in when sales come in.'}
           </Text>
         )}
         {/* The search page's analytics, at this card's grade (raw for raw). */}

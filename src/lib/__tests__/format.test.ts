@@ -18,3 +18,12 @@ it('counts sales', () => {
   expect(salesWord(1)).toBe('1 sale');
   expect(salesWord(3)).toBe('3 sales');
 });
+
+describe('cardLabel for sealed', () => {
+  it('names the kind instead of a grade', () => {
+    const { cardLabel } = require('../format');
+    expect(cardLabel({ language: 'ja', grader: 'raw', grade: null, sealed: 'booster_box' })).toBe('JP · Booster box');
+    expect(cardLabel({ language: 'en', grader: 'raw', grade: null, sealed: 'etb' })).toBe('Elite Trainer Box');
+    expect(cardLabel({ language: 'en', grader: 'raw', grade: null })).toBe('Raw');
+  });
+});

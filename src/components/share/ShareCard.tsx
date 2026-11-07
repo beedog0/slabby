@@ -111,7 +111,7 @@ export function ShareCardHost() {
           {rowTitle(card)}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary, paddingTop: 2 }]}>
-          {[gradeLabel(card.grader, card.grade, card.condition), card.setName && !/^\d+$/.test(card.setName) ? card.setName : null, card.year]
+          {[gradeLabel(card.grader, card.grade, card.condition, card.sealed), card.setName && !/^\d+$/.test(card.setName) ? card.setName : null, card.year]
             .filter(Boolean)
             .join(' · ')}
         </Text>
