@@ -2,11 +2,14 @@
 
 import { StyleSheet, Text, View } from 'react-native';
 import type { DisplayMode } from '../../store/display';
-import { color, radius, size, space, type } from '../../theme/tokens';
+import { radius, size, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import { Ledge } from './ShelfView';
 
 /** First run: no slabs at all. */
 export function EmptyVault() {
+  const styles = useStyles();
+  const color = useColors();
   return (
     <View style={styles.wrap}>
       <GhostSlab width={size.heroW * 0.8} />
@@ -19,6 +22,7 @@ export function EmptyVault() {
 }
 
 export function GhostSlab({ width }: { width: number }) {
+  const styles = useStyles();
   const k = width / size.heroW;
   return (
     <View style={[styles.slab, { width, height: (width * size.heroH) / size.heroW, padding: 8 * k, gap: 6 * k }]}>
@@ -30,6 +34,8 @@ export function GhostSlab({ width }: { width: number }) {
 
 /** A filter with nothing in it: empty slots laid out like the current view, then one line of copy. */
 export function EmptyFilter({ mode, width, title, hint }: { mode: DisplayMode; width: number; title: string; hint: string }) {
+  const styles = useStyles();
+  const color = useColors();
   let slots;
   if (mode === 'shelf') {
     const w = Math.floor((width - space.m * 2 - space.l * 2) / 3);
@@ -72,12 +78,10 @@ export function EmptyFilter({ mode, width, title, hint }: { mode: DisplayMode; w
   );
 }
 
-const line = { borderWidth: 1.5, borderColor: color.ghost } as const;
-
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   wrap: { alignItems: 'center', paddingTop: space.xxl, paddingHorizontal: space.gutter },
   row: { flexDirection: 'row', alignItems: 'flex-end' },
-  slab: { borderRadius: radius.slab, ...line },
-  label: { borderRadius: 3, ...line },
-  art: { flex: 1, borderRadius: 4, ...line },
-});
+  slab: { borderRadius: radius.slab, borderWidth: 1.5, borderColor: color.ghost },
+  label: { borderRadius: 3, borderWidth: 1.5, borderColor: color.ghost },
+  art: { flex: 1, borderRadius: 4, borderWidth: 1.5, borderColor: color.ghost },
+}));

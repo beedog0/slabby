@@ -4,12 +4,15 @@
 
 import { useEffect, useState } from 'react';
 import { InputAccessoryView, Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { color, size, space, type } from '../theme/tokens';
+import { size, space, type } from '../theme/tokens';
+import { themed, useColors } from '../theme/theme';
 
 export const KEYBOARD_DONE = 'keyboard-done';
 
 /** Mount once per screen that has number fields. Renders nothing off iOS. */
 export function KeyboardDone() {
+  const color = useColors();
+  const styles = useStyles();
   if (Platform.OS !== 'ios') return null;
   return (
     <InputAccessoryView nativeID={KEYBOARD_DONE}>
@@ -38,7 +41,7 @@ export function useKeyboardHeight() {
   return h;
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   bar: {
     height: size.touch,
     flexDirection: 'row',
@@ -50,4 +53,4 @@ const styles = StyleSheet.create({
     borderTopColor: color.hairline,
   },
   done: { minHeight: size.touch, justifyContent: 'center' },
-});
+}));

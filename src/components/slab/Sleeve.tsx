@@ -4,7 +4,8 @@
 
 import { useState } from 'react';
 import { Animated, StyleSheet, View, type ViewStyle } from 'react-native';
-import { color, shadow } from '../../theme/tokens';
+import { shadow } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 import type { Card } from '../../types';
 import { ArtImage } from '../ArtImage';
 
@@ -18,6 +19,7 @@ export function scanAspect(width: number, height: number): number {
 }
 
 export function Sleeve({ card, width, transform, sharp = false }: { card: Card; width: number; transform?: ViewStyle['transform']; sharp?: boolean }) {
+  const color = useColors();
   const uri = card.imageFrontUrl;
   const [aspect, setAspect] = useState(() => (uri && aspects.get(uri)) || CARD_ASPECT);
   const w = width * 0.86;

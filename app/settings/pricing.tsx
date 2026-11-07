@@ -8,13 +8,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, Hairline, IconButton, Stepper, Toggle } from '../../src/components/ui';
 import { money, rulePct } from '../../src/lib/format';
 import { useRules } from '../../src/store/rules';
-import { color, size, space, type } from '../../src/theme/tokens';
+import { size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 import type { PricingRules } from '../../src/types';
 
 const STEP = 1; // percentage points per tap
 const ROUNDING = [100, 500, 1000, 2500]; // $1, $5, $10, $25
 
 export default function PricingRulesScreen() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const rules = useRules((s) => s.rules);
   const set = useRules((s) => s.set);
@@ -89,6 +92,7 @@ export default function PricingRulesScreen() {
 }
 
 function Section({ title }: { title: string }) {
+  const color = useColors();
   return (
     <View style={{ paddingTop: space.section, paddingBottom: space.m }}>
       <Text style={[type.section, { color: color.ink }]}>{title}</Text>
@@ -100,6 +104,8 @@ function Section({ title }: { title: string }) {
 }
 
 function ValueRow({ title, value, onPress }: { title: string; value: string; onPress?: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <>
       <Pressable accessibilityRole={onPress ? 'button' : 'text'} onPress={onPress} disabled={!onPress} style={styles.valueRow}>
@@ -114,7 +120,7 @@ function ValueRow({ title, value, onPress }: { title: string; value: string; onP
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   nav: {
     height: size.touch + space.l,
     flexDirection: 'row',
@@ -127,4 +133,4 @@ const styles = StyleSheet.create({
   intro: { color: color.secondary, paddingTop: space.s },
   row: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingVertical: space.m, gap: space.m },
   valueRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-});
+}));

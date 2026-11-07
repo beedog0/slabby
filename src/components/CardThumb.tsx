@@ -2,10 +2,12 @@
 
 import { View } from 'react-native';
 import { ArtImage } from './ArtImage';
-import { color, radius, shadow, size } from '../theme/tokens';
+import { radius, shadow, size } from '../theme/tokens';
+import { useColors } from '../theme/theme';
 import type { Card } from '../types';
 
 export function CardThumb({ card }: { card: Card }) {
+  const color = useColors();
   const art = card.artColor ?? color.well;
   if (card.grader === 'raw') {
     return (

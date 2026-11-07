@@ -26,12 +26,14 @@ import { freshnessLine, trendSentence, trendVerdict } from '../../src/pricing/tr
 import { useCardRow } from '../../src/pricing/useCardRow';
 import { useCardRefresh } from '../../src/services/useRefresh';
 import { useVault } from '../../src/store/vault';
-import { color, space, type } from '../../src/theme/tokens';
+import { space, type } from '../../src/theme/tokens';
+import { useColors } from '../../src/theme/theme';
 
 type Range = '30' | '90';
 
 
 export default function SlabDetail() {
+  const color = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -118,7 +120,7 @@ export default function SlabDetail() {
                 values={detail.series}
                 paidCents={card.paidCents}
                 width={width - space.gutter * 2}
-                tint={trendTint(detail.series)}
+                tint={trendTint(detail.series, color)}
                 asOf={price?.asOf}
               />
             </View>
@@ -208,6 +210,7 @@ export default function SlabDetail() {
 }
 
 function MoreIcon() {
+  const color = useColors();
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24">
       <Circle cx={5} cy={12} r={1.8} fill={color.ink} />

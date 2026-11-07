@@ -7,7 +7,8 @@ import type { CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
 import { CopiesMark, PinMark } from './PinMark';
 import { SelectOutline } from './SelectOutline';
-import { color, shadow, size, space } from '../../theme/tokens';
+import { shadow, size, space } from '../../theme/tokens';
+import { themed } from '../../theme/theme';
 import { SlabView } from '../SlabView';
 
 const INSET = space.m; // slabs sit this far in from the ledge ends
@@ -34,6 +35,7 @@ export function ShelfView({
   actions?: SlabActions;
   perRow?: number;
 }) {
+  const styles = useStyles();
   const { slabW, left } = shelfLayout(width, PER_ROW);
   const shelves: CardRow[][] = [];
   for (let i = 0; i < rows.length; i += PER_ROW) shelves.push(rows.slice(i, i + PER_ROW));
@@ -69,6 +71,7 @@ export function ShelfView({
 }
 
 export function Ledge() {
+  const styles = useStyles();
   return (
     <View style={shadow.shelf}>
       <View style={styles.top} />
@@ -77,7 +80,7 @@ export function Ledge() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   slabs: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -97,4 +100,4 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 2,
     borderBottomRightRadius: 2,
   },
-});
+}));

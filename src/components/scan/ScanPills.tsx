@@ -6,7 +6,8 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
-import { color, space, type } from '../../theme/tokens';
+// Pills sit over the camera, so they use the fixed camera palette, not the app's light/dark one.
+import { light as color, space, type } from '../../theme/tokens';
 
 export type PillState = 'none' | 'seen' | 'done';
 export type ScanPill = { key: string; label: string; state: PillState; value?: string };
