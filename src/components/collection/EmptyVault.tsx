@@ -1,9 +1,11 @@
-// Empty states. An outlined slab is the same outline a scanned slab fades in from.
+// Empty states. First run shows the Slabby face (no real slab to show yet); filters
+// show outlined slabs, the same outline a scanned slab fades in from.
 
 import { StyleSheet, Text, View } from 'react-native';
 import type { DisplayMode } from '../../store/display';
 import { radius, size, space, type } from '../../theme/tokens';
 import { themed, useColors } from '../../theme/theme';
+import { FaceMark } from '../brand/FaceMark';
 import { Ledge } from './ShelfView';
 
 /** First run: no slabs at all. */
@@ -12,7 +14,7 @@ export function EmptyVault() {
   const color = useColors();
   return (
     <View style={styles.wrap}>
-      <GhostSlab width={size.heroW * 0.8} />
+      <FaceMark height={size.heroH * 0.5} />
       <Text style={[type.section, { color: color.ink, paddingTop: space.xxl }]}>Your collection starts here</Text>
       <Text style={[type.text, { color: color.secondary, textAlign: 'center', paddingTop: space.s, maxWidth: 280 }]}>
         Scan the QR code on a PSA label to add your first slab.
