@@ -25,12 +25,14 @@ import {
 } from '../../../src/services/search';
 import { useRules } from '../../../src/store/rules';
 import { useWishlist, wishKey, type WishGrade } from '../../../src/store/wishlist';
-import { color, size, space, type } from '../../../src/theme/tokens';
+import { size, space, type } from '../../../src/theme/tokens';
+import { useColors } from '../../../src/theme/theme';
 
 const MAX_DIGITS = 6;
 const ORDER: BuyRatingKind[] = ['steal', 'good', 'fair', 'over'];
 
 export default function WishlistPrice() {
+  const color = useColors();
   const { id, grade: gradeParam } = useLocalSearchParams<{ id: string; grade?: string }>();
   const grade = (gradeParam || 'psa10') as WishGrade;
   const productId = Number(id);

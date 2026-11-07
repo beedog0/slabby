@@ -26,7 +26,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { gradeLabel, rowTitle } from '../../lib/format';
-import { color, motion, radius, size, space, type } from '../../theme/tokens';
+import { motion, radius, size, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import type { Card } from '../../types';
 import { SlabView } from '../SlabView';
 import { SheetScope, useSheetDrag } from '../sheet/useSheetDrag';
@@ -74,6 +75,8 @@ export function groupsOf(items: MenuSpec['items']): MenuItem[][] {
 }
 
 export function MenuHost() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { height: screenH } = useWindowDimensions();
   const [spec, setSpec] = useState<MenuSpec | null>(null);
@@ -221,6 +224,7 @@ export function MenuHost() {
 }
 
 export function Check() {
+  const color = useColors();
   return (
     <Svg width={18} height={18} viewBox="0 0 18 18" fill="none" stroke={color.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M3.5 9.5l3.5 3.5 7.5-8" />
@@ -228,13 +232,13 @@ export function Check() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingHorizontal: space.gutter,
@@ -273,7 +277,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: space.xs,
   },
-});
+}));
 
 /** A slab's menu: its thumbnail, name and grade on top, so you know which slab you're acting on. */
 export function openSlabMenu(card: Card, items: MenuSpec['items']) {

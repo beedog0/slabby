@@ -5,7 +5,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { SORT_LABEL, type SortKey } from '../../pricing/arrange';
 import { openDropdown } from '../menu/Dropdown';
-import { color, radius, size, space, type } from '../../theme/tokens';
+import { radius, size, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 
 const SORTS: SortKey[] = ['value', 'gain', 'newest', 'name', 'mine'];
 
@@ -19,6 +20,8 @@ type Props = {
 };
 
 export function SearchSort({ query, onQuery, sort, onSort, sorts = SORTS }: Props) {
+  const color = useColors();
+  const styles = useStyles();
   // Opens right under the sort button, like the home … menu.
   const sortRef = useRef<ComponentRef<typeof View>>(null);
   const pickSort = () =>
@@ -57,7 +60,7 @@ export function SearchSort({ query, onQuery, sort, onSort, sorts = SORTS }: Prop
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m },
   field: {
     flex: 1,
@@ -71,4 +74,4 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, color: color.ink, paddingVertical: 0, height: 36 },
   sort: { height: size.touch, flexDirection: 'row', alignItems: 'center', gap: space.xs },
-});
+}));

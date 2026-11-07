@@ -7,7 +7,8 @@
 import { Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { Card } from '../../types';
-import { color, size, type } from '../../theme/tokens';
+// Marks sit on the slab, which looks the same in light and dark, so they keep the light palette.
+import { light as color, size, type } from '../../theme/tokens';
 
 /** Where the visible object sits inside SlabView's box: the whole slab, or the smaller raw card. */
 function frame(card: Pick<Card, 'grader'>, slabW: number) {

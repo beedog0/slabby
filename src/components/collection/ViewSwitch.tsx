@@ -4,7 +4,8 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import type { DisplayMode, SearchLayout } from '../../store/display';
-import { color, size } from '../../theme/tokens';
+import { size } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 
 type Mode = DisplayMode | SearchLayout;
 
@@ -28,6 +29,7 @@ export function ViewSwitch<T extends Mode = DisplayMode>({
   onChange: (m: T) => void;
   modes?: { mode: T; label: string }[];
 }) {
+  const color = useColors();
   return (
     <View accessibilityRole="tablist" style={styles.row}>
       {modes.map(({ mode, label }) => {

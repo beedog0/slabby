@@ -24,7 +24,8 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { color, motion, radius, size, space, type } from "../../theme/tokens";
+import { motion, radius, size, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import { Check, groupsOf, type MenuItem, type MenuSpec } from "./Menu";
 
 type Anchor = { x: number; y: number; w: number; h: number };
@@ -47,6 +48,8 @@ export function openDropdown(
 const native = Platform.OS !== "web";
 
 export function DropdownHost() {
+  const color = useColors();
+  const styles = useStyles();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [req, setReq] = useState<Request | null>(null);
   const progress = useRef(new Animated.Value(0)).current;
@@ -166,6 +169,8 @@ function Row({
   first: boolean;
   onPress: () => void;
 }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <View>
       {first ? null : <View style={styles.hairline} />}
@@ -195,11 +200,11 @@ function Row({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   panel: {
     position: "absolute",
     width: size.dropdownW,
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     borderRadius: radius.button,
     overflow: "hidden",
     paddingVertical: space.xs,
@@ -222,4 +227,4 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth * 2,
     borderTopColor: color.hairline,
   },
-});
+}));

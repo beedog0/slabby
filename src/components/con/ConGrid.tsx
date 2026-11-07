@@ -5,7 +5,8 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { bare, gradeLabel, money, rowTitle } from '../../lib/format';
 import type { CardRow } from '../../pricing/portfolio';
-import { color, space, type } from '../../theme/tokens';
+import { space, type } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 import { SlabView } from '../SlabView';
 
 const COLS = 2;
@@ -21,6 +22,7 @@ type Props = {
 };
 
 export function ConGrid({ rows, width, onPress, onLongPress, flash }: Props) {
+  const color = useColors();
   const cellW = Math.floor((width - GAP * (COLS - 1)) / COLS);
   const slabW = Math.floor(cellW * 0.82);
   return (
@@ -60,6 +62,7 @@ export function ConGrid({ rows, width, onPress, onLongPress, flash }: Props) {
 }
 
 function PriceText({ row }: { row: CardRow }) {
+  const color = useColors();
   const { card, price } = row;
   if (card.status === 'sold') {
     return (

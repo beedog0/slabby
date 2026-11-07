@@ -24,6 +24,8 @@ import { SearchSort } from '../src/components/collection/SearchSort';
 import type { SlabActions } from '../src/components/collection/actions';
 import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/collection/statusSheets';
 import { openDropdown } from '../src/components/menu/Dropdown';
+import { openAppearance, APPEARANCE_LABEL } from '../src/components/menu/appearanceMenu';
+import { useAppearance } from '../src/store/appearance';
 import { openSlabMenu } from '../src/components/menu/Menu';
 import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
 import { arrange, stackCopies } from '../src/pricing/arrange';
@@ -48,7 +50,8 @@ import { useDisplay } from '../src/store/display';
 import { usePrices } from '../src/store/prices';
 import { useRules } from '../src/store/rules';
 import { useVault } from '../src/store/vault';
-import { color, size, space, type } from '../src/theme/tokens';
+import { size, space, type } from '../src/theme/tokens';
+import { themed, useColors } from '../src/theme/theme';
 
 // Every filter fills the same header lines (value, one line, chart slot) so the tabs never move.
 const EMPTY: Record<CollectionFilter, { title: string; hint: string; chart: string }> = {
@@ -79,6 +82,8 @@ const VALUE_LABEL: Record<CollectionFilter, string> = {
 };
 
 export default function Home() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   // Where the display starts in the page; the swipe view sizes its slab to fit below it.
@@ -194,6 +199,7 @@ export default function Home() {
     });
 
   // Grouped by when you'd reach for it: at the con, around the shelf, then settings.
+  const appearance = useAppearance((st) => st.mode);
   const moreRef = useRef<ComponentRef<typeof View>>(null);
   const more = () =>
     openDropdown(moreRef, [
@@ -213,6 +219,7 @@ export default function Home() {
       [
         { label: 'Pricing rules', onPress: () => router.push('/settings/pricing') },
         { label: 'Back up', onPress: () => router.push('/settings/account') },
+        { label: 'Appearance', detail: APPEARANCE_LABEL[appearance], onPress: openAppearance },
       ],
     ]);
 
@@ -500,6 +507,7 @@ function plural(n: number, word: string) {
 
 /** Holds the chart's place when there is nothing to draw: a baseline and one quiet line. */
 function ChartPlaceholder({ text }: { text: string }) {
+  const color = useColors();
   return (
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
       {text ? <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.s }]}>{text}</Text> : null}
@@ -514,6 +522,7 @@ function ChartPlaceholder({ text }: { text: string }) {
 }
 
 function MoreIcon() {
+  const color = useColors();
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill={color.ink}>
       <Circle cx={5.5} cy={12} r={1.6} />
@@ -523,7 +532,7 @@ function MoreIcon() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   header: {
     flexDirection: 'row',
@@ -568,4 +577,4 @@ const styles = StyleSheet.create({
     paddingTop: space.s,
     backgroundColor: color.canvas,
   },
-});
+}));

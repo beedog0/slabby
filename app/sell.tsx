@@ -12,9 +12,11 @@ import { BackIcon, IconButton, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { useRules } from '../src/store/rules';
 import { saveDraft, useSellDraft } from '../src/store/sellDraft';
-import { color, size, space, type } from '../src/theme/tokens';
+import { size, space, type } from '../src/theme/tokens';
+import { useColors } from '../src/theme/theme';
 
 export default function Sell() {
+  const color = useColors();
   const insets = useSafeAreaInsets();
   const draft = useSellDraft((s) => s.draft);
   const patch = useSellDraft((s) => s.patch);

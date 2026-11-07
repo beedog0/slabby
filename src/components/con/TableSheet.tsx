@@ -30,7 +30,8 @@ import { DEFAULT_CON_NAME, useCon } from '../../store/con';
 import { usePrices } from '../../store/prices';
 import { useRules } from '../../store/rules';
 import { useVault } from '../../store/vault';
-import { color, motion, radius, size, space, type } from '../../theme/tokens';
+import { motion, radius, size, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import type { Card } from '../../types';
 import { CardThumb } from '../CardThumb';
 import { Keypad } from '../Keypad';
@@ -51,6 +52,8 @@ const MAX_DIGITS = 6;
 const native = Platform.OS !== 'web';
 
 export function TableSheet({ open, onClose, onScan }: Props) {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { height: screenH } = useWindowDimensions();
   const progress = useRef(new Animated.Value(0)).current;
@@ -157,6 +160,8 @@ function ListStep({
   onSet: (card: Card, s: ConStatus) => void;
   onSold: (card: Card) => void;
 }) {
+  const color = useColors();
+  const styles = useStyles();
   const cards = useVault((s) => s.cards);
   const update = useVault((s) => s.update);
   const rules = useRules((s) => s.rules);
@@ -317,6 +322,8 @@ function PriceStep({
   onBack: () => void;
   onSold: (id: string) => void;
 }) {
+  const color = useColors();
+  const styles = useStyles();
   const card = useVault((s) => s.cards.find((c) => c.id === id));
   const update = useVault((s) => s.update);
   const rules = useRules((s) => s.rules);
@@ -434,13 +441,13 @@ function PriceStep({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     overflow: 'hidden',
@@ -472,7 +479,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: space.gutter,
     width: size.dropdownW,
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     borderRadius: radius.button,
     overflow: 'hidden',
     paddingVertical: space.xs,
@@ -480,4 +487,4 @@ const styles = StyleSheet.create({
   dropRow: { height: size.touch, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.l, gap: space.m },
   priceHeader: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.gutter - 12, paddingRight: space.gutter },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center' },
-});
+}));
