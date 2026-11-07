@@ -11,7 +11,7 @@ import { Keypad } from '../../../src/components/Keypad';
 import { PriceLine, type Tick } from '../../../src/components/PriceLine';
 import { SoldState } from '../../../src/components/SoldState';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../../src/components/ui';
-import { gradeLabel, money, rowTitle } from '../../../src/lib/format';
+import { cardLabel, money, rowTitle } from '../../../src/lib/format';
 import { inputsFor } from '../../../src/pricing/portfolio';
 import { ebayNet, looksLikeTypo, verdict, vsEbay } from '../../../src/pricing/rules';
 import { useCardRow } from '../../../src/pricing/useCardRow';
@@ -52,7 +52,7 @@ export default function Offer() {
   if (card.status === 'sold') {
     return (
       <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
-        <Nav title={`${rowTitle(card)} · ${gradeLabel(card.grader, card.grade, card.condition)}`} />
+        <Nav title={`${rowTitle(card)} · ${cardLabel(card)}`} />
         <SoldState row={row} bottomInset={insets.bottom} />
       </View>
     );
@@ -204,7 +204,7 @@ export default function Offer() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
-      <Nav title={`${rowTitle(card)} · ${gradeLabel(card.grader, card.grade, card.condition)}`} />
+      <Nav title={`${rowTitle(card)} · ${cardLabel(card)}`} />
 
       <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: 'space-evenly' }}>
         <View style={{ alignItems: 'center' }}>

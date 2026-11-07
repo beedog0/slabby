@@ -3,6 +3,11 @@
 const MINUS = '−';
 
 /** 1248000 → "$12,480". Drops cents unless asked. */
+/** A card price: whole dollars, but cents under $10 so a $0.25 common doesn't read as $0. */
+export function cardPrice(cents: number): string {
+  return money(cents, { cents: Math.abs(cents) < 1000 && cents % 100 !== 0 });
+}
+
 export function money(cents: number, opts: { cents?: boolean } = {}): string {
   const neg = cents < 0;
   const abs = Math.abs(cents) / 100;
@@ -34,6 +39,19 @@ export function rulePct(n: number): string {
 export function gradeLabel(grader: string, grade: number | null, condition?: string): string {
   if (grader === 'raw') return condition ? `Raw · ${condition}` : 'Raw';
   return `${grader.toUpperCase()} ${grade ?? ''}`.trim();
+}
+
+const LANG_SHORT: Record<string, string> = { ja: 'JP', ko: 'KR', zh: 'CN' };
+
+/** "JP" for a Japanese card, "" for English, so lists can tell the two printings apart. */
+export function langTag(language: string | null | undefined): string {
+  if (!language || language === 'en') return '';
+  return LANG_SHORT[language] ?? language.toUpperCase();
+}
+
+/** Row subtitle: "JP · PSA 10", "PSA 10", "Raw · near mint". */
+export function cardLabel(c: { language: string; grader: string; grade: number | null; condition?: string }): string {
+  return [langTag(c.language), gradeLabel(c.grader, c.grade, c.condition)].filter(Boolean).join(' · ');
 }
 
 /** "Up $640 this month" / "Down $120 this month" / "Flat this month". */

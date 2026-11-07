@@ -272,3 +272,40 @@ export function parseSoldListings(raw: unknown): SaleRow[] {
   }
   return out;
 }
+
+/**
+ * A catalog product title as a card name: "Pikachu ex - 236/187" → "Pikachu ex",
+ * "Charizard (Secret)" → "Charizard". Null when nothing is left.
+ */
+export function productName(title: string | null | undefined): string | null {
+  const n = (title ?? '')
+    .replace(/\s+-\s+[A-Z]*\d+[A-Za-z]*(?:\/[A-Z0-9-]+)?\s*$/i, '')
+    .replace(/(?:\s*\([^)]*\))+\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return n || null;
+}
+
+// Words that don't tell two card names apart.
+const NAME_FILLER = new Set(['ex', 'gx', 'v', 'vmax', 'vstar', 'holo', 'the', 'and', 'of', 'pokemon']);
+const nameWords = (t: string | null | undefined) =>
+  (t ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w && !NAME_FILLER.has(w));
+
+/**
+ * Whether a number-matched product can be the card the label names. A label name of four or more
+ * letters that shares no word with the product ("DITTO" vs "Eevee - 173") means the set or language
+ * was read wrong, so the match is refused. Short names may be label codes ("PZA" for Pikachu ex on
+ * SV8a), so they trust the number.
+ */
+export function nameAgrees(label: string | null | undefined, product: string | null | undefined): boolean {
+  const have = nameWords(label);
+  const want = new Set(nameWords(productName(product)));
+  if (!have.length || !want.size) return true;
+  if (have.some((w) => want.has(w))) return true;
+  return !have.some((w) => /^[a-z]{4,}$/.test(w));
+}

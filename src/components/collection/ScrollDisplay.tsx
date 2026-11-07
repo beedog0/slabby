@@ -13,7 +13,7 @@ import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { size, space, type } from '../../theme/tokens';
 import { useColors } from '../../theme/theme';
 import { prefetchArt } from '../ArtImage';
-import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
+import { cardLabel, langTag, money, pct, rowTitle } from '../../lib/format';
 import { SlabView } from '../SlabView';
 import { CopiesMark, PinMark } from './PinMark';
 
@@ -302,7 +302,9 @@ function SwipeCaption({ row }: { row: CardRow }) {
         {rowTitle(card)}
         {/* Graded slabs show their grade on the label; raw cards say so here. */}
         {card.grader === 'raw' ? (
-          <Text style={muted}>{` · ${gradeLabel(card.grader, card.grade, card.condition)}`}</Text>
+          <Text style={muted}>{` · ${cardLabel(card)}`}</Text>
+        ) : langTag(card.language) ? (
+          <Text style={muted}>{` · ${langTag(card.language)}`}</Text>
         ) : null}
       </Text>
       <Text numberOfLines={1} style={[type.rowPrice, ink, { paddingTop: space.xs }]}>

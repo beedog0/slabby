@@ -30,6 +30,8 @@ let categories: Promise<Category[]> | null = null;
 
 /** TCGplayer category for a game and language. Null when TCGplayer doesn't sell that language. */
 export async function categoryFor(game: string, language: string): Promise<number | null> {
+  // TCGplayer sells Pokémon in English and Japanese only; a Korean card is neither.
+  if (language !== 'en' && language !== 'ja' && game === 'pokemon') return null;
   const known = KNOWN[`${game}:${language === 'ja' ? 'ja' : 'en'}`];
   if (known) return known;
   const want = NAMES[game];
@@ -47,6 +49,8 @@ export async function categoryFor(game: string, language: string): Promise<numbe
 
 export type TcgMatch = {
   tcgPlayerId: string;
+  /** The product title, e.g. "Pikachu ex - 236/187". */
+  name: string;
   image: string;
   setName: string;
   category: number;
@@ -82,7 +86,9 @@ async function matchIn(category: number, c: MatchInput) {
   const group =
     (code && groups.find((g) => compact(g.abbreviation) === code)) ||
     (code && groups.find((g) => compact(g.name).startsWith(code))) ||
-    (c.setName && groups.find((g) => compact(g.name).includes(compact(c.setName))));
+    (c.setName && groups.find((g) => compact(g.name).includes(compact(c.setName)))) ||
+    // Abbreviated label sets: "25TH ANNIV-GOLDEN BOX" is "25th Anniversary Golden Box".
+    (c.setName && groups.find((g) => wordsPrefix(c.setName!, g.name)));
   if (!group) return null;
 
   const products = await results<Product>(`/${category}/${group.groupId}/products`);
@@ -113,6 +119,7 @@ async function matchIn(category: number, c: MatchInput) {
     tcgPlayerId: String(best.productId),
     image: `https://tcgplayer-cdn.tcgplayer.com/product/${best.productId}_400w.jpg`,
     setName: group.name,
+    name: best.name,
     category,
     group: group.groupId,
   };
@@ -123,6 +130,14 @@ const SAME: Record<string, string[]> = { parallel: ['parallel', 'alternate', 'al
 function varietyWords(v: string | null | undefined): string[] {
   const words = (v ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !['art', 'rare', 'holo', 'the'].includes(w));
   return [...new Set(words.flatMap((w) => SAME[w] ?? [w]))];
+}
+
+/** Every word of the label's set starts a word of the group's name, in any order. */
+function wordsPrefix(label: string, group: string): boolean {
+  const split = (t: string) => t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const want = split(label);
+  const have = split(group);
+  return want.length >= 2 && want.every((w) => have.some((h) => h.startsWith(w)));
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

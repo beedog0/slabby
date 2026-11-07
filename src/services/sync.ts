@@ -162,7 +162,7 @@ export async function pushRules(rules: PricingRules): Promise<void> {
 }
 
 /** Server copy of the vault and rules, or null when signed out. */
-export async function pull(): Promise<{ cards: Card[]; rules: PricingRules | null } | null> {
+export async function pull(): Promise<{ cards: Card[]; rules: PricingRules | null; staleKeys: string[] } | null> {
   const uid = await userId();
   if (!supabase || !uid) return null;
   const [cards, rules] = await Promise.all([
@@ -173,6 +173,9 @@ export async function pull(): Promise<{ cards: Card[]; rules: PricingRules | nul
   return {
     cards: (cards.data as CardRowDb[]).map(fromRow),
     rules: rules.data ? rulesFromRow(rules.data) : null,
+    // Rows whose card_key was computed by an older cardKey(): push them again so the server
+    // (nightly comps, comps-refresh's ownership check) uses today's key.
+    staleKeys: (cards.data as CardRowDb[]).filter((r) => r.card_key !== cardKey(fromRow(r))).map((r) => r.id),
   };
 }
 

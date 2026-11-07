@@ -8,7 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Keypad } from '../../../src/components/Keypad';
 import { BackIcon, IconButton, PrimaryButton } from '../../../src/components/ui';
-import { gradeLabel, money, rowTitle } from '../../../src/lib/format';
+import { cardLabel, money, rowTitle } from '../../../src/lib/format';
 import { useVault } from '../../../src/store/vault';
 import { size, space, type } from '../../../src/theme/tokens';
 import { useColors } from '../../../src/theme/theme';
@@ -41,7 +41,7 @@ export default function WhatYouPaid() {
           <BackIcon />
         </IconButton>
         <Text numberOfLines={1} style={[type.body, { color: color.ink, flex: 1, textAlign: 'center' }]}>
-          {rowTitle(card)} · {gradeLabel(card.grader, card.grade, card.condition)}
+          {rowTitle(card)} · {cardLabel(card)}
         </Text>
         <View style={{ width: size.touch }} />
       </View>

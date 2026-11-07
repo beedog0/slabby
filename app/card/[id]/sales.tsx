@@ -12,7 +12,7 @@ import { DotStrip } from '../../../src/components/DotStrip';
 import { Segmented } from '../../../src/components/Segmented';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../../src/components/ui';
 import { ebaySoldUrl } from '../../../src/lib/ebay';
-import { gradeLabel, money, rowTitle, saleDay, saleLine, salesWord, shortDay } from '../../../src/lib/format';
+import { cardLabel, money, rowTitle, saleDay, saleLine, salesWord, shortDay } from '../../../src/lib/format';
 import { outlier, salesPoints, salesValues, summarize } from '../../../src/pricing/sales';
 import { useCardRow } from '../../../src/pricing/useCardRow';
 import { refreshCard } from '../../../src/services/comps';
@@ -87,7 +87,7 @@ export default function SalesScreen() {
             <BackIcon />
           </IconButton>
           <Text numberOfLines={1} style={[type.body, styles.navTitle]}>
-            {rowTitle(card)} · {gradeLabel(card.grader, card.grade, card.condition)}
+            {rowTitle(card)} · {cardLabel(card)}
           </Text>
           <View style={{ width: size.touch }} />
         </View>

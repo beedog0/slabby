@@ -16,6 +16,7 @@
 // full page in sell mode (app/search/[id].tsx ?sell=1, or app/sell.tsx when the card isn't in our
 // catalog) with where that ask sits against market and a rating against what you paid. "What you
 // paid" also takes "Pulled it" (rated against the set's pack price, else $0) or "Not sure".
+// After an add the camera stays up for the next card, with a line at the top to open the one just added; X closes.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -33,20 +34,22 @@ import { CostField, EMPTY_COST, paidCentsOf, toCost, type CostInput } from '../s
 import { ask as ruleAsk } from '../src/pricing/rules';
 import { useRules } from '../src/store/rules';
 import { useSellDraft, type SellDraft } from '../src/store/sellDraft';
+import { ScanPills } from '../src/components/scan/ScanPills';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
 import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
-import { gradeLabel, money, rowTitle } from '../src/lib/format';
+import { cardPrice, gradeLabel, money, rowTitle } from '../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
-import { cardFromCert, cardFromDetails, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
-import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, parseCardText, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
-import { cardNumber, displayName, mockProductId, type CatalogCard } from '../src/services/search';
+import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
+import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, correctionKey, findSimilarCards, missReason, parseCardText, printedNumber, printName, printOptions, similarForSlab, withCorrection, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { useCorrections } from '../src/store/corrections';
+import { cardNumber, displayName, mockProductId, nameAndVariant, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
 import { usePrices } from '../src/store/prices';
-import { parseLabel, stepAutoRead, type AutoRead, type ParsedLabel } from '../src/services/label';
+import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
 import { LabelReader } from '../modules/label-reader';
 import type { Card } from '../src/types';
@@ -65,6 +68,12 @@ const LOCK_MS = 450; // the locked frame and its check stay up this long before 
 const SHEET_IN_MS = 260;
 const SHEET_OUT_MS = 200;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** A read's identity: the cert, else name and grade. */
+const readId = (p: ParsedLabel) => {
+  const c = p.payload.PSACert;
+  return c.CertNumber || `${(c.Subject ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')}|${c.CardGrade ?? ''}`;
+};
 
 export default function Scan() {
   const color = useColors();
@@ -103,6 +112,7 @@ export default function Scan() {
   const [active, setActive] = useState(AppState.currentState === 'active');
   // A label was read once and we're waiting for a second matching read.
   const [spotted, setSpotted] = useState(false);
+  const [progress, setProgress] = useState<AutoProgress>(autoProgress(null));
   // The read succeeded: the frame closes solid with a check for a beat, then the sheet rises.
   const [locked, setLocked] = useState(false);
   const sheetIn = useRef(new Animated.Value(0)).current;
@@ -113,6 +123,11 @@ export default function Scan() {
   const [raw, setRaw] = useState<RawRead | null>(null);
   // What auto-read has gathered so far for the card in frame (fields merge across frames).
   const auto = useRef<AutoRead>(null);
+  // The last card read. Once it's in the vault, auto-read ignores it, so the slab just added (and
+  // still in frame after the sheet closes) isn't read again. A tap still reads it.
+  const lastRead = useRef<string | null>(null);
+  // Where the frame sits on screen, for keeping only the text inside it.
+  const frameRect = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const win = useWindowDimensions();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
@@ -167,6 +182,37 @@ export default function Scan() {
       live = false;
     };
   }, [previewKey]);
+  // "Not this card?": cards with the slab's name, and the one picked replaces the match for good.
+  const [similar, setSimilar] = useState<CatalogCard[] | null | 'loading'>(null);
+  useEffect(() => setSimilar(null), [previewKey]);
+  const notThisSlab = () => {
+    if (!preview) return;
+    setSimilar('loading');
+    similarForSlab(preview)
+      .catch(() => [] as CatalogCard[])
+      .then(setSimilar);
+  };
+  const correctSlab = (c: CatalogCard) => {
+    if (!preview || !previewKey) return;
+    const card = preview;
+    setSimilar(null);
+    setMatched({ key: previewKey, art: c.imageUrl, productId: c.productId });
+    setMatching(true);
+    // An explicit product replaces the server's match for this card (card-match), for every device.
+    const done = matchNewCard(card, String(c.productId))
+      .catch(() => null)
+      .then(async (ref) => {
+        if (ref) await refreshPrices([card]).catch(() => {});
+        return ref;
+      });
+    match.current = { key: previewKey, done };
+    done.then((ref) => {
+      if (match.current?.done !== done) return;
+      // The picked card's photo, even if an older server still answers with its first match.
+      setMatched({ key: previewKey, art: ref && String(ref.tcgplayer_id) === String(c.productId) ? (artFor(ref) ?? c.imageUrl) : c.imageUrl, productId: c.productId });
+      setMatching(false);
+    });
+  };
   const art = matched && matched.key === previewKey ? matched.art : null;
   const shown = preview && art ? { ...preview, imageFrontUrl: art } : preview;
   const owned = preview?.certNumber ? existing.find((c) => c.certNumber === preview.certNumber && c.status === 'owned') : undefined;
@@ -175,6 +221,8 @@ export default function Scan() {
   const copies = previewKey ? existing.filter((c) => c.status === 'owned' && cardKey(c) === previewKey).length : 0;
   // The same cert twice is almost always a re-scan, so Add asks once before saving it again.
   const [confirmAgain, setConfirmAgain] = useState(false);
+  /** The last slab added on this visit, and how many so far. */
+  const [added, setAdded] = useState<{ id: string; title: string; count: number } | null>(null);
   useEffect(() => setConfirmAgain(false), [previewKey]);
 
   // Con mode: what you paid from the cost field, else what the vault already has for this cert.
@@ -197,7 +245,10 @@ export default function Scan() {
     if (art) card.imageFrontUrl = art;
     add(card);
     afterSave(card);
-    router.replace(`/card/${card.id}`);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setAdded((a) => ({ id: card.id, title: rowTitle(card), count: (a?.count ?? 0) + 1 }));
+    setManual('');
+    rescan();
   };
 
   const startSell = useSellDraft((s) => s.start);
@@ -217,6 +268,7 @@ export default function Scan() {
     match.current = null;
     setConfirmAgain(false);
     setAsking(false);
+    setProgress(autoProgress(null));
     setLabelMiss(false);
     setResult(null);
     setCost(EMPTY_COST);
@@ -251,7 +303,16 @@ export default function Scan() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     findScannedCard(read)
       .catch(() => [] as CardMatch[])
-      .then((matches) => setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !isConfident(matches) } : r)));
+      // A card corrected before ("Not this card?") comes first, so it's never wrong twice.
+      .then((found) => withCorrection(found, useCorrections.getState().byKey[correctionKey(read)]))
+      .then((matches) => {
+        setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !isConfident(matches), similar: matches.length ? undefined : null } : r));
+        // No card with this number (a promo with no set, a print the catalog lacks): offer cards with the same name.
+        if (!matches.length)
+          findSimilarCards(read)
+            .catch(() => [] as CatalogCard[])
+            .then((similar) => setRaw((r) => (r && r.read === read ? { ...r, similar } : r)));
+      });
   };
 
   /** Con mode: add (or re-mark) the slab with the chosen status. `again` keeps the camera up. */
@@ -300,7 +361,12 @@ export default function Scan() {
     parsed.payload.PSACert.CertNumber = cert ?? '';
     lastCert.current = cert || null;
     auto.current = null;
+    lastRead.current = readId(parsed);
     setSpotted(false);
+    // Light every pill with what was read while the frame shows the lock.
+    const c = parsed.payload.PSACert;
+    const field = (value?: string) => (value ? { state: 'done' as const, value } : { state: 'none' as const });
+    setProgress({ name: field(c.Subject), grade: field(c.CardGrade), cert: field(c.CertNumber) });
     setLabelMiss(false);
     setLocked(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
@@ -328,7 +394,10 @@ export default function Scan() {
     try {
       const photo = await camera.current.takePictureAsync({ quality: manual ? 0.9 : 0.7, shutterSound: false });
       uri = photo?.uri;
-      const lines = uri ? await LabelReader.recognize(uri) : [];
+      const all = uri ? await LabelReader.recognize(uri) : [];
+      // Only text inside the frame: a laptop screen or the next slab behind it never gets read.
+      const inFrame = photo ? linesInFrame(all, photo, win, frameRect.current) : all;
+      const lines = manual && !inFrame.length ? all : inFrame;
       const parsed = parseLabel(lines);
       // A grader label means slab. Otherwise a collector number means a loose card. Raw cards print
       // "©2023 Pokémon", which can pass for a label's year and brand, so the number decides.
@@ -338,14 +407,15 @@ export default function Scan() {
       // Slab reads gather across frames; a loose card's frame doesn't feed the slab reader.
       const step = stepAutoRead(auto.current, slabbed || !loose ? parsed : null);
       if (asked) {
-        // A tap takes whatever is readable, topped up with what earlier frames saw of the same card.
-        const best = step.ready ?? step.state?.label ?? parsed;
+        // A tap takes this frame, topped up with the grade or cert earlier frames read.
+        const best = step.ready ?? withVotes(auto.current, parsed);
         if (best?.payload.PSACert.Subject && (slabbed || !loose)) return accept(best);
         if (loose) return acceptCard(loose);
         setSeen(lines.slice(0, 4).map((l) => l.text).join(' · '));
         setLabelMiss(true);
         auto.current = null;
         setSpotted(false);
+        setProgress(autoProgress(null));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         return;
       }
@@ -367,10 +437,17 @@ export default function Scan() {
         return;
       }
       lastKey.current = null;
+      if (step.ready && justAdded(step.ready)) {
+        auto.current = null;
+        setSpotted(false);
+        setProgress(autoProgress(null));
+        return;
+      }
       if (step.ready) return accept(step.ready);
       if (step.state && !auto.current) Haptics.selectionAsync().catch(() => {});
       auto.current = step.state;
       setSpotted(!!step.state);
+      setProgress(autoProgress(step.state));
       if (step.state) setLabelMiss(false);
     } catch {
       if (manualAsk.current) setLabelMiss(true);
@@ -384,6 +461,12 @@ export default function Scan() {
       inFlight.current = false;
       setReading(false);
     }
+  };
+  // The card auto-read just read, now owned (cert match), or with no cert to check by.
+  const justAdded = (p: ParsedLabel) => {
+    if (readId(p) !== lastRead.current) return false;
+    const cert = p.payload.PSACert.CertNumber;
+    return !cert || useVault.getState().cards.some((c) => c.certNumber === cert && c.status === 'owned');
   };
   const captureRef = useRef(capture);
   captureRef.current = capture;
@@ -437,6 +520,7 @@ export default function Scan() {
       auto.current = null;
       lastKey.current = null;
       setSpotted(false);
+      setProgress(autoProgress(null));
     };
   }, [autoOn]);
 
@@ -448,6 +532,7 @@ export default function Scan() {
   const frameH = labelMode ? Math.round(frameW * slabRatio) : frameW;
   const labelH = Math.round(frameH * LABEL_SHARE);
   const frameTop = insets.top + space.s + NAV_H + (labelMode ? space.xl : space.xxxl);
+  frameRect.current = { x: (win.width - frameW) / 2, y: frameTop, width: frameW, height: frameH };
   const hint = locked
     ? 'Got it'
     : busy
@@ -462,6 +547,8 @@ export default function Scan() {
           ? 'Hold still'
           : addedNote
             ? `${addedNote}. Scan the next slab`
+            : added
+              ? `${added.count} added. Scan the next card`
             : labelMode
               ? 'Fit the slab or card in the frame'
               : 'Line up the QR or barcode on the back of the slab';
@@ -522,10 +609,34 @@ export default function Scan() {
         </Pressable>
       </View>
 
+
       <View style={[styles.below, { top: frameTop + frameH + space.xl }]}>
         <View style={styles.hint}>
           <Text style={[type.text, { color: cam.onInk, textAlign: 'center' }]}>{hint}</Text>
         </View>
+        {labelMode && canUseCamera && !result ? (
+          // What the read has so far: each pill lights up with its value once confirmed.
+          <ScanPills
+            pills={[
+              { key: 'name', label: 'Name', ...progress.name, value: progress.name.value && titleName(progress.name.value) },
+              { key: 'grade', label: 'Grade', ...progress.grade, value: progress.grade.value && `PSA ${gradeFrom(progress.grade.value) ?? progress.grade.value}` },
+              { key: 'cert', label: 'Cert', ...progress.cert },
+            ]}
+          />
+        ) : null}
+        {added ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Added ${added.title}. Open it`}
+            onPress={() => router.push(`/card/${added.id}`)}
+            style={({ pressed }) => [styles.added, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={[type.text, { color: cam.onInk, flexShrink: 1 }]}>
+              Added · {added.title}
+            </Text>
+            <Text style={[type.text, { color: cam.onInk, fontWeight: '600' }]}>View</Text>
+          </Pressable>
+        ) : null}
         {!canUseCamera ? (
           <View style={styles.manual}>
             {Platform.OS !== 'web' && permission && !permission.granted ? (
@@ -619,7 +730,13 @@ export default function Scan() {
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{price ? money(price.marketCents) : '—'}</Text>
                   <Text style={[type.secondary, { color: color.secondary }]}>
-                    {price ? 'market' : matching ? 'finding comps' : 'no comps yet'}
+                    {price
+                      ? 'market'
+                      : gameOf(preview) === 'pokemon' && preview.language !== 'en' && preview.language !== 'ja'
+                        ? 'no price source yet'
+                        : matching
+                          ? 'finding comps'
+                          : 'no comps yet'}
                   </Text>
                 </View>
               </View>
@@ -632,6 +749,30 @@ export default function Scan() {
                     : `You already have ${copies} of this card. This would be your ${ordinal(copies + 1)}.`}
                 </Text>
               ) : null}
+              {similar === null ? (
+                supabase ? (
+                  <Pressable accessibilityRole="button" onPress={notThisSlab} style={styles.notThis}>
+                    <Text style={[type.text, { color: color.secondary }]}>Not this card? ›</Text>
+                  </Pressable>
+                ) : null
+              ) : similar === 'loading' ? (
+                <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>Looking for similar cards</Text>
+              ) : (
+                <>
+                  <Text style={[type.text, { color: color.secondary, paddingBottom: space.s }]}>
+                    {similar.length ? 'Pick the card in this slab.' : `No other cards named ${preview.name}.`}
+                  </Text>
+                  <CardPickList cards={similar} onPick={correctSlab} />
+                  <View style={{ flexDirection: 'row', gap: space.xl }}>
+                    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/search', params: { q: preview.name } })} style={styles.quiet}>
+                      <Text style={[type.text, { color: color.secondary }]}>Search cards</Text>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" onPress={() => setSimilar(null)} style={styles.quiet}>
+                      <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
               <Hairline />
               {fromCon ? (
                 <>
@@ -771,7 +912,16 @@ export default function Scan() {
   );
 }
 
-type RawRead = { read: ParsedCard; matches: CardMatch[] | null; pick: number; choosing: boolean };
+type RawRead = {
+  read: ParsedCard;
+  matches: CardMatch[] | null;
+  pick: number;
+  choosing: boolean;
+  /** Cards with the read name, when the number found none or "Not this card?" asked (null while looking). */
+  similar?: CatalogCard[] | null;
+  /** "Not this card?" opened the similar-cards list over a found card. */
+  showSimilar?: boolean;
+};
 
 /**
  * A loose card as it would be saved: raw, priced at TCGplayer market. A print the scan can't see
@@ -793,6 +943,33 @@ function rawCard(c: CatalogCard, paidCents: number | null, plan: 'hold' | 'sell'
     game: c.game,
   });
   return { ...card, grade: null };
+}
+
+/** Cards to pick from after "Not this card?" or a missed number: art, name, set · number, price. */
+function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: CatalogCard) => void }) {
+  const color = useColors();
+  const styles = useStyles();
+  return (
+    <SheetScrollView style={{ maxHeight: size.rowVault * 4 }}>
+      {cards.map((c, i) => (
+        <View key={c.productId}>
+          {i ? <Hairline /> : null}
+          <Pressable accessibilityRole="button" onPress={() => onPick(c)} style={({ pressed }) => [styles.pickRow, pressed && { opacity: 0.6 }]}>
+            <SlabView card={rawCard(c, null, 'hold')} width={size.thumbW} posed={false} />
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>
+                {nameAndVariant(c.name).name}
+              </Text>
+              <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
+                {[nameAndVariant(c.name).variant, c.setName, c.number ? `#${cardNumber(c.number)}` : null, c.language === 'ja' ? 'Japanese' : null].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+            <Text style={[type.rowPrice, { color: color.ink }]}>{c.marketCents ? cardPrice(c.marketCents) : '—'}</Text>
+          </Pressable>
+        </View>
+      ))}
+    </SheetScrollView>
+  );
 }
 
 /** Result sheet for a loose card: the best catalog match, or a short pick list when it's unclear. */
@@ -822,7 +999,7 @@ function RawSheet({
   const rules = useRules((s) => s.rules);
   const startSell = useSellDraft((s) => s.start);
   const n = raw.read.numbers[0];
-  const printed = n.total ? `${n.num}/${n.total}` : n.num;
+  const printed = printedNumber(n);
   const best = raw.matches?.[raw.pick]?.card ?? null;
   // Print: null is the catalog's own (base) printing. Holo vs reverse holo can't be told from a photo.
   const [print, setPrint] = useState<number | null>(null);
@@ -832,18 +1009,21 @@ function RawSheet({
     setChoosingPrint(false);
   }, [best?.productId]);
   const prints = best ? printOptions(best) : [];
-  const known = !!best?.printings?.length;
-  const chosen = print != null ? prints[print] : null;
-  // The base printing needs no suffix; an unpriced fallback choice always gets one.
-  const printSuffix = chosen && (!known || print! > 0) ? chosen.name : null;
-  const printLabel = chosen?.name ?? (known ? prints[0].name : 'As listed');
-  const priceCents = chosen?.marketCents ?? best?.marketCents ?? null;
+  // Index 0 is the catalog's own print (or the likely one before the catalog lists prints).
+  const chosen = prints[print ?? 0] ?? null;
+  // The default print needs no suffix; another one goes in the name, in plain words.
+  const printSuffix = chosen && print ? printName(chosen.name) : null;
+  const printLabel = chosen ? printName(chosen.name) : null;
+  // A print without its own price shows no price rather than the default print's.
+  const priceCents = chosen ? chosen.marketCents : (best?.marketCents ?? null);
   const preview = best ? rawCard(best, null, plan, printSuffix) : null;
   const copies = preview ? owned.filter((c) => c.status === 'owned' && cardKey(c) === cardKey(preview)).length : 0;
 
   // The product is known, so card-match skips matching and spends no search credit.
   const afterSave = (card: Card) => {
     if (!best) return;
+    // The card saved is the right one for this read; the next scan of it picks it first.
+    remember(correctionKey(raw.read), best.productId);
     matchNewCard(card, String(best.productId))
       .then(() => refreshPrices([card]))
       .catch(() => {});
@@ -861,7 +1041,22 @@ function RawSheet({
     openSell({ card, productId: best.productId, marketCents: priceCents, askCents, cost: toCost(cost), afterSave }, startSell);
   };
 
+  // Candidates usually share a set (variants of one card); then the set goes in the header once.
+  const sets = new Set(raw.matches?.map((m) => m.card.setName) ?? []);
+  const oneSet = sets.size === 1 ? [...sets][0] : null;
   const choose = (i: number) => setRaw((r) => (r ? { ...r, pick: i, choosing: false } : r));
+  const pickSimilar = (c: CatalogCard) =>
+    setRaw((r) => (r ? { ...r, matches: [{ card: c, score: Infinity }, ...(r.matches ?? []).filter((m) => m.card.productId !== c.productId)], pick: 0, choosing: false, showSimilar: false } : r));
+  // "Not this card?": the other cards with this number when there are some, else cards with the name read.
+  const notThis = () => {
+    if ((raw.matches?.length ?? 0) > 1) return setRaw((r) => (r ? { ...r, choosing: true } : r));
+    setRaw((r) => (r ? { ...r, showSimilar: true, similar: r.similar ?? null } : r));
+    if (raw.similar == null)
+      findSimilarCards(raw.read)
+        .catch(() => [] as CatalogCard[])
+        .then((similar) => setRaw((r) => (r && r.read === raw.read ? { ...r, similar } : r)));
+  };
+  const remember = useCorrections((s) => s.remember);
   const again = (
     <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
       <Text style={[type.text, { color: color.secondary }]}>Scan again</Text>
@@ -884,14 +1079,34 @@ function RawSheet({
           <Text style={[type.text, { color: color.secondary }]}>Read from the card · {printed}</Text>
           <Text style={[type.body, { color: color.ink, paddingVertical: space.l }]}>Finding the card</Text>
         </>
-      ) : !best || !preview ? (
+      ) : !best || !preview || raw.showSimilar ? (
         <>
-          <Text style={[type.section, { color: color.ink }]}>Couldn’t find card {printed}</Text>
+          <Text style={[type.section, { color: color.ink }]}>{best && preview ? 'Which card is it?' : `Couldn’t find card ${printed}`}</Text>
           <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
-            It may be misread or not in the catalog yet. Search for it by name instead.
+            {best && preview ? `Cards named ${raw.read.name ?? displayName(best.name)}. Slabby will remember the one you pick.` : missReason(raw.read)}
           </Text>
-          <PrimaryButton title="Search cards" onPress={() => router.replace('/search')} />
-          {again}
+          {raw.similar?.length ? (
+            <>
+              <Text style={[type.text, { color: color.secondary, paddingBottom: space.s }]}>
+                {best && preview ? 'Pick yours if it’s here.' : `Similar cards named ${raw.read.name}. Pick yours if it’s here.`}
+              </Text>
+              <CardPickList cards={raw.similar} onPick={pickSimilar} />
+              <Pressable accessibilityRole="button" onPress={() => router.replace({ pathname: '/search', params: raw.read.name ? { q: raw.read.name } : {} })} style={styles.quiet}>
+                <Text style={[type.text, { color: color.secondary }]}>Search cards</Text>
+              </Pressable>
+            </>
+          ) : raw.similar === null ? (
+            <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>Looking for similar cards</Text>
+          ) : (
+            <PrimaryButton title="Search cards" onPress={() => router.replace({ pathname: '/search', params: raw.read.name ? { q: raw.read.name } : {} })} />
+          )}
+          {best && preview ? (
+            <Pressable accessibilityRole="button" onPress={() => setRaw((r) => (r ? { ...r, showSimilar: false } : r))} style={styles.quiet}>
+              <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
+            </Pressable>
+          ) : (
+            again
+          )}
         </>
       ) : choosingPrint ? (
         <>
@@ -911,8 +1126,8 @@ function RawSheet({
                   }}
                   style={({ pressed }) => [styles.field, pressed && { opacity: 0.6 }]}
                 >
-                  <Text style={[type.body, { color: color.ink, fontWeight: printLabel === x.name ? '600' : '400' }]}>{x.name}</Text>
-                  <Text style={[type.rowPrice, { color: color.ink }]}>{x.marketCents ? money(x.marketCents) : ''}</Text>
+                  <Text style={[type.body, { color: color.ink, fontWeight: (print ?? 0) === i ? '600' : '400' }]}>{printName(x.name)}</Text>
+                  <Text style={[type.rowPrice, { color: color.ink }]}>{x.marketCents ? cardPrice(x.marketCents) : ''}</Text>
                 </Pressable>
               </View>
             ))}
@@ -925,7 +1140,7 @@ function RawSheet({
         <>
           <Text style={[type.section, { color: color.ink }]}>Which card is it?</Text>
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
-            {raw.matches.length} cards are numbered {printed}.
+            {raw.matches.length} cards {oneSet ? `in ${oneSet} ` : ''}are numbered {printed}.
           </Text>
           <SheetScrollView style={{ maxHeight: size.rowVault * 5 }}>
             {raw.matches.map((m, i) => (
@@ -938,15 +1153,21 @@ function RawSheet({
                 >
                   <SlabView card={rawCard(m.card, null, 'hold')} width={size.thumbW} posed={false} />
                   <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
-                      {displayName(m.card.name)}
+                    <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>
+                      {nameAndVariant(m.card.name).name}
                     </Text>
-                    <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                      {m.card.setName}
-                      {m.card.language === 'ja' ? ' · Japanese' : ''}
+                    {/* The variant is what tells these apart, so it gets its own line; the set only when they differ. */}
+                    <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
+                      {[
+                        nameAndVariant(m.card.name).variant ?? 'Regular',
+                        oneSet ? null : m.card.setName,
+                        m.card.language === 'ja' ? 'Japanese' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </Text>
                   </View>
-                  <Text style={[type.rowPrice, { color: color.ink }]}>{m.card.marketCents ? money(m.card.marketCents) : '—'}</Text>
+                  <Text style={[type.rowPrice, { color: color.ink }]}>{m.card.marketCents ? cardPrice(m.card.marketCents) : '—'}</Text>
                 </Pressable>
               </View>
             ))}
@@ -963,12 +1184,15 @@ function RawSheet({
                 {preview.name}
               </Text>
               <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
-                {best.setName} · {LANGUAGE_NAME[preview.language] ?? preview.language} · Raw
+                {best.setName}
+              </Text>
+              <Text style={[type.text, { color: color.secondary }]}>
+                {[LANGUAGE_NAME[preview.language] ?? preview.language, printLabel ?? 'Raw'].join(' · ')}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{priceCents ? money(priceCents) : '—'}</Text>
-              <Text style={[type.secondary, { color: color.secondary }]}>{priceCents ? 'TCGplayer market' : 'no price yet'}</Text>
+              <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{priceCents ? cardPrice(priceCents) : '—'}</Text>
+              <Text style={[type.secondary, { color: color.secondary }]}>{priceCents ? 'TCGplayer market' : 'no price for this print'}</Text>
             </View>
           </View>
           {copies ? (
@@ -976,13 +1200,11 @@ function RawSheet({
               You already have {copies} of this card raw. This would be your {ordinal(copies + 1)}.
             </Text>
           ) : null}
-          {raw.matches.length > 1 ? (
-            <Pressable accessibilityRole="button" onPress={() => setRaw((r) => (r ? { ...r, choosing: true } : r))} style={styles.notThis}>
-              <Text style={[type.text, { color: color.secondary }]}>
-                Not this card? {raw.matches.length - 1} other{raw.matches.length > 2 ? 's' : ''} ›
-              </Text>
-            </Pressable>
-          ) : null}
+          <Pressable accessibilityRole="button" onPress={notThis} style={styles.notThis}>
+            <Text style={[type.text, { color: color.secondary }]}>
+              {raw.matches.length > 1 ? `Not this card? ${raw.matches.length - 1} other${raw.matches.length > 2 ? 's' : ''} ›` : 'Not this card? ›'}
+            </Text>
+          </Pressable>
           {prints.length > 1 ? (
             <>
               <Hairline />
@@ -1084,6 +1306,16 @@ const useStyles = themed((color) => StyleSheet.create({
   },
   capture: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s },
+  added: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    marginTop: space.s,
+    minHeight: size.touch,
+    paddingHorizontal: space.l,
+    borderRadius: radius.field,
+    backgroundColor: color.scanHint,
+  },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center', marginTop: space.s },
   navBtn: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
   scrim: { backgroundColor: color.scanScrim },

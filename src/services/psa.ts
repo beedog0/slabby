@@ -4,6 +4,7 @@
 //   3. The PSA token lives only in Edge Function secrets.
 // Screens call `lookupCert`; nothing else talks to PSA.
 
+import { setLine } from './label';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import certsJson from '../mocks/certs.json';
 import { GAMES, gameFromBrand, gameOf } from '../lib/games';
@@ -142,7 +143,8 @@ export function titleName(subject: string): string {
 export function parseBrand(brand = ''): { game: Game; language: string; setCode: string | null; setName: string | null } {
   const game = gameFromBrand(brand) ?? 'pokemon';
   // Newer labels print "SV8a JP-..." or "SV-P JP PROMO" instead of "JAPANESE SV2a-...".
-  const language = /JAPANESE|\bJPN?\b/i.test(brand) ? 'ja' : /KOREAN|\bKOR\b/i.test(brand) ? 'ko' : /CHINESE/i.test(brand) ? 'zh' : 'en';
+  // Newer Korean labels print "SV-P KO" (Korea-only promos like the Metamong Project Ditto).
+  let language = /JAPANESE|\bJPN?\b/i.test(brand) ? 'ja' : /KOREAN|\bKOR?\b|\bKR\b/i.test(brand) ? 'ko' : /CHINESE|\bCHN\b/i.test(brand) ? 'zh' : 'en';
   const rest = brand
     .trim()
     .replace(GAMES[game].brand, '')
@@ -150,14 +152,17 @@ export function parseBrand(brand = ''): { game: Game; language: string; setCode:
   // Pokémon and One Piece codes are letters then digits (SV2a, SV-P, OP05, ST10, EB01, PRB01).
   // Riftbound's are letters only (OGN, SFD), so they only count with the hyphen after them.
   const code =
-    rest.match(/^((?:[A-Z]{1,4}\d{1,2}[a-z]?)|(?:[A-Z]{1,3}-P))(?:\s+(?:JPN?|KOR))?(?=[-\s]|$)-?/i) ??
+    rest.match(/^((?:[A-Z]{1,4}\d{1,2}[a-z]?)|(?:[A-Z]{1,3}-P))(?:\s+(?:JPN?|KOR?|KR|CHN))?(?=[-\s]|$)-?/i) ??
     (game === 'riftbound' ? rest.match(/^([A-Z]{2,4})-/i) : null);
   const setName = (code ? rest.slice(code[0].length) : rest)
-    .replace(/^(?:JPN?|KOR)\b-?\s*/i, '')
+    .replace(/^(?:JPN?|KOR?|KR|CHN)\b-?\s*/i, '')
     .replace(/^POKEMON CARD\s*/i, '')
     .trim();
   // Set codes print as letters, digits, then a lowercase variant letter: SV2a, SV-P, S12a.
   const setCode = code ? code[1].replace(/^[a-z]+/i, (l) => l.toUpperCase()).replace(/-p$/, '-P') : null;
+  // English promos print "SVP" or "SV BLACK STAR"; a hyphenated "SV-P" / "S-P" code is an Asian promo,
+  // Japanese unless the label names another language.
+  if (game === 'pokemon' && language === 'en' && setCode && /-P$/.test(setCode)) language = 'ja';
   return { game, language, setCode, setName: setName ? titleName(setName) : null };
 }
 
@@ -174,6 +179,31 @@ export function repairCard(c: Card): Card {
   const name = gameOf(c) === 'pokemon' ? splitSuffix(c.name) : c.name;
   if (name !== c.name) next = { ...next, name };
   return next;
+}
+
+// Words that don't tell two card names apart.
+const NAME_FILLER = new Set(['ex', 'gx', 'v', 'vmax', 'vstar', 'holo', 'the', 'and', 'of']);
+const nameWords = (t: string) =>
+  t
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w && !NAME_FILLER.has(w));
+
+/**
+ * The name to show once a card is matched to its catalog product. Newer Japanese labels can print
+ * a short code where the name goes ("PZA #236" on SV8a), so a label name that shares no word with
+ * the matched product's name was a misread and the product's name wins. A name that agrees
+ * ("Charizard-holo" vs "Charizard") is kept. Null when nothing should change.
+ */
+export function nameFromMatch(current: string, matched: string | null | undefined): string | null {
+  const m = matched?.trim();
+  if (!m || m === current) return null;
+  const have = nameWords(current);
+  const want = new Set(nameWords(m));
+  if (!want.size) return null;
+  return have.some((w) => want.has(w)) ? null : m;
 }
 
 /** OCR often drops the space before the suffix: "PIKACHUex" → "PIKACHU ex". */
@@ -193,7 +223,8 @@ export function cardFromCert(payload: PsaCertPayload, extra: { paidCents: number
     grade: gradeFrom(p.CardGrade ?? p.GradeDescription),
     // The glued-suffix fix ("PIKACHUex") is Pokémon-only; other games have names ending in "ex".
     name: titleName(brand.game === 'pokemon' ? splitSuffix(p.Subject ?? 'Unknown card') : p.Subject ?? 'Unknown card'),
-    setName: brand.setName,
+    // "2021 POKEMON JPN" names no set; PSA puts the product on the variety line ("25TH ANNIV-GOLDEN BOX").
+    setName: brand.setName ?? (!brand.setCode && setLine(p.Variety) ? titleName(p.Variety!.trim()) : null),
     setCode: brand.setCode,
     number: p.CardNumber ?? null,
     variety: p.Variety?.trim() || null,

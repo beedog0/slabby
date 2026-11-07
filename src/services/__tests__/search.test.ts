@@ -1,4 +1,4 @@
-import { addParams, buyPrices, cardNumber, displayName, matches, openPrices, searchCards, terms } from '../search';
+import { addParams, buyPrices, cardNumber, displayName, nameAndVariant, matches, openPrices, searchCards, terms } from '../search';
 
 describe('search helpers', () => {
   it('splits numbers out of a search', () => {
@@ -14,6 +14,9 @@ describe('search helpers', () => {
   it('drops the printed number from TCGplayer titles only', () => {
     expect(displayName('Mew ex - 205/165')).toBe('Mew ex');
     expect(displayName('Jinx - Loose Cannon')).toBe('Jinx - Loose Cannon');
+    expect(displayName('Snorunt - 046/217 (Love Ball)')).toBe('Snorunt (Love Ball)');
+    expect(nameAndVariant('Snorunt - 046/217 (Energy Symbol Pattern)')).toEqual({ name: 'Snorunt', variant: 'Energy Symbol Pattern' });
+    expect(nameAndVariant('Snorunt')).toEqual({ name: 'Snorunt', variant: null });
     expect(cardNumber('205/165')).toBe('205');
     expect(cardNumber('OP05-119')).toBe('OP05-119');
   });
