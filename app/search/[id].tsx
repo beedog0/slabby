@@ -194,7 +194,7 @@ export default function SearchedCard() {
       <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
       <ScrollView scrollEnabled={!tilting} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: insets.top + space.s, paddingBottom: space.xl }}>
         <View style={[styles.hero, { height: heroH }]}>
-          <SlabView card={slab} width={slabW} interactive onDragChange={setTilting} />
+          <SlabView card={slab} width={slabW} interactive spotlight onDragChange={setTilting} />
         </View>
 
         <View style={styles.titleRow}>

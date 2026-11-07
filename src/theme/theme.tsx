@@ -40,6 +40,11 @@ export function useColors(): Palette {
   return forced ?? palettes[scheme];
 }
 
+/** True on the dark palette (honours PaletteScope, so the share image stays light). */
+export function useIsDark(): boolean {
+  return useColors() === dark;
+}
+
 /** A StyleSheet per palette, built once each, read with the returned hook. */
 export function themed<T>(build: (color: Palette) => T): () => T {
   const cache = new Map<Palette, T>();

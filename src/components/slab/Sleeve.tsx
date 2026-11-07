@@ -5,7 +5,8 @@
 import { useState } from 'react';
 import { Animated, StyleSheet, View, type ViewStyle } from 'react-native';
 import { shadow } from '../../theme/tokens';
-import { useColors } from '../../theme/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useColors, useIsDark } from '../../theme/theme';
 import type { Card } from '../../types';
 import { ArtImage } from '../ArtImage';
 
@@ -20,6 +21,7 @@ export function scanAspect(width: number, height: number): number {
 
 export function Sleeve({ card, width, transform, sharp = false }: { card: Card; width: number; transform?: ViewStyle['transform']; sharp?: boolean }) {
   const color = useColors();
+  const dark = useIsDark();
   const uri = card.imageFrontUrl;
   const [aspect, setAspect] = useState(() => (uri && aspects.get(uri)) || CARD_ASPECT);
   const w = width * 0.86;
@@ -46,11 +48,22 @@ export function Sleeve({ card, width, transform, sharp = false }: { card: Card; 
           style={[StyleSheet.absoluteFill, { borderRadius: r }]}
         />
       ) : null}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sleeve, { borderRadius: r }]} />
+      {dark ? (
+        // Lit from above on black, like the slab: the lower part of the card falls into shade.
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.22)']}
+          locations={[0, 0.45, 1]}
+          style={[StyleSheet.absoluteFill, { borderRadius: r }]}
+        />
+      ) : null}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, dark ? styles.sleeveDark : styles.sleeve, { borderRadius: r }]} />
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   sleeve: { borderWidth: StyleSheet.hairlineWidth * 2, borderColor: 'rgba(0,0,0,0.10)', backgroundColor: 'rgba(255,255,255,0.06)' },
+  // On black the penny sleeve's edge catches the light instead of casting a line.
+  sleeveDark: { borderWidth: StyleSheet.hairlineWidth * 2, borderColor: 'rgba(255,255,255,0.22)', backgroundColor: 'rgba(255,255,255,0.04)' },
 });

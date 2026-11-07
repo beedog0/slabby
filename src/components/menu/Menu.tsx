@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { cardLabel, gradeLabel, rowTitle } from '../../lib/format';
+import { cardLabel, rowTitle } from '../../lib/format';
 import { motion, radius, size, space, type } from '../../theme/tokens';
 import { themed, useColors } from '../../theme/theme';
 import type { Card } from '../../types';

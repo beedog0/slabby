@@ -6,7 +6,7 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
-// Pills sit over the camera, so they use the fixed camera palette, not the app's light/dark one.
+// Camera chrome: looks the same in light and dark, like the rest of Scan's camera overlay.
 import { light as color, space, type } from '../../theme/tokens';
 
 export type PillState = 'none' | 'seen' | 'done';

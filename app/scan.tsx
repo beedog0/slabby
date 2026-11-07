@@ -964,8 +964,8 @@ function rawCard(c: CatalogCard, paidCents: number | null, plan: 'hold' | 'sell'
 
 /** Cards to pick from after "Not this card?" or a missed number: art, name, set · number, price. */
 function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: CatalogCard) => void }) {
-  const styles = useStyles();
   const color = useColors();
+  const styles = useStyles();
   return (
     <SheetScrollView style={{ maxHeight: size.rowVault * 4 }}>
       {cards.map((c, i) => (

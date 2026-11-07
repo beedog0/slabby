@@ -11,20 +11,20 @@ import type { Card } from '../../types';
 import { light as color, size, type } from '../../theme/tokens';
 
 /** Where the visible object sits inside SlabView's box: the whole slab, or the smaller raw card. */
-function frame(card: Pick<Card, 'grader'>, slabW: number) {
+function frame(card: Pick<Card, 'grader'>, slabW: number, anchor: 'center' | 'bottom' = 'center') {
   const h = (slabW * size.heroH) / size.heroW;
   if (card.grader !== 'raw') return { top: 0, left: 0, w: slabW, h };
   const w = slabW * 0.86;
   const ch = w * (88 / 63);
-  return { top: (h - ch) / 2, left: (slabW - w) / 2, w, h: ch };
+  return { top: anchor === 'bottom' ? h - ch : (h - ch) / 2, left: (slabW - w) / 2, w, h: ch };
 }
 
 const badge = (slabW: number) => Math.round(Math.max(18, Math.min(24, slabW * 0.12)));
 
 /** Place inside the relatively positioned wrapper around SlabView. */
-export function PinMark({ slabW, card }: { slabW: number; card: Pick<Card, 'grader'> }) {
+export function PinMark({ slabW, card, anchor }: { slabW: number; card: Pick<Card, 'grader'>; anchor?: 'center' | 'bottom' }) {
   const d = badge(slabW);
-  const f = frame(card, slabW);
+  const f = frame(card, slabW, anchor);
   return (
     <View
       pointerEvents="none"
@@ -55,10 +55,10 @@ export function PinMark({ slabW, card }: { slabW: number; card: Pick<Card, 'grad
   );
 }
 
-export function CopiesMark({ slabW, card, copies }: { slabW: number; card: Pick<Card, 'grader'>; copies: number }) {
+export function CopiesMark({ slabW, card, copies, anchor }: { slabW: number; card: Pick<Card, 'grader'>; copies: number; anchor?: 'center' | 'bottom' }) {
   if (copies < 2) return null;
   const d = badge(slabW);
-  const f = frame(card, slabW);
+  const f = frame(card, slabW, anchor);
   return (
     <View
       pointerEvents="none"
