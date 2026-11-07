@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, Hairline, IconButton, Stepper, Toggle } from '../../src/components/ui';
 import { money, rulePct } from '../../src/lib/format';
+import { LAST_DAY_CUT_PCT } from '../../src/pricing/rules';
 import { useRules } from '../../src/store/rules';
 import { color, size, space, type } from '../../src/theme/tokens';
 import type { PricingRules } from '../../src/types';
@@ -18,6 +19,7 @@ export default function PricingRulesScreen() {
   const insets = useSafeAreaInsets();
   const rules = useRules((s) => s.rules);
   const set = useRules((s) => s.set);
+  const cut = rules.lastDayCutPct ?? LAST_DAY_CUT_PCT;
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   const pctRow = (key: keyof PricingRules, title: string, sub: string) => {
@@ -72,6 +74,19 @@ export default function PricingRulesScreen() {
             <Text style={[type.secondary, { color: color.secondary }]}>floor can't drop under what you paid</Text>
           </View>
           <Toggle label="Never sell at a loss" value={rules.neverBelowPaid} onChange={(v) => set({ neverBelowPaid: v })} />
+        </View>
+        <Hairline />
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={[type.body, { color: color.ink }]}>Last-day prices</Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>floor cut in con mode</Text>
+          </View>
+          <Stepper
+            label="Last-day prices"
+            value={rulePct(-cut)}
+            onMinus={() => set({ lastDayCutPct: Math.min(50, cut + STEP) })}
+            onPlus={() => set({ lastDayCutPct: Math.max(1, cut - STEP) })}
+          />
         </View>
         <Hairline />
 

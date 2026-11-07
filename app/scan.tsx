@@ -34,7 +34,7 @@ import { CostField, EMPTY_COST, paidCentsOf, toCost, type CostInput } from '../s
 import { ask as ruleAsk } from '../src/pricing/rules';
 import { useRules } from '../src/store/rules';
 import { useSellDraft, type SellDraft } from '../src/store/sellDraft';
-import { ScanPills } from '../src/components/scan/ScanPills';
+import { ScanPills, type PillState, type ScanPill } from '../src/components/scan/ScanPills';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
@@ -107,7 +107,14 @@ export default function Scan() {
   const [active, setActive] = useState(AppState.currentState === 'active');
   // A label was read once and we're waiting for a second matching read.
   const [spotted, setSpotted] = useState(false);
-  const [progress, setProgress] = useState<AutoProgress>(autoProgress(null));
+  const [progress, setProgressState] = useState<AutoProgress>(autoProgress(null));
+  /** A loose card's read so far (Number · Set pills), in place of the slab pills. */
+  const [cardPills, setCardPills] = useState<ScanPill[] | null>(null);
+  // Every slab-pill update or reset also clears the loose-card pills.
+  const setProgress = (p: AutoProgress) => {
+    setProgressState(p);
+    setCardPills(null);
+  };
   // The read succeeded: the frame closes solid with a check for a beat, then the sheet rises.
   const [locked, setLocked] = useState(false);
   const sheetIn = useRef(new Animated.Value(0)).current;
@@ -418,6 +425,14 @@ export default function Scan() {
         // A loose card: two matching reads of its number in a row add it.
         auto.current = step.state;
         const key = cardSteadyKey(loose);
+        const n = loose.numbers[0];
+        const steady = !!key && key === lastKey.current;
+        const pill = (has: boolean): PillState => (!has ? 'none' : steady ? 'done' : 'seen');
+        setProgressState(autoProgress(null));
+        setCardPills([
+          { key: 'number', label: 'Number', state: pill(!!n), value: n && steady ? printedNumber(n) : undefined },
+          { key: 'set', label: 'Set', state: pill(!!loose.codes[0]), value: loose.codes[0] && steady ? loose.codes[0] : undefined },
+        ]);
         if (!key) {
           lastKey.current = null;
           setSpotted(false);
@@ -612,7 +627,7 @@ export default function Scan() {
         {labelMode && canUseCamera && !result ? (
           // What the read has so far: each pill lights up with its value once confirmed.
           <ScanPills
-            pills={[
+            pills={cardPills ?? [
               { key: 'name', label: 'Name', ...progress.name, value: progress.name.value && titleName(progress.name.value) },
               { key: 'grade', label: 'Grade', ...progress.grade, value: progress.grade.value && `PSA ${gradeFrom(progress.grade.value) ?? progress.grade.value}` },
               { key: 'cert', label: 'Cert', ...progress.cert },

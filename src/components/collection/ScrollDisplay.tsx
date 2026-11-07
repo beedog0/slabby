@@ -279,6 +279,13 @@ function SwipeCaption({ row }: { row: CardRow }) {
         ) : null}
       </>
     );
+  } else if (made != null && !card.paidCents) {
+    // Pulled or gifted: no cost, so no percent (it would be infinite).
+    line = (
+      <>
+        <Text style={tint(made)}>{signedMoney(made)}</Text> · paid nothing
+      </>
+    );
   } else if (made != null) {
     line = (
       <>
