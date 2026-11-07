@@ -479,7 +479,7 @@ export default function Scan() {
               ) : (
                 <>
                   <Text style={[type.text, { color: color.secondary, paddingBottom: space.s }]}>
-                    {similar.length ? 'Pick the card in this slab. Slabby will remember it.' : `No other cards named ${preview.name}.`}
+                    {similar.length ? 'Pick the card in this slab.' : `No other cards named ${preview.name}.`}
                   </Text>
                   <CardPickList cards={similar} onPick={correctSlab} />
                   <View style={{ flexDirection: 'row', gap: space.xl }}>
