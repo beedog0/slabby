@@ -38,11 +38,11 @@ import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
 import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
-import { gradeLabel, money, rowTitle } from '../src/lib/format';
+import { cardPrice, gradeLabel, money, rowTitle } from '../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
 import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
-import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, parseCardText, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
-import { cardNumber, displayName, mockProductId, type CatalogCard } from '../src/services/search';
+import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, parseCardText, printName, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { cardNumber, displayName, mockProductId, nameAndVariant, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
@@ -874,12 +874,13 @@ function RawSheet({
     setChoosingPrint(false);
   }, [best?.productId]);
   const prints = best ? printOptions(best) : [];
-  const known = !!best?.printings?.length;
-  const chosen = print != null ? prints[print] : null;
-  // The base printing needs no suffix; an unpriced fallback choice always gets one.
-  const printSuffix = chosen && (!known || print! > 0) ? chosen.name : null;
-  const printLabel = chosen?.name ?? (known ? prints[0].name : 'As listed');
-  const priceCents = chosen?.marketCents ?? best?.marketCents ?? null;
+  // Index 0 is the catalog's own print (or the likely one before the catalog lists prints).
+  const chosen = prints[print ?? 0] ?? null;
+  // The default print needs no suffix; another one goes in the name, in plain words.
+  const printSuffix = chosen && print ? printName(chosen.name) : null;
+  const printLabel = chosen ? printName(chosen.name) : null;
+  // A print without its own price shows no price rather than the default print's.
+  const priceCents = chosen ? chosen.marketCents : (best?.marketCents ?? null);
   const preview = best ? rawCard(best, null, plan, printSuffix) : null;
   const copies = preview ? owned.filter((c) => c.status === 'owned' && cardKey(c) === cardKey(preview)).length : 0;
 
@@ -903,6 +904,9 @@ function RawSheet({
     openSell({ card, productId: best.productId, marketCents: priceCents, askCents, cost: toCost(cost), afterSave }, startSell);
   };
 
+  // Candidates usually share a set (variants of one card); then the set goes in the header once.
+  const sets = new Set(raw.matches?.map((m) => m.card.setName) ?? []);
+  const oneSet = sets.size === 1 ? [...sets][0] : null;
   const choose = (i: number) => setRaw((r) => (r ? { ...r, pick: i, choosing: false } : r));
   const again = (
     <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
@@ -945,8 +949,8 @@ function RawSheet({
                   }}
                   style={({ pressed }) => [styles.field, pressed && { opacity: 0.6 }]}
                 >
-                  <Text style={[type.body, { color: color.ink, fontWeight: printLabel === x.name ? '600' : '400' }]}>{x.name}</Text>
-                  <Text style={[type.rowPrice, { color: color.ink }]}>{x.marketCents ? money(x.marketCents) : ''}</Text>
+                  <Text style={[type.body, { color: color.ink, fontWeight: (print ?? 0) === i ? '600' : '400' }]}>{printName(x.name)}</Text>
+                  <Text style={[type.rowPrice, { color: color.ink }]}>{x.marketCents ? cardPrice(x.marketCents) : ''}</Text>
                 </Pressable>
               </View>
             ))}
@@ -959,7 +963,7 @@ function RawSheet({
         <>
           <Text style={[type.section, { color: color.ink }]}>Which card is it?</Text>
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
-            {raw.matches.length} cards are numbered {printed}.
+            {raw.matches.length} cards {oneSet ? `in ${oneSet} ` : ''}are numbered {printed}.
           </Text>
           <ScrollView style={{ maxHeight: size.rowVault * 5 }}>
             {raw.matches.map((m, i) => (
@@ -972,15 +976,21 @@ function RawSheet({
                 >
                   <SlabView card={rawCard(m.card, null, 'hold')} width={size.thumbW} posed={false} />
                   <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
-                      {displayName(m.card.name)}
+                    <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>
+                      {nameAndVariant(m.card.name).name}
                     </Text>
-                    <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                      {m.card.setName}
-                      {m.card.language === 'ja' ? ' · Japanese' : ''}
+                    {/* The variant is what tells these apart, so it gets its own line; the set only when they differ. */}
+                    <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
+                      {[
+                        nameAndVariant(m.card.name).variant ?? 'Regular',
+                        oneSet ? null : m.card.setName,
+                        m.card.language === 'ja' ? 'Japanese' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </Text>
                   </View>
-                  <Text style={[type.rowPrice, { color: color.ink }]}>{m.card.marketCents ? money(m.card.marketCents) : '—'}</Text>
+                  <Text style={[type.rowPrice, { color: color.ink }]}>{m.card.marketCents ? cardPrice(m.card.marketCents) : '—'}</Text>
                 </Pressable>
               </View>
             ))}
@@ -997,12 +1007,15 @@ function RawSheet({
                 {preview.name}
               </Text>
               <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
-                {best.setName} · {LANGUAGE_NAME[preview.language] ?? preview.language} · Raw
+                {best.setName}
+              </Text>
+              <Text style={[type.text, { color: color.secondary }]}>
+                {[LANGUAGE_NAME[preview.language] ?? preview.language, printLabel ?? 'Raw'].join(' · ')}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{priceCents ? money(priceCents) : '—'}</Text>
-              <Text style={[type.secondary, { color: color.secondary }]}>{priceCents ? 'TCGplayer market' : 'no price yet'}</Text>
+              <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{priceCents ? cardPrice(priceCents) : '—'}</Text>
+              <Text style={[type.secondary, { color: color.secondary }]}>{priceCents ? 'TCGplayer market' : 'no price for this print'}</Text>
             </View>
           </View>
           {copies ? (
