@@ -165,18 +165,14 @@ export default function Scan() {
         setLabelMiss(true);
         auto.current = null;
         setSpotted(false);
-      setProgress(autoProgress(null));
         setProgress(autoProgress(null));
-    setProgress(autoProgress(null));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         return;
       }
       if (step.ready && justAdded(step.ready)) {
         auto.current = null;
         setSpotted(false);
-      setProgress(autoProgress(null));
         setProgress(autoProgress(null));
-    setProgress(autoProgress(null));
         return;
       }
       if (step.ready) return accept(step.ready);
@@ -255,7 +251,6 @@ export default function Scan() {
       auto.current = null;
       setSpotted(false);
       setProgress(autoProgress(null));
-    setProgress(autoProgress(null));
     };
   }, [autoOn]);
 
