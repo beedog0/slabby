@@ -236,7 +236,14 @@ export function ScrollDisplay({
  * slabs for sale, the sale vs paid for sold ones. The 30-day chart lives on the detail screen.
  */
 const signedMoney = (cents: number) => `${cents >= 0 ? '+' : '−'}${money(Math.abs(cents))}`;
+const shortDay = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
+/**
+ * Each line has one owner, so the market and your own numbers never blur:
+ * - Line 1 is the market: the price, with this week's move attached like a ticker ("−2% this week").
+ * - Line 2 is you: what you've made ("+$190 (+45%) on $420 paid"), or, for sale, your ask and floor.
+ * Green/red only ever means up or down. The floor is a rule you set, so it stays ink.
+ */
 function SwipeCaption({ row }: { row: CardRow }) {
   const { card, price } = row;
   const sold = card.status === 'sold';
@@ -244,11 +251,9 @@ function SwipeCaption({ row }: { row: CardRow }) {
   const value = sold ? card.soldCents : price?.marketCents;
   const muted = { color: color.secondary };
   const ink = { color: color.ink };
-  // Last 7 days of market movement, beside the price: "+$25 (+2%) 7d".
   const week = weekChange(row);
-  const signed = (cents: number) => (
-    <Text style={{ color: cents >= 0 ? color.gain : color.loss }}>{`${cents >= 0 ? '+' : ''}${money(cents)}`}</Text>
-  );
+  const tint = (cents: number) => ({ color: cents >= 0 ? color.gain : color.loss });
+  const made = value != null && card.paidCents != null ? value - card.paidCents : null;
 
   let line: React.ReactNode;
   if (selling && row.ask != null) {
@@ -257,21 +262,30 @@ function SwipeCaption({ row }: { row: CardRow }) {
         Ask <Text style={ink}>{money(row.ask)}</Text>
         {row.floor != null ? (
           <>
-            {' · '}floor <Text style={{ color: color.loss }}>{money(row.floor)}</Text>
+            {' · '}floor <Text style={ink}>{money(row.floor)}</Text>
           </>
         ) : null}
       </>
     );
-  } else if (value != null && card.paidCents != null) {
+  } else if (sold) {
     line = (
       <>
-        {signed(value - card.paidCents)}
-        {sold ? ' · sold, paid ' : ' · paid '}
-        <Text style={ink}>{money(card.paidCents)}</Text>
+        {card.soldAt ? `Sold ${shortDay(card.soldAt)}` : 'Sold'}
+        {made != null ? (
+          <>
+            {' · '}
+            <Text style={tint(made)}>{signedMoney(made)}</Text> profit
+          </>
+        ) : null}
       </>
     );
-  } else if (sold) {
-    line = 'Sold';
+  } else if (made != null) {
+    line = (
+      <>
+        <Text style={tint(made)}>{`${signedMoney(made)} (${pct(made / card.paidCents!)})`}</Text> on{' '}
+        <Text style={ink}>{money(card.paidCents!)}</Text> paid
+      </>
+    );
   } else if (price) {
     line = card.grader === 'raw' ? 'TCGplayer market' : 'eBay sold, 30 days';
   } else {
@@ -292,7 +306,7 @@ function SwipeCaption({ row }: { row: CardRow }) {
         {week ? (
           <Text style={[type.secondary, muted]}>
             {'  '}
-            <Text style={{ color: week.cents >= 0 ? color.gain : color.loss }}>{`${signedMoney(week.cents)} (${pct(week.fraction)})`}</Text> 7d
+            <Text style={tint(week.cents)}>{pct(week.fraction)}</Text> this week
           </Text>
         ) : null}
       </Text>

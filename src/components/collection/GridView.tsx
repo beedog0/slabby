@@ -52,7 +52,7 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
   const { card, price } = row;
   const sold = card.status === 'sold';
   const value = sold ? card.soldCents : price?.marketCents;
-  // Last 7 days of market movement, like the search grid's "+3% 7d". What you paid is on the card.
+  // Last 7 days of market movement, as "+3% this week". What you paid is on the card.
   const week = weekChange(row);
   const align = center ? 'center' : 'flex-start';
   return (
@@ -70,7 +70,7 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
       <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
         {week ? (
           <>
-            <Text style={{ color: week.cents >= 0 ? color.gain : color.loss }}>{pct(week.fraction)}</Text> 7d
+            <Text style={{ color: week.cents >= 0 ? color.gain : color.loss }}>{pct(week.fraction)}</Text> this week
           </>
         ) : (
           ' '
