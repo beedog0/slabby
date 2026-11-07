@@ -33,6 +33,12 @@ const LOCK_MS = 450; // the locked frame and its check stay up this long before 
 const SHEET_IN_MS = 260;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** A read's identity: the cert, else name and grade. */
+const readId = (p: ParsedLabel) => {
+  const c = p.payload.PSACert;
+  return c.CertNumber || `${(c.Subject ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')}|${c.CardGrade ?? ''}`;
+};
+
 export default function Scan() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
@@ -60,6 +66,9 @@ export default function Scan() {
   const manualAsk = useRef(false);
   // What auto-read has gathered so far for the card in frame (fields merge across frames).
   const auto = useRef<AutoRead>(null);
+  // The last card read. Once it's in the vault, auto-read ignores it, so the slab just added (and
+  // still in frame after the sheet closes) isn't read again. A tap still reads it.
+  const lastRead = useRef<string | null>(null);
   const win = useWindowDimensions();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
@@ -107,6 +116,7 @@ export default function Scan() {
     parsed.payload.PSACert.CertNumber = cert ?? '';
     lastCert.current = cert || null;
     auto.current = null;
+    lastRead.current = readId(parsed);
     setSpotted(false);
     setLabelMiss(false);
     setLocked(true);
@@ -150,6 +160,11 @@ export default function Scan() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         return;
       }
+      if (step.ready && justAdded(step.ready)) {
+        auto.current = null;
+        setSpotted(false);
+        return;
+      }
       if (step.ready) return accept(step.ready);
       if (step.state && !auto.current) Haptics.selectionAsync().catch(() => {});
       auto.current = step.state;
@@ -167,6 +182,12 @@ export default function Scan() {
       inFlight.current = false;
       setReading(false);
     }
+  };
+  // The card auto-read just read, now owned (cert match), or with no cert to check by.
+  const justAdded = (p: ParsedLabel) => {
+    if (readId(p) !== lastRead.current) return false;
+    const cert = p.payload.PSACert.CertNumber;
+    return !cert || useVault.getState().cards.some((c) => c.certNumber === cert && c.status === 'owned');
   };
   const captureRef = useRef(capture);
   captureRef.current = capture;
