@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Animated, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
+import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/sheet/useSheetDrag';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
@@ -317,6 +318,8 @@ function FilterSheet({
   const [mounted, setMounted] = useState(open);
   const [sheetH, setSheetH] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
+  // Pull down anywhere on the sheet, over the rows too, to close it.
+  const sheet = useSheetDrag(onClose);
 
   useEffect(() => {
     if (open) setMounted(true);
@@ -327,6 +330,7 @@ function FilterSheet({
 
   useEffect(() => {
     if (open && mounted && sheetH) {
+      sheet.reset();
       progress.setValue(0);
       Animated.timing(progress, { toValue: 1, duration: 260, useNativeDriver: true }).start();
     }
@@ -349,14 +353,16 @@ function FilterSheet({
       </Animated.View>
       <Animated.View
         onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
+        {...sheet.panHandlers}
         style={[
           styles.sheet,
           { paddingBottom: bottom + space.l },
           sheetH
-            ? { transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [sheetH, 0] }) }] }
+            ? { transform: [{ translateY: Animated.add(progress.interpolate({ inputRange: [0, 1], outputRange: [sheetH, 0] }), sheet.drag) }] }
             : { opacity: 0 },
         ]}
       >
+        <SheetScope value={sheet.scope}>
         <View style={styles.grabber} />
         <View style={styles.sheetHead}>
           <Text style={[type.section, { color: color.ink }]}>Filter</Text>
@@ -366,7 +372,7 @@ function FilterSheet({
             </Pressable>
           ) : null}
         </View>
-        <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: space.l }}>
+        <SheetScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: space.l }}>
           {showLanguage ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Language</Text>
@@ -415,10 +421,11 @@ function FilterSheet({
           {!facets ? (
             <Text style={[type.text, styles.gutter, { color: color.secondary }]}>Type a search to see its sets and rarities.</Text>
           ) : null}
-        </ScrollView>
+        </SheetScrollView>
         <View style={styles.gutter}>
           <PrimaryButton title={`Show ${count} ${count === 1 ? 'card' : 'cards'}`} onPress={onClose} />
         </View>
+        </SheetScope>
       </Animated.View>
     </Modal>
   );

@@ -21,13 +21,14 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Keyboard, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, AppState, Easing, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { backToCon } from '../src/components/conStatusMenu';
 import { KEYBOARD_DONE, KeyboardDone, useKeyboardHeight } from '../src/components/KeyboardDone';
 import { SlabView } from '../src/components/SlabView';
 import { AskStep } from '../src/components/sell/AskStep';
+import { SheetScope, SheetScrollView, useSheetDrag } from '../src/components/sheet/useSheetDrag';
 import { CostField, EMPTY_COST, paidCentsOf, toCost, type CostInput } from '../src/components/sell/CostField';
 import { ask as ruleAsk } from '../src/pricing/rules';
 import { useRules } from '../src/store/rules';
@@ -59,6 +60,7 @@ const NAV_H = 44;
 const LABEL_SHARE = 0.2;
 const LOCK_MS = 450; // the locked frame and its check stay up this long before the sheet rises
 const SHEET_IN_MS = 260;
+const SHEET_OUT_MS = 200;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function Scan() {
@@ -217,6 +219,24 @@ export default function Scan() {
     setLossConfirm(false);
     setRaw(null);
   };
+
+  // Pull either result sheet down, from anywhere on it, to put it away: same as Scan again.
+  const sheet = useSheetDrag(() => {
+    Keyboard.dismiss();
+    Animated.timing(sheet.drag, {
+      toValue: win.height,
+      duration: SHEET_OUT_MS,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: Platform.OS !== 'web',
+    }).start(() => {
+      rescan();
+      sheet.reset();
+    });
+  });
+  const rawOpen = !!raw;
+  useEffect(() => {
+    if (rawOpen) sheet.reset();
+  }, [rawOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const acceptCard = (read: ParsedCard) => {
     lastKey.current = null;
@@ -388,6 +408,7 @@ export default function Scan() {
   // The sheet slides up whenever a result arrives.
   useEffect(() => {
     if (!result) return;
+    sheet.reset();
     sheetIn.setValue(0);
     Animated.timing(sheetIn, {
       toValue: 1,
@@ -544,16 +565,18 @@ export default function Scan() {
         <Pressable accessibilityLabel="Close keyboard" style={StyleSheet.absoluteFill} onPress={() => Keyboard.dismiss()} />
       ) : null}
 
-      {raw ? <RawSheet raw={raw} setRaw={setRaw} rescan={rescan} bottom={insets.bottom} keyboardH={keyboardH} /> : null}
+      {raw ? <RawSheet raw={raw} setRaw={setRaw} rescan={rescan} bottom={insets.bottom} keyboardH={keyboardH} sheet={sheet} /> : null}
 
       {result ? (
         <Animated.View
           style={[
             styles.sheet,
             keyboardH > 0 ? { bottom: keyboardH, paddingBottom: space.l } : { paddingBottom: insets.bottom + space.l },
-            { transform: [{ translateY: sheetIn.interpolate({ inputRange: [0, 1], outputRange: [win.height * 0.6, 0] }) }] },
+            { transform: [{ translateY: Animated.add(sheetIn.interpolate({ inputRange: [0, 1], outputRange: [win.height * 0.6, 0] }), sheet.drag) }] },
           ]}
+          {...sheet.panHandlers}
         >
+          <SheetScope value={sheet.scope}>
           <View style={styles.grabber} />
           {result.status === 'found' && preview ? (
             <>
@@ -735,6 +758,7 @@ export default function Scan() {
               </Pressable>
             </>
           )}
+          </SheetScope>
         </Animated.View>
       ) : null}
       <KeyboardDone />
@@ -773,12 +797,15 @@ function RawSheet({
   rescan,
   bottom,
   keyboardH,
+  sheet,
 }: {
   raw: RawRead;
   setRaw: (f: (r: RawRead | null) => RawRead | null) => void;
   rescan: () => void;
   bottom: number;
   keyboardH: number;
+  /** The scan screen's pull-down: drag it anywhere, over the pick list too, to go back to the camera. */
+  sheet: ReturnType<typeof useSheetDrag>;
 }) {
   const [cost, setCost] = useState<CostInput>(EMPTY_COST);
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
@@ -835,7 +862,15 @@ function RawSheet({
   );
 
   return (
-    <View style={[styles.sheet, keyboardH > 0 ? { bottom: keyboardH, paddingBottom: space.l } : { paddingBottom: bottom + space.l }]}>
+    <Animated.View
+      style={[
+        styles.sheet,
+        keyboardH > 0 ? { bottom: keyboardH, paddingBottom: space.l } : { paddingBottom: bottom + space.l },
+        { transform: [{ translateY: sheet.drag }] },
+      ]}
+      {...sheet.panHandlers}
+    >
+      <SheetScope value={sheet.scope}>
       <View style={styles.grabber} />
       {raw.matches === null ? (
         <>
@@ -857,7 +892,7 @@ function RawSheet({
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
             A photo can’t tell holo from reverse holo. Pick the one in your hand.
           </Text>
-          <ScrollView style={{ maxHeight: size.rowVault * 5 }}>
+          <SheetScrollView style={{ maxHeight: size.rowVault * 5 }}>
             {prints.map((x, i) => (
               <View key={x.name}>
                 {i ? <Hairline /> : null}
@@ -874,7 +909,7 @@ function RawSheet({
                 </Pressable>
               </View>
             ))}
-          </ScrollView>
+          </SheetScrollView>
           <Pressable accessibilityRole="button" onPress={() => setChoosingPrint(false)} style={styles.quiet}>
             <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
           </Pressable>
@@ -885,7 +920,7 @@ function RawSheet({
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
             {raw.matches.length} cards are numbered {printed}.
           </Text>
-          <ScrollView style={{ maxHeight: size.rowVault * 5 }}>
+          <SheetScrollView style={{ maxHeight: size.rowVault * 5 }}>
             {raw.matches.map((m, i) => (
               <View key={m.card.productId}>
                 {i ? <Hairline /> : null}
@@ -908,7 +943,7 @@ function RawSheet({
                 </Pressable>
               </View>
             ))}
-          </ScrollView>
+          </SheetScrollView>
           {again}
         </>
       ) : (
@@ -995,7 +1030,8 @@ function RawSheet({
           )}
         </>
       )}
-    </View>
+      </SheetScope>
+    </Animated.View>
   );
 }
 
