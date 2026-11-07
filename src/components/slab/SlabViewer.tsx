@@ -7,14 +7,15 @@ import { useEffect, useRef } from 'react';
 import { Animated, Modal, PanResponder, StyleSheet, Text, View, useWindowDimensions, type GestureResponderEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { color, slabPose, space, type } from '../../theme/tokens';
+import { color, space, type } from '../../theme/tokens';
 import type { Card } from '../../types';
 import { IconButton } from '../ui';
 import { SLAB_ASPECT } from './geometry';
 import { Slab3D } from './Slab3D';
 
-const REST_YAW = parseFloat(slabPose.rotateY);
-const REST_PITCH = parseFloat(slabPose.rotateX);
+// The viewer rests square to the screen, front or back.
+const REST_YAW = 0;
+const REST_PITCH = 0;
 const DEG_PER_PT = 0.55; // sideways drag → spin
 const PITCH_MAX = 38;
 const ZOOM_MAX = 2.4;
