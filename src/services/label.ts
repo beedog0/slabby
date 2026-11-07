@@ -156,54 +156,103 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
 }
 
 // ── Auto-read on the scan screen ────────────────────────────────────────────────────────────────
-// Each frame is read on its own, but a slab held at a slight angle rarely gives every field in one
-// frame. So reads of the same card are merged: the grade can come from one frame and the cert from
-// the next. The grade is never guessed: no card is added without a grade number read off the label.
+// Each frame is read on its own and the frames vote. A blurry frame still yields text, just wrong
+// text ("TT TH AN NY - COLDEN BOX" for "25TH ANNIV-GOLDEN BOX"), and different wrong text each
+// time, so the name must come out the same in two frames before it counts. The grade and cert are
+// strict formats (a garbled one doesn't parse at all), so one frame is enough for those, and they
+// can come from different frames. The grade is never guessed.
 
-export type AutoRead = { label: ParsedLabel; hits: number; misses: number } | null;
+type Vote = { value: string; count: number };
+export type AutoRead = {
+  /** Name votes, by normalized name, with the last frame that read it (for set, number, variety). */
+  names: Record<string, Vote & { label: ParsedLabel }>;
+  grade: Vote | null;
+  cert: Vote | null;
+  misses: number;
+} | null;
+
+/** What the frame has confirmed so far, for the progress row on the scan screen. */
+export type AutoProgress = { name: 'none' | 'seen' | 'sure'; grade: boolean; cert: boolean };
 
 const norm = (s?: string) => (s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const graded = (g?: string) => !!g && (/\d$/.test(g) || /^AUTH/.test(g));
-
-function sameCard(a: ParsedLabel, b: ParsedLabel): boolean {
-  const x = a.payload.PSACert;
-  const y = b.payload.PSACert;
-  if (x.CertNumber && y.CertNumber) return x.CertNumber === y.CertNumber;
-  return !!x.Subject && norm(x.Subject) === norm(y.Subject);
-}
-
-function merge(a: ParsedLabel, b: ParsedLabel): ParsedLabel {
-  const x = a.payload.PSACert;
-  const y = b.payload.PSACert;
-  const PSACert = {
-    ...x,
-    CertNumber: x.CertNumber || y.CertNumber,
-    Year: x.Year ?? y.Year,
-    Brand: x.Brand ?? y.Brand,
-    CardNumber: x.CardNumber ?? y.CardNumber,
-    Subject: x.Subject ?? y.Subject,
-    Variety: x.Variety ?? y.Variety,
-    CardGrade: graded(x.CardGrade) ? x.CardGrade : graded(y.CardGrade) ? y.CardGrade : (x.CardGrade ?? y.CardGrade),
-  };
-  return { payload: { PSACert }, complete: !!(PSACert.Subject && PSACert.CertNumber && graded(PSACert.CardGrade)) };
-}
-
 /** Frames without a label we tolerate (a glare, a wobble) before forgetting what we've read. */
 const MISS_LIMIT = 3;
 
+const vote = (v: Vote | null, value: string): Vote =>
+  v && v.value === value ? { value, count: v.count + 1 } : !v || v.count <= 1 ? { value, count: 1 } : v;
+
+function topName(state: NonNullable<AutoRead>) {
+  return Object.values(state.names).sort((a, b) => b.count - a.count)[0] ?? null;
+}
+
+export function autoProgress(state: AutoRead): AutoProgress {
+  const top = state ? topName(state) : null;
+  return { name: !top ? 'none' : top.count >= 2 ? 'sure' : 'seen', grade: !!state?.grade, cert: !!state?.cert };
+}
+
 /**
- * Feed one frame's parse. Returns the new state, and the label to add when it's ready: name and
- * grade number plus the cert, or name and grade number seen in two frames when the cert won't read.
+ * Feed one frame's parse. Returns the new state, and the label to add when it's ready: a name read
+ * the same in two frames, a grade number, and the cert (or, when the cert won't read, the grade
+ * read the same in two frames).
  */
 export function stepAutoRead(state: AutoRead, next: ParsedLabel | null): { state: AutoRead; ready: ParsedLabel | null } {
-  if (!next?.payload.PSACert.Subject) {
+  const c = next?.payload.PSACert;
+  if (!c?.Subject) {
     if (!state) return { state: null, ready: null };
     const misses = state.misses + 1;
     return { state: misses >= MISS_LIMIT ? null : { ...state, misses }, ready: null };
   }
-  const label = state && sameCard(state.label, next) ? merge(state.label, next) : merge(next, next);
-  const hits = state && sameCard(state.label, next) ? state.hits + 1 : 1;
-  const c = label.payload.PSACert;
-  const ready = graded(c.CardGrade) && (!!c.CertNumber || hits >= 2) ? label : null;
-  return { state: ready ? null : { label, hits, misses: 0 }, ready };
+  // A different cert and a different name: another slab came into frame, so start over.
+  if (state?.cert && c.CertNumber && state.cert.value !== c.CertNumber && !state.names[norm(c.Subject)]) state = null;
+  const key = norm(c.Subject);
+  const prev = state?.names[key];
+  const s: NonNullable<AutoRead> = {
+    names: { ...(state?.names ?? {}), [key]: { value: c.Subject, count: (prev?.count ?? 0) + 1, label: next! } },
+    grade: graded(c.CardGrade) ? vote(state?.grade ?? null, c.CardGrade!) : (state?.grade ?? null),
+    cert: c.CertNumber ? vote(state?.cert ?? null, c.CertNumber) : (state?.cert ?? null),
+    misses: 0,
+  };
+  const top = topName(s)!;
+  const ok = top.count >= 2 && !!s.grade && (!!s.cert || s.grade.count >= 2);
+  if (!ok) return { state: s, ready: null };
+  const base = top.label.payload.PSACert;
+  const PSACert = { ...base, Subject: top.value, CardGrade: s.grade!.value, CertNumber: s.cert?.value ?? '' };
+  return { state: null, ready: { payload: { PSACert }, complete: !!s.cert } };
+}
+
+/** A tapped read: this frame, with a grade or cert it missed filled in from earlier frames. */
+export function withVotes(state: AutoRead, parsed: ParsedLabel | null): ParsedLabel | null {
+  if (!parsed?.payload.PSACert.Subject) return parsed;
+  const c = parsed.payload.PSACert;
+  const PSACert = {
+    ...c,
+    CardGrade: graded(c.CardGrade) ? c.CardGrade : (state?.grade?.value ?? c.CardGrade),
+    CertNumber: c.CertNumber || state?.cert?.value || '',
+  };
+  return { payload: { PSACert }, complete: !!(PSACert.Subject && PSACert.CertNumber && graded(PSACert.CardGrade)) };
+}
+
+type Rect = { x: number; y: number; width: number; height: number };
+
+/**
+ * Keep the lines that sit inside the on-screen frame, so text around the slab (a laptop screen, a
+ * price tag on the next slab) never reaches the parser. The preview shows the photo scaled to cover
+ * the view, so a line's 0..1 photo position maps to the view through that scale and crop. `margin`
+ * grows the frame by that share of its size on each side.
+ */
+export function linesInFrame<T extends LabelLine>(lines: T[], photo: { width: number; height: number }, view: { width: number; height: number }, frame: Rect, margin = 0.12): T[] {
+  if (!photo.width || !photo.height) return lines;
+  // Vision's positions are in the upright photo; the reported size can be the sensor's landscape one.
+  if (photo.width > photo.height !== view.width > view.height) photo = { width: photo.height, height: photo.width };
+  const scale = Math.max(view.width / photo.width, view.height / photo.height);
+  const dx = (photo.width * scale - view.width) / 2;
+  const dy = (photo.height * scale - view.height) / 2;
+  const mx = frame.width * margin;
+  const my = frame.height * margin;
+  return lines.filter((l) => {
+    const x = l.x * photo.width * scale - dx;
+    const y = l.y * photo.height * scale - dy;
+    return x >= frame.x - mx && x <= frame.x + frame.width + mx && y >= frame.y - my && y <= frame.y + frame.height + my;
+  });
 }

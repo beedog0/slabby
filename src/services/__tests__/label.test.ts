@@ -1,4 +1,4 @@
-import { parseLabel, stepAutoRead } from '../label';
+import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes } from '../label';
 import { cardFromCert } from '../psa';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -68,48 +68,86 @@ describe('parseLabel', () => {
 
 describe('stepAutoRead', () => {
   const full = ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', 'FULL ART', '10', '138092551'];
+  const run = (frames: (string[] | null)[]) => {
+    let r: ReturnType<typeof stepAutoRead> = { state: null, ready: null };
+    for (const f of frames) {
+      r = stepAutoRead(r.state, f ? parseLabel(f) : null);
+      if (r.ready) return r;
+    }
+    return r;
+  };
 
-  it('adds on one clean frame', () => {
-    const r = stepAutoRead(null, parseLabel(full));
+  it('needs the name the same in two frames, even when one frame has everything', () => {
+    expect(run([full]).ready).toBeNull();
+    expect(run([full, full]).ready?.payload.PSACert).toMatchObject({ Subject: 'SURFING PIKACHU VMAX', CardGrade: 'GEM MT 10', CertNumber: '138092551' });
+  });
+
+  it('outvotes a blurry frame that garbles the name', () => {
+    const jp = (name: string) => ['2021 POKEMON JPN', name, 'GEM MT 10', '166947927'];
+    const r = run([jp('TT TH AN NY - COLDEN BOX'), jp('PIKACHU'), jp('PIKACHU')]);
+    expect(r.ready?.payload.PSACert.Subject).toBe('PIKACHU');
+  });
+
+  it('never commits on two different garbled names', () => {
+    const jp = (name: string) => ['2021 POKEMON JPN', name, 'GEM MT 10', '166947927'];
+    expect(run([jp('TT TH AN NY'), jp('PIKACHJ')]).ready).toBeNull();
+  });
+
+  it('takes the grade from one frame and the cert from another', () => {
+    const r = run([
+      ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551'],
+      ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX GEM MT', 'FULL ART 10'],
+    ]);
     expect(r.ready?.payload.PSACert).toMatchObject({ CardGrade: 'GEM MT 10', CertNumber: '138092551' });
   });
 
-  it('takes the grade from one frame and the cert from the next', () => {
-    const a = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
-    expect(a.ready).toBeNull();
-    const b = stepAutoRead(a.state, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX GEM MT', 'FULL ART 10']));
-    expect(b.ready?.payload.PSACert).toMatchObject({ Subject: 'SURFING PIKACHU VMAX', CardGrade: 'GEM MT 10', CertNumber: '138092551' });
-  });
-
-  it('adds name and grade without a cert once two frames agree', () => {
+  it('adds without a cert once name and grade each agree twice', () => {
     const lines = ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', 'FULL ART', '10'];
-    const a = stepAutoRead(null, parseLabel(lines));
-    expect(a.ready).toBeNull();
-    expect(stepAutoRead(a.state, parseLabel(lines)).ready).not.toBeNull();
+    expect(run([lines, lines]).ready?.payload.PSACert.CertNumber).toBe('');
   });
 
   it('never adds without a grade number, however many frames', () => {
-    let s = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
-    for (let i = 0; i < 4; i++) {
-      s = stepAutoRead(s.state, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
-      expect(s.ready).toBeNull();
-    }
+    const lines = ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551'];
+    expect(run([lines, lines, lines, lines]).ready).toBeNull();
   });
 
   it('survives a couple of blurry frames, then forgets', () => {
-    let s = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
-    s = stepAutoRead(s.state, null);
-    s = stepAutoRead(s.state, null);
-    expect(s.state).not.toBeNull();
-    s = stepAutoRead(s.state, null);
-    expect(s.state).toBeNull();
+    expect(run([full, null, null]).state).not.toBeNull();
+    expect(run([full, null, null, null]).state).toBeNull();
+    expect(run([full, null, null, full]).ready).not.toBeNull();
   });
 
-  it('starts over when a different card comes into frame', () => {
-    const a = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
-    const b = stepAutoRead(a.state, parseLabel(['2023 POKEMON SV #199', 'MEW EX GEM MT', 'SPECIAL ART RARE 10']));
-    expect(b.ready).toBeNull();
-    expect(b.state?.label.payload.PSACert.Subject).toBe('MEW EX');
+  it('starts over when a different slab comes into frame', () => {
+    const r = run([full, ['2023 POKEMON SV #199', 'MEW EX GEM MT', 'SPECIAL ART RARE 10', '81234560']]);
+    expect(r.ready).toBeNull();
+    expect(Object.keys(r.state!.names)).toEqual(['MEWEX']);
+  });
+
+  it('reports progress', () => {
+    expect(autoProgress(null)).toEqual({ name: 'none', grade: false, cert: false });
+    const one = run([['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']]);
+    expect(autoProgress(one.state)).toEqual({ name: 'seen', grade: false, cert: true });
+  });
+});
+
+describe('withVotes', () => {
+  it('fills a tapped frame from earlier frames', () => {
+    const s = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT 10'])).state;
+    const r = withVotes(s, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+    expect(r?.payload.PSACert).toMatchObject({ CardGrade: 'GEM MT 10', CertNumber: '138092551' });
+  });
+});
+
+describe('linesInFrame', () => {
+  // 3:4 photo on a 440×956 view: shown 717×956, 138.5 pt cropped off each side.
+  const photo = { width: 3024, height: 4032 };
+  const view = { width: 440, height: 956 };
+  const frame = { x: 75, y: 134, width: 290, height: 466 };
+  it('keeps text on the slab and drops text around it', () => {
+    const on = { text: '2021 POKEMON JPN', x: (138.5 + 100) / 717, y: 180 / 956 };
+    const off = { text: 'POKEMON chat on a laptop', x: (138.5 + 400) / 717, y: 800 / 956 };
+    expect(linesInFrame([on, off], photo, view, frame)).toEqual([on]);
+    expect(linesInFrame([on, off], { width: 4032, height: 3024 }, view, frame)).toEqual([on]);
   });
 });
 
@@ -129,7 +167,7 @@ describe('two-column labels joined by OCR', () => {
       CardNumber: '9',
     });
     expect(r?.complete).toBe(true);
-    expect(stepAutoRead(null, r).ready).not.toBeNull();
+    expect(stepAutoRead(stepAutoRead(null, r).state, r).ready).not.toBeNull();
   });
 
   it('never auto-reads a half-framed label with no grade number', () => {
