@@ -83,7 +83,7 @@ export default function SlabDetail() {
         </View>
 
         <View style={styles.hero}>
-          <SlabView card={card} interactive onDragChange={setTilting} />
+          <SlabView card={card} interactive spotlight onDragChange={setTilting} />
         </View>
 
         <View style={styles.titleRow}>

@@ -58,14 +58,14 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress, onLong
       <Animated.View style={{ transform: [{ translateY }, { rotate }], opacity, alignItems: 'center' }}>
         {/* Flat, not posed: the reflection meets a straight bottom edge, as in Cover Flow. */}
         <View>
-          <SlabView card={row.card} width={slabW} posed={false} />
-          {pinned ? <PinMark slabW={slabW} card={row.card} /> : null}
-          <CopiesMark slabW={slabW} card={row.card} copies={row.copies ?? 1} />
+          <SlabView card={row.card} width={slabW} posed={false} spotlight anchor="bottom" />
+          {pinned ? <PinMark slabW={slabW} card={row.card} anchor="bottom" /> : null}
+          <CopiesMark slabW={slabW} card={row.card} copies={row.copies ?? 1} anchor="bottom" />
         </View>
         <View pointerEvents="none" style={{ width: slabW, height: reflH, overflow: 'hidden', marginTop: 3 }}>
           {/* Flipped about its centre, the slab's bottom edge lands at the top of this strip. */}
           <View style={{ height: slabH, opacity: REFLECTION.opacity, transform: [{ scaleY: -1 }] }}>
-            <SlabView card={row.card} width={slabW} posed={false} />
+            <SlabView card={row.card} width={slabW} posed={false} anchor="bottom" />
           </View>
           <LinearGradient
             colors={[`${color.canvas}00`, color.canvas]}
