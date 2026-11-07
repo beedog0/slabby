@@ -312,7 +312,7 @@ export async function fillArt(cards: Card[]): Promise<void> {
   const keys = [...new Set(owned.map(cardKey))];
   const named = await supabase.from('card_refs').select('card_key, tcgplayer_id, image_url, matched_name').in('card_key', keys);
   const error = named.error;
-  // A project without 0013 has no matched_name: still fill photos.
+  // A project without 0014 has no matched_name: still fill photos.
   const data: CardRef[] | null = error
     ? (await supabase.from('card_refs').select('card_key, tcgplayer_id, image_url').in('card_key', keys)).data
     : named.data;
