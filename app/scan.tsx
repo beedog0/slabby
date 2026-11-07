@@ -42,7 +42,8 @@ import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
 import { cardPrice, gradeLabel, money, rowTitle } from '../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
 import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
-import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, parseCardText, printName, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, correctionKey, findSimilarCards, missReason, parseCardText, printedNumber, printName, printOptions, similarForSlab, withCorrection, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { useCorrections } from '../src/store/corrections';
 import { cardNumber, displayName, mockProductId, nameAndVariant, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
@@ -176,6 +177,37 @@ export default function Scan() {
       live = false;
     };
   }, [previewKey]);
+  // "Not this card?": cards with the slab's name, and the one picked replaces the match for good.
+  const [similar, setSimilar] = useState<CatalogCard[] | null | 'loading'>(null);
+  useEffect(() => setSimilar(null), [previewKey]);
+  const notThisSlab = () => {
+    if (!preview) return;
+    setSimilar('loading');
+    similarForSlab(preview)
+      .catch(() => [] as CatalogCard[])
+      .then(setSimilar);
+  };
+  const correctSlab = (c: CatalogCard) => {
+    if (!preview || !previewKey) return;
+    const card = preview;
+    setSimilar(null);
+    setMatched({ key: previewKey, art: c.imageUrl, productId: c.productId });
+    setMatching(true);
+    // An explicit product replaces the server's match for this card (card-match), for every device.
+    const done = matchNewCard(card, String(c.productId))
+      .catch(() => null)
+      .then(async (ref) => {
+        if (ref) await refreshPrices([card]).catch(() => {});
+        return ref;
+      });
+    match.current = { key: previewKey, done };
+    done.then((ref) => {
+      if (match.current?.done !== done) return;
+      // The picked card's photo, even if an older server still answers with its first match.
+      setMatched({ key: previewKey, art: ref && String(ref.tcgplayer_id) === String(c.productId) ? (artFor(ref) ?? c.imageUrl) : c.imageUrl, productId: c.productId });
+      setMatching(false);
+    });
+  };
   const art = matched && matched.key === previewKey ? matched.art : null;
   const shown = preview && art ? { ...preview, imageFrontUrl: art } : preview;
   const owned = preview?.certNumber ? existing.find((c) => c.certNumber === preview.certNumber && c.status === 'owned') : undefined;
@@ -266,7 +298,16 @@ export default function Scan() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     findScannedCard(read)
       .catch(() => [] as CardMatch[])
-      .then((matches) => setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !isConfident(matches) } : r)));
+      // A card corrected before ("Not this card?") comes first, so it's never wrong twice.
+      .then((found) => withCorrection(found, useCorrections.getState().byKey[correctionKey(read)]))
+      .then((matches) => {
+        setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !isConfident(matches), similar: matches.length ? undefined : null } : r));
+        // No card with this number (a promo with no set, a print the catalog lacks): offer cards with the same name.
+        if (!matches.length)
+          findSimilarCards(read)
+            .catch(() => [] as CatalogCard[])
+            .then((similar) => setRaw((r) => (r && r.read === read ? { ...r, similar } : r)));
+      });
   };
 
   /** Con mode: add (or re-mark) the slab with the chosen status. `again` keeps the camera up. */
@@ -703,6 +744,30 @@ export default function Scan() {
                     : `You already have ${copies} of this card. This would be your ${ordinal(copies + 1)}.`}
                 </Text>
               ) : null}
+              {similar === null ? (
+                supabase ? (
+                  <Pressable accessibilityRole="button" onPress={notThisSlab} style={styles.notThis}>
+                    <Text style={[type.text, { color: color.secondary }]}>Not this card? ›</Text>
+                  </Pressable>
+                ) : null
+              ) : similar === 'loading' ? (
+                <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>Looking for similar cards</Text>
+              ) : (
+                <>
+                  <Text style={[type.text, { color: color.secondary, paddingBottom: space.s }]}>
+                    {similar.length ? 'Pick the card in this slab.' : `No other cards named ${preview.name}.`}
+                  </Text>
+                  <CardPickList cards={similar} onPick={correctSlab} />
+                  <View style={{ flexDirection: 'row', gap: space.xl }}>
+                    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/search', params: { q: preview.name } })} style={styles.quiet}>
+                      <Text style={[type.text, { color: color.secondary }]}>Search cards</Text>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" onPress={() => setSimilar(null)} style={styles.quiet}>
+                      <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
               <Hairline />
               {fromCon ? (
                 <>
@@ -842,7 +907,16 @@ export default function Scan() {
   );
 }
 
-type RawRead = { read: ParsedCard; matches: CardMatch[] | null; pick: number; choosing: boolean };
+type RawRead = {
+  read: ParsedCard;
+  matches: CardMatch[] | null;
+  pick: number;
+  choosing: boolean;
+  /** Cards with the read name, when the number found none or "Not this card?" asked (null while looking). */
+  similar?: CatalogCard[] | null;
+  /** "Not this card?" opened the similar-cards list over a found card. */
+  showSimilar?: boolean;
+};
 
 /**
  * A loose card as it would be saved: raw, priced at TCGplayer market. A print the scan can't see
@@ -864,6 +938,31 @@ function rawCard(c: CatalogCard, paidCents: number | null, plan: 'hold' | 'sell'
     game: c.game,
   });
   return { ...card, grade: null };
+}
+
+/** Cards to pick from after "Not this card?" or a missed number: art, name, set · number, price. */
+function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: CatalogCard) => void }) {
+  return (
+    <SheetScrollView style={{ maxHeight: size.rowVault * 4 }}>
+      {cards.map((c, i) => (
+        <View key={c.productId}>
+          {i ? <Hairline /> : null}
+          <Pressable accessibilityRole="button" onPress={() => onPick(c)} style={({ pressed }) => [styles.pickRow, pressed && { opacity: 0.6 }]}>
+            <SlabView card={rawCard(c, null, 'hold')} width={size.thumbW} posed={false} />
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>
+                {nameAndVariant(c.name).name}
+              </Text>
+              <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
+                {[nameAndVariant(c.name).variant, c.setName, c.number ? `#${cardNumber(c.number)}` : null, c.language === 'ja' ? 'Japanese' : null].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+            <Text style={[type.rowPrice, { color: color.ink }]}>{c.marketCents ? cardPrice(c.marketCents) : '—'}</Text>
+          </Pressable>
+        </View>
+      ))}
+    </SheetScrollView>
+  );
 }
 
 /** Result sheet for a loose card: the best catalog match, or a short pick list when it's unclear. */
@@ -891,7 +990,7 @@ function RawSheet({
   const rules = useRules((s) => s.rules);
   const startSell = useSellDraft((s) => s.start);
   const n = raw.read.numbers[0];
-  const printed = n.total ? `${n.num}/${n.total}` : n.num;
+  const printed = printedNumber(n);
   const best = raw.matches?.[raw.pick]?.card ?? null;
   // Print: null is the catalog's own (base) printing. Holo vs reverse holo can't be told from a photo.
   const [print, setPrint] = useState<number | null>(null);
@@ -914,6 +1013,8 @@ function RawSheet({
   // The product is known, so card-match skips matching and spends no search credit.
   const afterSave = (card: Card) => {
     if (!best) return;
+    // The card saved is the right one for this read; the next scan of it picks it first.
+    remember(correctionKey(raw.read), best.productId);
     matchNewCard(card, String(best.productId))
       .then(() => refreshPrices([card]))
       .catch(() => {});
@@ -935,6 +1036,18 @@ function RawSheet({
   const sets = new Set(raw.matches?.map((m) => m.card.setName) ?? []);
   const oneSet = sets.size === 1 ? [...sets][0] : null;
   const choose = (i: number) => setRaw((r) => (r ? { ...r, pick: i, choosing: false } : r));
+  const pickSimilar = (c: CatalogCard) =>
+    setRaw((r) => (r ? { ...r, matches: [{ card: c, score: Infinity }, ...(r.matches ?? []).filter((m) => m.card.productId !== c.productId)], pick: 0, choosing: false, showSimilar: false } : r));
+  // "Not this card?": the other cards with this number when there are some, else cards with the name read.
+  const notThis = () => {
+    if ((raw.matches?.length ?? 0) > 1) return setRaw((r) => (r ? { ...r, choosing: true } : r));
+    setRaw((r) => (r ? { ...r, showSimilar: true, similar: r.similar ?? null } : r));
+    if (raw.similar == null)
+      findSimilarCards(raw.read)
+        .catch(() => [] as CatalogCard[])
+        .then((similar) => setRaw((r) => (r && r.read === raw.read ? { ...r, similar } : r)));
+  };
+  const remember = useCorrections((s) => s.remember);
   const again = (
     <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
       <Text style={[type.text, { color: color.secondary }]}>Scan again</Text>
@@ -957,14 +1070,34 @@ function RawSheet({
           <Text style={[type.text, { color: color.secondary }]}>Read from the card · {printed}</Text>
           <Text style={[type.body, { color: color.ink, paddingVertical: space.l }]}>Finding the card</Text>
         </>
-      ) : !best || !preview ? (
+      ) : !best || !preview || raw.showSimilar ? (
         <>
-          <Text style={[type.section, { color: color.ink }]}>Couldn’t find card {printed}</Text>
+          <Text style={[type.section, { color: color.ink }]}>{best && preview ? 'Which card is it?' : `Couldn’t find card ${printed}`}</Text>
           <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
-            It may be misread or not in the catalog yet. Search for it by name instead.
+            {best && preview ? `Cards named ${raw.read.name ?? displayName(best.name)}. Slabby will remember the one you pick.` : missReason(raw.read)}
           </Text>
-          <PrimaryButton title="Search cards" onPress={() => router.replace('/search')} />
-          {again}
+          {raw.similar?.length ? (
+            <>
+              <Text style={[type.text, { color: color.secondary, paddingBottom: space.s }]}>
+                {best && preview ? 'Pick yours if it’s here.' : `Similar cards named ${raw.read.name}. Pick yours if it’s here.`}
+              </Text>
+              <CardPickList cards={raw.similar} onPick={pickSimilar} />
+              <Pressable accessibilityRole="button" onPress={() => router.replace({ pathname: '/search', params: raw.read.name ? { q: raw.read.name } : {} })} style={styles.quiet}>
+                <Text style={[type.text, { color: color.secondary }]}>Search cards</Text>
+              </Pressable>
+            </>
+          ) : raw.similar === null ? (
+            <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>Looking for similar cards</Text>
+          ) : (
+            <PrimaryButton title="Search cards" onPress={() => router.replace({ pathname: '/search', params: raw.read.name ? { q: raw.read.name } : {} })} />
+          )}
+          {best && preview ? (
+            <Pressable accessibilityRole="button" onPress={() => setRaw((r) => (r ? { ...r, showSimilar: false } : r))} style={styles.quiet}>
+              <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
+            </Pressable>
+          ) : (
+            again
+          )}
         </>
       ) : choosingPrint ? (
         <>
@@ -1058,13 +1191,11 @@ function RawSheet({
               You already have {copies} of this card raw. This would be your {ordinal(copies + 1)}.
             </Text>
           ) : null}
-          {raw.matches.length > 1 ? (
-            <Pressable accessibilityRole="button" onPress={() => setRaw((r) => (r ? { ...r, choosing: true } : r))} style={styles.notThis}>
-              <Text style={[type.text, { color: color.secondary }]}>
-                Not this card? {raw.matches.length - 1} other{raw.matches.length > 2 ? 's' : ''} ›
-              </Text>
-            </Pressable>
-          ) : null}
+          <Pressable accessibilityRole="button" onPress={notThis} style={styles.notThis}>
+            <Text style={[type.text, { color: color.secondary }]}>
+              {raw.matches.length > 1 ? `Not this card? ${raw.matches.length - 1} other${raw.matches.length > 2 ? 's' : ''} ›` : 'Not this card? ›'}
+            </Text>
+          </Pressable>
           {prints.length > 1 ? (
             <>
               <Hairline />
