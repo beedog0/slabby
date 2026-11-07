@@ -254,6 +254,19 @@ const SET_WAIT = 3;
 /** The fuller of two reads of the brand line (a tilted frame can cut it short). */
 const longer = (a?: string, b?: string) => ((b?.length ?? 0) > (a?.length ?? 0) ? b : a);
 
+/** Two reads of one name: equal, one inside the other, or a few letters apart (blur). */
+function sameName(a: string, b: string) {
+  if (!a || !b) return false;
+  if (a === b || a.includes(b) || b.includes(a)) return true;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length] <= Math.max(2, Math.floor(Math.max(a.length, b.length) * 0.34));
+}
+
 /** Frames without a label we tolerate (a glare, a wobble) before forgetting what we've read. */
 const MISS_LIMIT = 3;
 
@@ -288,6 +301,10 @@ export function stepAutoRead(state: AutoRead, next: ParsedLabel | null): { state
   }
   // A different cert and a different name: another slab came into frame, so start over.
   if (state?.cert && c.CertNumber && state.cert.value !== c.CertNumber && !state.names[norm(c.Subject)]) state = null;
+  // A name unlike any read so far, without the same cert to tie it to them, is another slab too
+  // (the next one slid in before its cert was read). Keeping the old cert would give it the
+  // previous slab's cert, set and number.
+  if (state && !(c.CertNumber && state.cert?.value === c.CertNumber) && !Object.keys(state.names).some((n) => sameName(n, norm(c.Subject)))) state = null;
   const key = norm(c.Subject);
   const prev = state?.names[key];
   const s: NonNullable<AutoRead> = {

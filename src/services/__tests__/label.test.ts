@@ -125,6 +125,21 @@ describe('stepAutoRead', () => {
     expect(Object.keys(r.state!.names)).toEqual(['MEWEX']);
   });
 
+  it('never gives the next slab the cert or set of the one before it', () => {
+    const golden = ['2021 POKEMON JPN 25TH ANNIV-GOLDEN BOX', 'PIKACHU', 'GEM MT 10', '166947927'];
+    // The Pikachu is still half in frame, then the next slab slides in and its cert isn't read yet.
+    const next = ['2021 POKEMON JPN', 'TEAM ROCKET', 'GEM MT 10'];
+    const r = run([golden, next, next, next, next, next]);
+    expect(r.ready?.payload.PSACert.Subject).toBe('TEAM ROCKET');
+    expect(r.ready?.payload.PSACert.CertNumber).toBe('');
+    expect(r.ready?.payload.PSACert.Variety).toBeUndefined();
+  });
+
+  it('keeps gathering when blur only garbles a letter or two of the name', () => {
+    const r = run([full, ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHJ VMAX', 'GEM MT 10'], full]);
+    expect(r.ready?.payload.PSACert).toMatchObject({ Subject: 'SURFING PIKACHU VMAX', CertNumber: '138092551' });
+  });
+
   it('reports progress', () => {
     expect(autoProgress(null)).toEqual({ name: { state: 'none' }, grade: { state: 'none' }, cert: { state: 'none' } });
     const one = run([['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']]);

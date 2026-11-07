@@ -364,7 +364,9 @@ export default function Scan() {
   const close = () => (fromCon && lastAdded ? backToCon(lastAdded.status, lastAdded.id) : router.back());
 
   const accept = (parsed: ParsedLabel) => {
-    const cert = result?.cert ?? lastCert.current ?? parsed.payload.PSACert.CertNumber;
+    // The cert read off this slab wins. A cert remembered from the back's code only fills in when
+    // the label gave none, and never in label mode, where it would belong to the previous slab.
+    const cert = parsed.payload.PSACert.CertNumber || result?.cert || (labelMode ? null : lastCert.current);
     parsed.payload.PSACert.CertNumber = cert ?? '';
     lastCert.current = cert || null;
     auto.current = null;
