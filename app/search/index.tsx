@@ -49,8 +49,10 @@ export default function Search() {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   // Con mode opens search with ?con=1: each result also shows what to pay, from the buying rules.
-  const params = useLocalSearchParams<{ con?: string; q?: string }>();
+  // The trade calculator opens it with ?trade=1: a card opens with "Add to their side".
+  const params = useLocalSearchParams<{ con?: string; q?: string; trade?: string }>();
   const con = params.con === '1';
+  const trade = params.trade === '1';
   const rules = useRules((s) => s.rules);
   const { searchLayout: layout, setSearchLayout } = useDisplay();
   const { width } = useWindowDimensions();
@@ -253,9 +255,9 @@ export default function Search() {
           ItemSeparatorComponent={layout === 'grid' ? undefined : () => <Hairline inset={space.gutter + size.thumbW + space.m} />}
           renderItem={({ item }) =>
             layout === 'grid' ? (
-              <ResultTile card={item} width={cellW} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+              <ResultTile card={item} width={cellW} con={con} trade={trade} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
             ) : (
-              <ResultRow card={item} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+              <ResultRow card={item} con={con} trade={trade} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
             )
           }
         />
@@ -458,18 +460,19 @@ function CheckRow({ label, detail, on, onPress }: { label: string; detail?: stri
   );
 }
 
-type ResultProps = { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number };
+type ResultProps = { card: Found; con: boolean; trade?: boolean; rules: PricingRules; change: number | null; days: number };
 
-const openCard = (card: Found, con: boolean) => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`);
+const openCard = (card: Found, con: boolean, trade = false) =>
+  router.push(trade ? `/search/${card.productId}?trade=1` : con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`);
 
 /** Grid tile: the card photo, then name, set · number and price, like home's grid. */
-function ResultTile({ card, width, con, rules, change, days }: ResultProps & { width: number }) {
+function ResultTile({ card, width, con, trade, rules, change, days }: ResultProps & { width: number }) {
   const color = useColors();
   const styles = useStyles();
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
   return (
-    <Pressable accessibilityRole="button" onPress={() => openCard(card, con)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
+    <Pressable accessibilityRole="button" onPress={() => openCard(card, con, trade)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
       <View style={[styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
         {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}
       </View>
@@ -494,7 +497,7 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
   );
 }
 
-function ResultRow({ card, con, rules, change, days }: { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number }) {
+function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
   const color = useColors();
   const styles = useStyles();
   const no = cardNumber(card.number);
@@ -503,7 +506,7 @@ function ResultRow({ card, con, rules, change, days }: { card: Found; con: boole
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`)}
+      onPress={() => openCard(card, con, trade)}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.5 }]}
     >
       <View style={styles.thumb}>{card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}</View>

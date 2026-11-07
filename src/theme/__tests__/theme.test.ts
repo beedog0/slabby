@@ -31,7 +31,7 @@ describe('palettes', () => {
 // marks, the share image, the printed sell sheet, and the camera chrome. Everything else reads
 // useColors() or themed(), so a new screen can't silently stay light.
 it('only fixed-light files import the light palette directly', () => {
-  const out = execSync("git grep -l -E \"\\blight( as color)?\\b.*from '.*theme/tokens'\" -- app src", { cwd: `${__dirname}/../../..` })
+  const out = execSync("git grep -l -E \"(^|[^A-Za-z])light( as color)?([^A-Za-z]|$).*from '.*theme/tokens'\" -- app src ':!**/__tests__/**'", { cwd: `${__dirname}/../../..` })
     .toString()
     .trim()
     .split('\n')
@@ -41,6 +41,7 @@ it('only fixed-light files import the light palette directly', () => {
     'app/scan.tsx',
     'src/components/PriceLine.tsx',
     'src/components/collection/PinMark.tsx',
+    'src/components/scan/ScanPills.tsx',
     'src/components/share/ShareCard.tsx',
     'src/services/sellSheet.ts',
   ]);

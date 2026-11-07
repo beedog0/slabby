@@ -33,6 +33,7 @@ import {
   cardNumber,
   catalogCard,
   displayName,
+  nameAndVariant,
   firstLowGrade,
   gradeLabel,
   isQuiet,
@@ -44,6 +45,7 @@ import {
   type SearchPrices,
 } from '../../src/services/search';
 import { useRules } from '../../src/store/rules';
+import { useTrade } from '../../src/store/trade';
 import { useWishlist, wishKey, type WishGrade } from '../../src/store/wishlist';
 import { size, space, type } from '../../src/theme/tokens';
 import { themed, useColors } from '../../src/theme/theme';
@@ -58,8 +60,11 @@ const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-U
 export default function SearchedCard() {
   const color = useColors();
   const styles = useStyles();
-  const { id, con, sell, grade } = useLocalSearchParams<{ id: string; con?: string; sell?: string; grade?: string }>();
+  const { id, con, sell, grade, trade } = useLocalSearchParams<{ id: string; con?: string; sell?: string; grade?: string; trade?: string }>();
   const buying = con === '1';
+  // From the trade calculator: the one action is putting this card, at the grade shown, on their side.
+  const trading = trade === '1';
+  const addTheirs = useTrade((s) => s.addTheirs);
   const draft = useSellDraft((s) => (sell === '1' ? s.draft : null));
   const patchDraft = useSellDraft((s) => s.patch);
   const selling = !!draft;
@@ -170,7 +175,7 @@ export default function SearchedCard() {
   const change = hist && !quiet ? hist.change : null;
   const no = cardNumber(ready.number);
   const detail = [no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
-  const openSet = () => openSetPage(ready, groupId);
+  const openSet = () => openSetPage(ready, groupId, { trade: trading });
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
   const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
   // The sheet's market wins: for a raw card it's the print you picked.
@@ -194,10 +199,12 @@ export default function SearchedCard() {
 
         <View style={styles.titleRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={2} style={[type.title, { color: color.ink }]}>
-              {displayName(ready.name)}
-            </Text>
-            <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
+            {/* Name on its own line, the variant ("Alternate Art Secret") on the next: nothing truncates. */}
+            <Text style={[type.title, { color: color.ink }]}>{nameAndVariant(ready.name).name}</Text>
+            {nameAndVariant(ready.name).variant ? (
+              <Text style={[type.text, { color: color.secondary }]}>{nameAndVariant(ready.name).variant}</Text>
+            ) : null}
+            <Text style={[type.text, { color: color.secondary }]}>
               {/* The set name opens the whole set. */}
               <Text onPress={openSet} accessibilityRole="link" style={{ color: color.ink }}>
                 {setTitle(ready.setName)}
@@ -292,7 +299,7 @@ export default function SearchedCard() {
             )}
           </View>
 
-          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} />
+          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} trade={trading} />
           {prices?.capped ? (
             <Text style={[type.secondary, { color: color.secondary, paddingTop: space.m }]}>
               Graded prices for new cards are paused until tomorrow to save credits for your scans.
@@ -304,6 +311,31 @@ export default function SearchedCard() {
       <View style={[styles.gutter, { paddingBottom: Math.max(insets.bottom, space.l), paddingTop: space.m }]}>
         {draft ? (
           <PrimaryButton title={`Put up for sale at ${money(draft.askCents)}`} onPress={putUp} />
+        ) : trading ? (
+          price && !quiet ? (
+            <PrimaryButton
+              title={`Add to their side · ${money(price.marketCents)}`}
+              onPress={() => {
+                addTheirs({
+                  key: `${ready.productId}:${pick}`,
+                  productId: ready.productId,
+                  grade: pick,
+                  name: displayName(ready.name),
+                  setName: ready.setName,
+                  number: ready.number,
+                  imageUrl: ready.imageUrl,
+                  game: ready.game,
+                  language: ready.language,
+                  marketCents: price.marketCents,
+                });
+                router.dismissTo('/con/trade');
+              }}
+            />
+          ) : (
+            <Text style={[type.text, { color: color.secondary, textAlign: 'center', minHeight: size.button, paddingTop: space.l }]}>
+              {price === undefined ? 'Loading prices' : 'No recent price at this grade. Pick another grade.'}
+            </Text>
+          )
         ) : buying ? (
           // Buying at a con: the next step is the seller's price, rated against your rules.
           // Or save the card to the wishlist with the price you're hunting for.

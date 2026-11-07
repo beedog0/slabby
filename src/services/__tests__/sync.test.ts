@@ -23,7 +23,9 @@ describe('row mapping', () => {
     expect(fromRow({ ...toRow(mew, 'u'), grade: '9.5' as unknown as number }).grade).toBe(9.5);
   });
   it('round-trips rules', () => {
-    expect(rulesFromRow(rulesToRow(DEFAULT_RULES, 'u'))).toEqual(DEFAULT_RULES);
+    // Last-day prices stay on the phone; everything else syncs.
+    const { lastDayCutPct: _cut, lastDayUntil: _until, ...synced } = DEFAULT_RULES;
+    expect(rulesFromRow(rulesToRow(DEFAULT_RULES, 'u'))).toEqual(synced);
   });
 });
 

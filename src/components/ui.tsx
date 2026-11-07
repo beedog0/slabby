@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View, type ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { radius, size, space, type } from '../theme/tokens';
 import { themed, useColors } from '../theme/theme';
 
@@ -65,6 +65,17 @@ export function PlusIcon({ s = 24 }: { s?: number }) {
   return (
     <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={1.75} strokeLinecap="round">
       <Path d="M12 5v14M5 12h14" />
+    </Svg>
+  );
+}
+
+export function MoreIcon() {
+  const color = useColors();
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color.ink}>
+      <Circle cx={5.5} cy={12} r={1.6} />
+      <Circle cx={12} cy={12} r={1.6} />
+      <Circle cx={18.5} cy={12} r={1.6} />
     </Svg>
   );
 }
