@@ -3,7 +3,8 @@
 // reading is the default. The QR → PSA lookup only runs where the label reader isn't built in
 // (web, Expo Go). Reference: 02-scan.png. As soon as a scan resolves, card-match runs for the card
 // (photo + first comps), so a quick scan at a table shows art and market without adding anything.
-// Add to vault then saves what the sheet already fetched; card-match isn't asked twice.
+// Add to vault then saves what the sheet already fetched; card-match isn't asked twice. After an add
+// the camera stays up for the next slab, with a line at the top to open the one just added; X closes.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -101,6 +102,8 @@ export default function Scan() {
   const copies = previewKey ? existing.filter((c) => c.status === 'owned' && cardKey(c) === previewKey).length : 0;
   // The same cert twice is almost always a re-scan, so Add asks once before saving it again.
   const [confirmAgain, setConfirmAgain] = useState(false);
+  /** The last slab added on this visit, and how many so far. */
+  const [added, setAdded] = useState<{ id: string; title: string; count: number } | null>(null);
   useEffect(() => setConfirmAgain(false), [previewKey]);
 
   const addToVault = () => {
@@ -116,7 +119,11 @@ export default function Scan() {
       .then((ref) => ref ?? matchNewCard(card))
       .then(() => refreshPrices([card]))
       .catch(() => {});
-    router.replace(`/card/${card.id}`);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setAdded((a) => ({ id: card.id, title: rowTitle(card), count: (a?.count ?? 0) + 1 }));
+    setPaid('');
+    setManual('');
+    rescan();
   };
 
   const rescan = () => {
@@ -195,6 +202,20 @@ export default function Scan() {
         </Pressable>
       </View>
 
+      {added ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Added ${added.title}. Open it`}
+          onPress={() => router.push(`/card/${added.id}`)}
+          style={({ pressed }) => [styles.added, pressed && { opacity: 0.7 }]}
+        >
+          <Text numberOfLines={1} style={[type.text, { color: color.onInk, flex: 1 }]}>
+            Added · {added.title}
+          </Text>
+          <Text style={[type.text, { color: color.onInk, fontWeight: '600' }]}>View</Text>
+        </Pressable>
+      ) : null}
+
       <View style={styles.viewfinder}>
         <View style={styles.frame}>
           {['tl', 'tr', 'bl', 'br'].map((c) => (
@@ -210,7 +231,9 @@ export default function Scan() {
                 ? seen
                   ? `Couldn’t find a PSA label in “${seen.slice(0, 80)}”. Fill the frame with the label and hold steady.`
                   : 'Couldn’t read any text. Move closer so the label fills the frame, and hold steady.'
-                : labelMode
+                : added
+                  ? `${added.count} added. Scan the next slab`
+                  : labelMode
                   ? 'Fill the frame with the front label, then tap Read label'
                   : 'Line up the QR or barcode on the back of the slab'}
         </Text>
@@ -402,6 +425,17 @@ const styles = StyleSheet.create({
   },
   capture: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s },
+  added: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    marginHorizontal: space.gutter,
+    marginTop: space.s,
+    minHeight: size.touch,
+    paddingHorizontal: space.l,
+    borderRadius: radius.field,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center', marginTop: space.s },
   navBtn: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
   viewfinder: { flex: 1, alignItems: 'center', paddingTop: space.xxxl },
