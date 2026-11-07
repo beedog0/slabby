@@ -249,8 +249,6 @@ export default function Scan() {
     afterSave(card);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setAdded((a) => ({ id: card.id, title: rowTitle(card), count: (a?.count ?? 0) + 1 }));
-    // What you paid was for this slab; the next one starts blank.
-    setCost(EMPTY_COST);
     setManual('');
     rescan();
   };
