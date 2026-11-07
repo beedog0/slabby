@@ -16,6 +16,7 @@
 // full page in sell mode (app/search/[id].tsx ?sell=1, or app/sell.tsx when the card isn't in our
 // catalog) with where that ask sits against market and a rating against what you paid. "What you
 // paid" also takes "Pulled it" (rated against the set's pack price, else $0) or "Not sure".
+// After an add the camera stays up for the next card, with a line at the top to open the one just added; X closes.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -168,6 +169,8 @@ export default function Scan() {
   const copies = previewKey ? existing.filter((c) => c.status === 'owned' && cardKey(c) === previewKey).length : 0;
   // The same cert twice is almost always a re-scan, so Add asks once before saving it again.
   const [confirmAgain, setConfirmAgain] = useState(false);
+  /** The last slab added on this visit, and how many so far. */
+  const [added, setAdded] = useState<{ id: string; title: string; count: number } | null>(null);
   useEffect(() => setConfirmAgain(false), [previewKey]);
 
   // Con mode: what you paid from the cost field, else what the vault already has for this cert.
@@ -190,7 +193,10 @@ export default function Scan() {
     if (art) card.imageFrontUrl = art;
     add(card);
     afterSave(card);
-    router.replace(`/card/${card.id}`);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setAdded((a) => ({ id: card.id, title: rowTitle(card), count: (a?.count ?? 0) + 1 }));
+    setManual('');
+    rescan();
   };
 
   const startSell = useSellDraft((s) => s.start);
@@ -436,6 +442,8 @@ export default function Scan() {
           ? 'Hold still'
           : addedNote
             ? `${addedNote}. Scan the next slab`
+            : added
+              ? `${added.count} added. Scan the next card`
             : labelMode
               ? 'Fit the slab or card in the frame'
               : 'Line up the QR or barcode on the back of the slab';
@@ -496,10 +504,24 @@ export default function Scan() {
         </Pressable>
       </View>
 
+
       <View style={[styles.below, { top: frameTop + frameH + space.xl }]}>
         <View style={styles.hint}>
           <Text style={[type.text, { color: color.onInk, textAlign: 'center' }]}>{hint}</Text>
         </View>
+        {added ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Added ${added.title}. Open it`}
+            onPress={() => router.push(`/card/${added.id}`)}
+            style={({ pressed }) => [styles.added, pressed && { opacity: 0.7 }]}
+          >
+            <Text numberOfLines={1} style={[type.text, { color: color.onInk, flex: 1 }]}>
+              Added · {added.title}
+            </Text>
+            <Text style={[type.text, { color: color.onInk, fontWeight: '600' }]}>View</Text>
+          </Pressable>
+        ) : null}
         {!canUseCamera ? (
           <View style={styles.manual}>
             {Platform.OS !== 'web' && permission && !permission.granted ? (
@@ -1047,6 +1069,16 @@ const styles = StyleSheet.create({
   },
   capture: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s },
+  added: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    marginTop: space.s,
+    minHeight: size.touch,
+    paddingHorizontal: space.l,
+    borderRadius: radius.field,
+    backgroundColor: color.scanHint,
+  },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center', marginTop: space.s },
   navBtn: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
   scrim: { backgroundColor: color.scanScrim },
