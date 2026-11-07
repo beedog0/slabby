@@ -21,6 +21,17 @@ export const color = {
   shelfFront: '#8C6239',
   /** Empty-state slab outline. */
   ghost: '#D8D8DE',
+  /** Dims the page behind a sheet. Flat, no blur, no gradient. */
+  scrim: 'rgba(10,10,10,0.28)',
+  /** Lighter dim behind a dropdown: the page stays readable, the white panel still separates. */
+  scrimLight: 'rgba(10,10,10,0.16)',
+  // Camera screen only: dims the picture outside the label window, and backs the hint.
+  scanScrim: 'rgba(0,0,0,0.55)',
+  scanHint: 'rgba(0,0,0,0.6)',
+  /** Hairline marking where the label ends inside the slab frame. */
+  scanGuide: 'rgba(255,255,255,0.45)',
+  /** The label window's wash when a read locks. */
+  scanLocked: 'rgba(255,176,32,0.18)',
 } as const;
 
 export const space = {
@@ -43,6 +54,7 @@ export const radius = {
   segmented: 9,
   thumb: 3,
   slab: 12,
+  chip: 15,
 } as const;
 
 export const size = {
@@ -54,6 +66,11 @@ export const size = {
   thumbH: 50,
   heroW: 190,
   heroH: 305, // 190 × PSA's 134.6/83.9
+  /** The slab in the scan result sheet. */
+  sheetSlabW: 44,
+  /** Scan window: fits a whole slab or a loose card, portrait. */
+  scanFrameW: 260,
+  scanFrameRatio: 0.66,
   sparkW: 56,
   sparkH: 24,
   stepper: 32,
@@ -64,6 +81,38 @@ export const size = {
   viewIcon: 40,
   /** Home value chart; its slot keeps this height on every filter so the tabs never move. */
   homeChart: 84,
+  /** Menu sheet rows: taller than a vault row's text line, shorter than a con row. */
+  menuRow: 52,
+  /** The slab in a menu sheet's header. */
+  menuSlabW: 44,
+  /** Arrange shelf's 1–5 slabs-per-shelf control. */
+  perShelfW: 180,
+  grabberW: 36,
+  grabberH: 5,
+  /** Home … dropdown width. */
+  dropdownW: 224,
+  /** Select mode outline around a picked slab: line weight and its gap from the case. */
+  selectLine: 2,
+  selectGap: 4,
+  // Sales screen.
+  saleRow: 72,
+  dayRow: 56,
+  dotStrip: 32,
+  dot: 6,
+  medianTick: 16,
+  floorTick: 10,
+  rangeControl: 132,
+  skeletonBar: 14,
+  /** Applied-filter chips under search's control row. */
+  chip: 30,
+} as const;
+
+/** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */
+export const motion = {
+  sheetIn: 240,
+  sheetOut: 180,
+  dropIn: 160,
+  dropOut: 120,
 } as const;
 
 const tab: TextStyle = { fontVariant: ['tabular-nums'] };
@@ -92,6 +141,14 @@ export const shadow = {
     shadowOpacity: 0.18,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
+  },
+  /** Dropdown menus: the one floating surface besides the slab. */
+  menu: {
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   slabContact: {
     shadowColor: '#000',

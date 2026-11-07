@@ -2,7 +2,7 @@
 // disk, so nothing reloads or goes soft while the carousel slides (the old RN Image re-fetched
 // the 400 px art and showed it blurry until it decoded).
 
-import { Image, type ImageStyle } from 'expo-image';
+import { Image, type ImageLoadEventData, type ImageStyle } from 'expo-image';
 import type { StyleProp } from 'react-native';
 
 /** The largest TCGplayer rendition (716×1000 for a card). Other URLs pass through. */
@@ -18,12 +18,28 @@ export function prefetchArt(urls: (string | null | undefined)[]) {
 
 /** `sharp` keeps the full 1000 px decode instead of one sized to the view, so a zoomed-in
  *  slab is crisp on its first frame rather than sharpening a moment later. */
-export function ArtImage({ uri, style, recyclingKey, sharp = false }: { uri: string; style?: StyleProp<ImageStyle>; recyclingKey?: string; sharp?: boolean }) {
+export function ArtImage({
+  uri,
+  style,
+  recyclingKey,
+  sharp = false,
+  fit = 'cover',
+  onLoad,
+}: {
+  uri: string;
+  style?: StyleProp<ImageStyle>;
+  recyclingKey?: string;
+  sharp?: boolean;
+  /** 'contain' never crops (raw singles, whose scans vary in aspect). */
+  fit?: 'cover' | 'contain';
+  onLoad?: (e: ImageLoadEventData) => void;
+}) {
   return (
     <Image
       source={{ uri: hiResArt(uri) }}
       style={style}
-      contentFit="cover"
+      contentFit={fit}
+      onLoad={onLoad}
       cachePolicy="memory-disk"
       transition={0}
       recyclingKey={recyclingKey}

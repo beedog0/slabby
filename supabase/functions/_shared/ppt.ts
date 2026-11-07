@@ -13,7 +13,11 @@ export type PptCard = {
   imageCdnUrl400?: string;
   prices?: { market?: number | null; low?: number | null };
   priceHistory?: { conditions?: Record<string, { history: { date: string; market: number | null }[] }> };
-  ebay?: { priceHistory?: Record<string, Record<string, { average: number; count: number }>> };
+  ebay?: {
+    priceHistory?: Record<string, Record<string, { average: number; count: number }>>;
+    /** Individual sold listings per grade; PPT Business plan only. Parsed defensively. */
+    soldListings?: Record<string, unknown>;
+  };
 };
 
 async function get(path: string, params: Record<string, string>): Promise<unknown> {
@@ -56,6 +60,8 @@ function score(d: PptCard, c: { name: string; setName: string | null; setCode?: 
  * the best name and set fit. Null when nothing has the card number.
  */
 export async function matchCard(c: { name: string; number: string | null; language: string; setName: string | null; setCode?: string | null }) {
+  // PPT lists English and Japanese cards only; searching English for a Korean card finds another card.
+  if (c.language !== 'en' && c.language !== 'ja') return null;
   const want = bareNumber(c.number);
   const full = c.name
     .replace(/\b(alt art|SAR|SIR|AR)\b/gi, '')

@@ -128,3 +128,65 @@ export function looksLikeTypo(offerCents: number, marketCents: number): boolean 
 export function vsEbay(offerCents: number, marketCents: number): number {
   return offerCents - ebayNet(marketCents);
 }
+
+// ── Buying: rate an asking price ─────────────────────────────────────────────────────────────
+
+/** steal ≤ target < good ≤ max < fair ≤ market < over. */
+export type BuyRatingKind = 'steal' | 'good' | 'fair' | 'over';
+
+export type BuyRating = {
+  kind: BuyRatingKind;
+  /** ask − your max. Negative means under it. */
+  deltaToMax: number;
+  /** ask − market. Negative means under it. */
+  deltaToMarket: number;
+  /** ask ÷ market, e.g. 0.88. */
+  pctOfMarket: number;
+  /** What to counter with: your target. */
+  counterAt: number;
+  /** Far under market: worth checking the slab before paying. */
+  suspicious: boolean;
+};
+
+export const BUY_RATING_LABEL: Record<BuyRatingKind, string> = {
+  steal: 'Steal',
+  good: 'Good buy',
+  fair: 'Fair',
+  over: 'Over market',
+};
+
+/** Under half of market is too good: fakes, swapped labels, or a typo. */
+export const SUSPICIOUS_FRACTION = 0.5;
+
+/** Rate an asking price against your buying rules (target, max) and the market for that grade. */
+export function buyRating(askCents: number, p: { targetCents: number; maxCents: number; marketCents: number }): BuyRating {
+  const kind: BuyRatingKind =
+    askCents <= p.targetCents ? 'steal' : askCents <= p.maxCents ? 'good' : askCents <= p.marketCents ? 'fair' : 'over';
+  return {
+    kind,
+    deltaToMax: askCents - p.maxCents,
+    deltaToMarket: askCents - p.marketCents,
+    pctOfMarket: p.marketCents > 0 ? askCents / p.marketCents : 0,
+    counterAt: p.targetCents,
+    suspicious: askCents < p.marketCents * SUSPICIOUS_FRACTION,
+  };
+}
+
+/**
+ * Over a price history, how a fixed price would have rated each day (Steal / Good buy / Fair /
+ * Over market), using your buying rules against that day's market. Days without a price are skipped.
+ */
+export function ratingHistory(
+  priceCents: number,
+  series: number[],
+  limits: (marketCents: number) => { targetCents: number; maxCents: number } | null,
+): Record<BuyRatingKind, number> {
+  const out: Record<BuyRatingKind, number> = { steal: 0, good: 0, fair: 0, over: 0 };
+  for (const m of series) {
+    if (!(m > 0)) continue;
+    const l = limits(m);
+    if (!l) continue;
+    out[buyRating(priceCents, { ...l, marketCents: m }).kind]++;
+  }
+  return out;
+}

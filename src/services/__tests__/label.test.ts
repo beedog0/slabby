@@ -1,4 +1,4 @@
-import { parseLabel } from '../label';
+import { parseLabel, stepAutoRead } from '../label';
 import { cardFromCert } from '../psa';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -63,5 +63,103 @@ describe('parseLabel', () => {
     expect(r?.payload.PSACert).toMatchObject({ Year: '2023', CardNumber: '205', Subject: 'MEW ex', CardGrade: 'GEM MT 10', CertNumber: '81234560' });
     expect(r?.payload.PSACert.Brand).toBe('POKEMON JAPANESE SV2a-POKEMON CARD 151');
     expect(r?.complete).toBe(true);
+  });
+});
+
+describe('stepAutoRead', () => {
+  const full = ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', 'FULL ART', '10', '138092551'];
+
+  it('adds on one clean frame', () => {
+    const r = stepAutoRead(null, parseLabel(full));
+    expect(r.ready?.payload.PSACert).toMatchObject({ CardGrade: 'GEM MT 10', CertNumber: '138092551' });
+  });
+
+  it('takes the grade from one frame and the cert from the next', () => {
+    const a = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+    expect(a.ready).toBeNull();
+    const b = stepAutoRead(a.state, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX GEM MT', 'FULL ART 10']));
+    expect(b.ready?.payload.PSACert).toMatchObject({ Subject: 'SURFING PIKACHU VMAX', CardGrade: 'GEM MT 10', CertNumber: '138092551' });
+  });
+
+  it('adds name and grade without a cert once two frames agree', () => {
+    const lines = ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', 'FULL ART', '10'];
+    const a = stepAutoRead(null, parseLabel(lines));
+    expect(a.ready).toBeNull();
+    expect(stepAutoRead(a.state, parseLabel(lines)).ready).not.toBeNull();
+  });
+
+  it('never adds without a grade number, however many frames', () => {
+    let s = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+    for (let i = 0; i < 4; i++) {
+      s = stepAutoRead(s.state, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+      expect(s.ready).toBeNull();
+    }
+  });
+
+  it('survives a couple of blurry frames, then forgets', () => {
+    let s = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+    s = stepAutoRead(s.state, null);
+    s = stepAutoRead(s.state, null);
+    expect(s.state).not.toBeNull();
+    s = stepAutoRead(s.state, null);
+    expect(s.state).toBeNull();
+  });
+
+  it('starts over when a different card comes into frame', () => {
+    const a = stepAutoRead(null, parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']));
+    const b = stepAutoRead(a.state, parseLabel(['2023 POKEMON SV #199', 'MEW EX GEM MT', 'SPECIAL ART RARE 10']));
+    expect(b.ready).toBeNull();
+    expect(b.state?.label.payload.PSACert.Subject).toBe('MEW EX');
+  });
+});
+
+describe('two-column labels joined by OCR', () => {
+  it('reads the grade when it lands on the variety line', () => {
+    const r = parseLabel([
+      '2021 POKEMON CELEBRATIONS #009',
+      'SURFING PIKACHU VMAX GEM MT',
+      'FULL ART 10',
+      '138092551',
+    ]);
+    expect(r?.payload.PSACert).toMatchObject({
+      Subject: 'SURFING PIKACHU VMAX',
+      CardGrade: 'GEM MT 10',
+      Variety: 'FULL ART',
+      CertNumber: '138092551',
+      CardNumber: '9',
+    });
+    expect(r?.complete).toBe(true);
+    expect(stepAutoRead(null, r).ready).not.toBeNull();
+  });
+
+  it('never auto-reads a half-framed label with no grade number', () => {
+    const r = parseLabel(['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT']);
+    expect(r?.payload.PSACert.Subject).toBe('SURFING PIKACHU VMAX');
+    expect(stepAutoRead(null, r).ready).toBeNull();
+  });
+});
+
+it('keeps EX in a name when OCR joins the grade onto it', () => {
+  const r = parseLabel(['2023 POKEMON SV #199', 'MEW EX GEM MT', 'SPECIAL ART RARE 10', '81234560']);
+  expect(r?.payload.PSACert).toMatchObject({ Subject: 'MEW EX', CardGrade: 'GEM MT 10', CertNumber: '81234560' });
+});
+
+describe('Korean promo label', () => {
+  // 2025 SV-P KO Ditto, Metamong Project stamp rally, cert 120864973.
+  const lines = ['2025 POKEMON SV-P KO', '#173', 'DITTO', 'GEM MT', 'METAMONG PROJECT STMP RLY', '10', '120864973'];
+  it('reads the name, the promo line as the variety, grade and cert', () => {
+    const p = parseLabel(lines)!.payload.PSACert;
+    expect(p.Subject).toBe('DITTO');
+    expect(p.Variety).toBe('METAMONG PROJECT STMP RLY');
+    expect(p.CardNumber).toBe('173');
+    expect(p.CardGrade).toBe('GEM MT 10');
+    expect(p.CertNumber).toBe('120864973');
+  });
+  it('is a Korean SV-P card', () => {
+    const p = parseLabel(lines)!.payload;
+    const card = cardFromCert(p, { paidCents: null, plan: 'hold' });
+    expect(card.language).toBe('ko');
+    expect(card.setCode).toBe('SV-P');
+    expect(card.name).toBe('Ditto');
   });
 });

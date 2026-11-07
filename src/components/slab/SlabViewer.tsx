@@ -1,4 +1,5 @@
-// Full-screen slab viewer: tap the slab on the card screen to open it. Drag sideways to spin
+// Full-screen slab viewer: tap the slab on the card screen to open it. A raw single opens here
+// too: it tilts and zooms but doesn't turn over. Drag sideways to spin
 // it all the way round (it settles on the front or the back), drag up and down to tilt, pinch
 // to zoom, double-tap to reset. A modal, so there is no back-swipe to fight with.
 
@@ -12,12 +13,14 @@ import type { Card } from '../../types';
 import { IconButton } from '../ui';
 import { SLAB_ASPECT } from './geometry';
 import { Slab3D } from './Slab3D';
+import { Sleeve } from './Sleeve';
 
 const REST_YAW = parseFloat(slabPose.rotateY);
 const REST_PITCH = parseFloat(slabPose.rotateX);
 const DEG_PER_PT = 0.55; // sideways drag → spin
 const PITCH_MAX = 38;
 const ZOOM_MAX = 2.4;
+const RAW_TILT = 30; // a raw single tilts, it doesn't turn over (there's no back to show)
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const spread = (e: GestureResponderEvent) => {
@@ -28,6 +31,9 @@ const spread = (e: GestureResponderEvent) => {
 export function SlabViewer({ card, visible, onClose }: { card: Card; visible: boolean; onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const { width: sw, height: sh } = useWindowDimensions();
+  const raw = card.grader === 'raw';
+  const rawRef = useRef(raw);
+  rawRef.current = raw;
   const slabW = Math.min(sw * 0.74, (sh * 0.6) / SLAB_ASPECT);
 
   const yaw = useRef(new Animated.Value(REST_YAW)).current;
@@ -53,6 +59,12 @@ export function SlabViewer({ card, visible, onClose }: { card: Card; visible: bo
   }, [visible, yaw, pitch, zoom, enter, hint, g]);
 
   const settle = (vx: number) => {
+    if (rawRef.current) {
+      g.yaw = REST_YAW;
+      Animated.spring(yaw, { toValue: REST_YAW, friction: 6, tension: 50, useNativeDriver: false }).start();
+      Animated.spring(pitch, { toValue: REST_PITCH, friction: 6, tension: 50, useNativeDriver: false }).start();
+      return;
+    }
     // Carry the flick a little, then come to rest on whichever face is nearest.
     const projected = g.yaw + vx * 1000 * DEG_PER_PT * 0.18;
     const target = REST_YAW + Math.round((projected - REST_YAW) / 180) * 180;
@@ -104,7 +116,7 @@ export function SlabViewer({ card, visible, onClose }: { card: Card; visible: bo
           g.moved = true;
           Animated.timing(hint, { toValue: 0, duration: 240, useNativeDriver: true }).start();
         }
-        g.yaw = g.startYaw + s.dx * DEG_PER_PT;
+        g.yaw = rawRef.current ? REST_YAW + RAW_TILT * Math.tanh(s.dx / 140) : g.startYaw + s.dx * DEG_PER_PT;
         yaw.setValue(g.yaw);
         pitch.setValue(REST_PITCH - PITCH_MAX * Math.tanh(s.dy / 160));
       },
@@ -123,16 +135,35 @@ export function SlabViewer({ card, visible, onClose }: { card: Card; visible: bo
     }),
   ).current;
 
-  const scale = Animated.multiply(zoom, enter.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] }));
+  // The slab is laid out at full-zoom size and scaled down, so iOS draws its text, edges and
+  // art at the zoomed resolution. Scaling a small render up is what made it pixelate.
+  const scale = Animated.multiply(
+    Animated.multiply(zoom, 1 / ZOOM_MAX),
+    enter.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] }),
+  );
 
   return (
     <Modal visible={visible} animationType="fade" presentationStyle="overFullScreen" transparent statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.page} {...pan.panHandlers}>
         <Animated.View style={{ transform: [{ scale }], opacity: enter }}>
-          <Slab3D card={card} width={slabW} yaw={yaw} pitch={pitch} sharp />
+          {raw ? (
+            <Sleeve
+              card={card}
+              width={(slabW / 0.86) * ZOOM_MAX}
+              sharp
+              transform={[
+                // Drawn at full-zoom size, so the perspective distance scales with it.
+                { perspective: slabPose.perspective * ZOOM_MAX },
+                { rotateY: yaw.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) },
+                { rotateX: pitch.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) },
+              ]}
+            />
+          ) : (
+            <Slab3D card={card} width={slabW * ZOOM_MAX} yaw={yaw} pitch={pitch} sharp />
+          )}
         </Animated.View>
         <Animated.Text style={[type.secondary, styles.hint, { bottom: insets.bottom + space.xxl, opacity: hint }]}>
-          Drag to turn · pinch to zoom
+          {raw ? 'Drag to tilt · pinch to zoom' : 'Drag to turn · pinch to zoom'}
         </Animated.Text>
       </View>
       <View style={[styles.close, { top: insets.top + space.s }]}>

@@ -7,13 +7,14 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type React from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { CardRow } from '../../pricing/portfolio';
+import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { color, size, space, type } from '../../theme/tokens';
 import { prefetchArt } from '../ArtImage';
-import { cardLabel, langTag, money, rowTitle } from '../../lib/format';
+import { cardLabel, langTag, money, pct, rowTitle } from '../../lib/format';
 import { SlabView } from '../SlabView';
+import { CopiesMark, PinMark } from './PinMark';
 
 // Room between cases: the slab now has a real case edge and shadow, so neighbours need air.
 const GAP = space.xxxl;
@@ -23,7 +24,7 @@ const REFLECTION = { opacity: 0.18, height: 0.12 } as const;
 const ITEM_TOP = space.m;
 // Name, value, one line, then "1 of 9": a fixed block so the slab can be sized to what's left.
 const CAPTION_H = 110;
-const MIN_SLAB_W = 150;
+const MIN_SLAB_W = 130;
 
 type ItemProps = {
   row: CardRow;
@@ -33,9 +34,11 @@ type ItemProps = {
   slabW: number;
   slabH: number;
   onPress: (n: number) => void;
+  onLongPress?: (row: CardRow) => void;
+  pinned?: boolean;
 };
 
-const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: ItemProps) {
+const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress, onLongPress, pinned }: ItemProps) {
   const range = [(n - 1) * step, n * step, (n + 1) * step];
   const opacity = x.interpolate({ inputRange: range, outputRange: [0.5, 1, 0.5], extrapolate: 'clamp' });
   // Whole-degree lean and whole-point drop only, so the slab lands on exact pixels at rest.
@@ -47,11 +50,16 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: Item
       accessibilityRole="button"
       accessibilityLabel={row.card.name}
       onPress={() => onPress(n)}
+      onLongPress={onLongPress ? () => onLongPress(row) : undefined}
       style={{ width: step, alignItems: 'center', paddingTop: ITEM_TOP }}
     >
       <Animated.View style={{ transform: [{ translateY }, { rotate }], opacity, alignItems: 'center' }}>
         {/* Flat, not posed: the reflection meets a straight bottom edge, as in Cover Flow. */}
-        <SlabView card={row.card} width={slabW} posed={false} />
+        <View>
+          <SlabView card={row.card} width={slabW} posed={false} />
+          {pinned ? <PinMark slabW={slabW} card={row.card} /> : null}
+          <CopiesMark slabW={slabW} card={row.card} copies={row.copies ?? 1} />
+        </View>
         <View pointerEvents="none" style={{ width: slabW, height: reflH, overflow: 'hidden', marginTop: 3 }}>
           {/* Flipped about its centre, the slab's bottom edge lands at the top of this strip. */}
           <View style={{ height: slabH, opacity: REFLECTION.opacity, transform: [{ scaleY: -1 }] }}>
@@ -72,7 +80,19 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress }: Item
  * `fitHeight` is the room left on screen below the tabs. The slab is sized so slab, reflection
  * and caption all fit in it, between MIN_SLAB_W and the full carousel size.
  */
-export function ScrollDisplay({ rows, screenW, fitHeight }: { rows: CardRow[]; screenW: number; fitHeight?: number }) {
+export function ScrollDisplay({
+  rows,
+  screenW,
+  fitHeight,
+  onLongPress,
+  pinnedId,
+}: {
+  rows: CardRow[];
+  screenW: number;
+  fitHeight?: number;
+  onLongPress?: (row: CardRow) => void;
+  pinnedId?: string | null;
+}) {
   const maxW = Math.min(size.carouselSlabW, screenW - space.gutter * 2 - 80);
   const fitSlabH = fitHeight ? (fitHeight - ITEM_TOP - 3 - CAPTION_H) / (1 + REFLECTION.height) : Infinity;
   const slabW = Math.round(Math.max(MIN_SLAB_W, Math.min(maxW, (fitSlabH * size.heroW) / size.heroH)));
@@ -106,6 +126,38 @@ export function ScrollDisplay({ rows, screenW, fitHeight }: { rows: CardRow[]; s
   useEffect(() => {
     prefetchArt(rows.map((r) => r.card.imageFrontUrl));
   }, [rows]);
+
+  // Put slab n in the middle and tell the lean/dim/caption animations so directly. The scroll
+  // position only reaches `x` through scroll events, and iOS sends none when the list re-sorts,
+  // re-filters or changes size under a resting finger, so `x` could keep an old offset and draw
+  // the centred slab as a dimmed, leaning neighbour (the "1 of 3" slab sitting off to one side).
+  const settle = useCallback(
+    (n: number) => {
+      const k = Math.max(0, Math.min(rows.length - 1, n));
+      indexRef.current = k;
+      setIndex(k);
+      list.current?.scrollToOffset({ offset: k * step, animated: false });
+      x.setValue(k * step);
+    },
+    [rows.length, step, x],
+  );
+
+  // A new sort, filter or search gives a new order: start again from its first slab.
+  const order = rows.map((r) => r.card.id).join('|');
+  const lastOrder = useRef(order);
+  useLayoutEffect(() => {
+    if (order === lastOrder.current) return;
+    lastOrder.current = order;
+    settle(0);
+  }, [order, settle]);
+
+  // The slab is resized once the room below the tabs is known; keep the same slab centred.
+  const lastStep = useRef(step);
+  useLayoutEffect(() => {
+    if (step === lastStep.current) return;
+    lastStep.current = step;
+    settle(indexRef.current);
+  }, [step, settle]);
 
   const onPress = useCallback(
     (n: number) => {
@@ -142,9 +194,22 @@ export function ScrollDisplay({ rows, screenW, fitHeight }: { rows: CardRow[]; s
           },
         })}
         scrollEventThrottle={16}
+        // Fires on mount and whenever the slabs change width or count, with no scroll event of
+        // its own: re-centre so the animations match what's on screen.
+        onContentSizeChange={() => settle(indexRef.current)}
         getItemLayout={(_, n) => ({ length: step, offset: step * n, index: n })}
         renderItem={({ item, index: n }) => (
-          <Item row={item} n={n} x={x} step={step} slabW={slabW} slabH={slabH} onPress={onPress} />
+          <Item
+            row={item}
+            n={n}
+            x={x}
+            step={step}
+            slabW={slabW}
+            slabH={slabH}
+            onPress={onPress}
+            onLongPress={onLongPress}
+            pinned={item.card.id === pinnedId}
+          />
         )}
       />
       {current ? (
@@ -170,6 +235,15 @@ export function ScrollDisplay({ rows, screenW, fitHeight }: { rows: CardRow[]; s
  * Name, value, then one line that depends on the slab: gain vs paid for holds, ask and floor for
  * slabs for sale, the sale vs paid for sold ones. The 30-day chart lives on the detail screen.
  */
+const signedMoney = (cents: number) => `${cents >= 0 ? '+' : '−'}${money(Math.abs(cents))}`;
+const shortDay = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+/**
+ * Each line has one owner, so the market and your own numbers never blur:
+ * - Line 1 is the market: the price, with this week's move attached like a ticker ("−2% this week").
+ * - Line 2 is you: what you've made ("+$190 (+45%) on $420 paid"), or, for sale, your ask and floor.
+ * Green/red only ever means up or down. The floor is a rule you set, so it stays ink.
+ */
 function SwipeCaption({ row }: { row: CardRow }) {
   const { card, price } = row;
   const sold = card.status === 'sold';
@@ -177,9 +251,9 @@ function SwipeCaption({ row }: { row: CardRow }) {
   const value = sold ? card.soldCents : price?.marketCents;
   const muted = { color: color.secondary };
   const ink = { color: color.ink };
-  const signed = (cents: number) => (
-    <Text style={{ color: cents >= 0 ? color.gain : color.loss }}>{`${cents >= 0 ? '+' : ''}${money(cents)}`}</Text>
-  );
+  const week = weekChange(row);
+  const tint = (cents: number) => ({ color: cents >= 0 ? color.gain : color.loss });
+  const made = value != null && card.paidCents != null ? value - card.paidCents : null;
 
   let line: React.ReactNode;
   if (selling && row.ask != null) {
@@ -188,21 +262,30 @@ function SwipeCaption({ row }: { row: CardRow }) {
         Ask <Text style={ink}>{money(row.ask)}</Text>
         {row.floor != null ? (
           <>
-            {' · '}floor <Text style={{ color: color.loss }}>{money(row.floor)}</Text>
+            {' · '}floor <Text style={ink}>{money(row.floor)}</Text>
           </>
         ) : null}
       </>
     );
-  } else if (value != null && card.paidCents != null) {
+  } else if (sold) {
     line = (
       <>
-        {signed(value - card.paidCents)}
-        {sold ? ' · sold, paid ' : ' · paid '}
-        <Text style={ink}>{money(card.paidCents)}</Text>
+        {card.soldAt ? `Sold ${shortDay(card.soldAt)}` : 'Sold'}
+        {made != null ? (
+          <>
+            {' · '}
+            <Text style={tint(made)}>{signedMoney(made)}</Text> profit
+          </>
+        ) : null}
       </>
     );
-  } else if (sold) {
-    line = 'Sold';
+  } else if (made != null) {
+    line = (
+      <>
+        <Text style={tint(made)}>{`${signedMoney(made)} (${pct(made / card.paidCents!)})`}</Text> on{' '}
+        <Text style={ink}>{money(card.paidCents!)}</Text> paid
+      </>
+    );
   } else if (price) {
     line = card.grader === 'raw' ? 'TCGplayer market' : 'eBay sold, 30 days';
   } else {
@@ -220,7 +303,15 @@ function SwipeCaption({ row }: { row: CardRow }) {
           <Text style={muted}>{` · ${langTag(card.language)}`}</Text>
         ) : null}
       </Text>
-      <Text style={[type.rowPrice, ink, { paddingTop: space.xs }]}>{value != null ? money(value) : '—'}</Text>
+      <Text numberOfLines={1} style={[type.rowPrice, ink, { paddingTop: space.xs }]}>
+        {value != null ? money(value) : '—'}
+        {week ? (
+          <Text style={[type.secondary, muted]}>
+            {'  '}
+            <Text style={tint(week.cents)}>{pct(week.fraction)}</Text> this week
+          </Text>
+        ) : null}
+      </Text>
       <Text numberOfLines={1} style={[type.secondary, muted, { paddingTop: 2 }]}>
         {line}
       </Text>
