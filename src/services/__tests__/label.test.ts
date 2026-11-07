@@ -85,7 +85,8 @@ describe('stepAutoRead', () => {
 
   it('outvotes a blurry frame that garbles the name', () => {
     const jp = (name: string) => ['2021 POKEMON JPN', name, 'GEM MT 10', '166947927'];
-    const r = run([jp('TT TH AN NY - COLDEN BOX'), jp('PIKACHU'), jp('PIKACHU')]);
+    // No set on the brand line and none read, so it waits up to three more frames for one.
+    const r = run([jp('TT TH AN NY - COLDEN BOX'), ...Array(5).fill(jp('PIKACHU'))]);
     expect(r.ready?.payload.PSACert.Subject).toBe('PIKACHU');
   });
 
@@ -240,5 +241,32 @@ describe('nameLike', () => {
     expect(nameLike('M CHARIZARD EX')).toBe(true);
     expect(nameLike('25TH ANNIV-GOLDEN BOX')).toBe(false);
     expect(nameLike('TT TH AN NY - CO')).toBe(false);
+  });
+});
+
+describe('auto-read keeps the set line from any frame', () => {
+  const frame = (extra: Record<string, string | undefined>) => ({
+    payload: { PSACert: { CertNumber: '166947927', Year: '2021', Brand: 'POKEMON JAPANESE', CardNumber: '3', Subject: 'PIKACHU', CardGrade: 'GEM MT 10', ...extra } },
+    complete: true,
+  });
+  it('adds the set line one frame read and the voting frames missed', () => {
+    let st = stepAutoRead(null, frame({ Variety: '25TH ANNIV-GOLDEN BOX' }));
+    st = stepAutoRead(st.state, frame({}));
+    expect(st.ready?.payload.PSACert.Variety).toBe('25TH ANNIV-GOLDEN BOX');
+  });
+  it('waits a few frames for a set line when the brand names none, then adds without it', () => {
+    let st = stepAutoRead(null, frame({}));
+    st = stepAutoRead(st.state, frame({}));
+    expect(st.ready).toBeNull();
+    st = stepAutoRead(st.state, frame({ Variety: '25TH ANNIV-GOLDEN BOX' }));
+    expect(st.ready?.payload.PSACert.Variety).toBe('25TH ANNIV-GOLDEN BOX');
+    let s2 = stepAutoRead(null, frame({}));
+    for (let i = 0; i < 4 && !s2.ready; i++) s2 = stepAutoRead(s2.state, frame({}));
+    expect(s2.ready?.payload.PSACert.Subject).toBe('PIKACHU');
+  });
+  it('does not wait when the brand names a set', () => {
+    let st = stepAutoRead(null, frame({ Brand: 'POKEMON JAPANESE SV8a' }));
+    st = stepAutoRead(st.state, frame({ Brand: 'POKEMON JAPANESE SV8a' }));
+    expect(st.ready).not.toBeNull();
   });
 });

@@ -231,6 +231,13 @@ export type AutoRead = {
   names: Record<string, Vote & { label: ParsedLabel }>;
   grade: Vote | null;
   cert: Vote | null;
+  /** Set/variety line, card number and brand from any frame: the frame that reads the name best
+   * often misses them (a tilted label loses "25TH ANNIV-GOLDEN BOX"). */
+  variety?: string;
+  number?: string;
+  brand?: string;
+  /** Frames waited for a set line after everything else was read. */
+  waits?: number;
   misses: number;
 } | null;
 
@@ -240,6 +247,13 @@ export type AutoProgress = { name: Field; grade: Field; cert: Field };
 
 const norm = (s?: string) => (s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const graded = (g?: string) => !!g && (/\d$/.test(g) || /^AUTH/.test(g));
+/** Brand lines that name only the language, no set: "POKEMON JAPANESE" (from "2021 POKEMON JPN"). */
+const NO_SET = /^POKEMON(?:\s+(?:JAPANESE|KOREAN|CHINESE|JPN?|KOR?|KR))?\s*$/i;
+/** Extra frames to wait for a missing set line before adding without it. Auto-read runs ~1/s. */
+const SET_WAIT = 3;
+/** The fuller of two reads of the brand line (a tilted frame can cut it short). */
+const longer = (a?: string, b?: string) => ((b?.length ?? 0) > (a?.length ?? 0) ? b : a);
+
 /** Frames without a label we tolerate (a glare, a wobble) before forgetting what we've read. */
 const MISS_LIMIT = 3;
 
@@ -280,13 +294,28 @@ export function stepAutoRead(state: AutoRead, next: ParsedLabel | null): { state
     names: { ...(state?.names ?? {}), [key]: { value: c.Subject, count: (prev?.count ?? 0) + 1, label: next! } },
     grade: graded(c.CardGrade) ? vote(state?.grade ?? null, c.CardGrade!) : (state?.grade ?? null),
     cert: c.CertNumber ? vote(state?.cert ?? null, c.CertNumber) : (state?.cert ?? null),
+    variety: state?.variety ?? c.Variety ?? undefined,
+    number: state?.number ?? c.CardNumber ?? undefined,
+    brand: longer(state?.brand, c.Brand),
+    waits: state?.waits ?? 0,
     misses: 0,
   };
   const top = topName(s)!;
   const ok = top.count >= 2 && !!s.grade && (!!s.cert || s.grade.count >= 2);
   if (!ok) return { state: s, ready: null };
+  // "2021 POKEMON JPN" names no set: PSA prints it on its own line. Without that line the card
+  // can't be told from every other Japanese #3, so give the next few frames a chance to read it.
+  if (!s.variety && NO_SET.test(s.brand ?? '') && s.waits! < SET_WAIT) return { state: { ...s, waits: s.waits! + 1 }, ready: null };
   const base = top.label.payload.PSACert;
-  const PSACert = { ...base, Subject: top.value, CardGrade: s.grade!.value, CertNumber: s.cert?.value ?? '' };
+  const PSACert = {
+    ...base,
+    Subject: top.value,
+    CardGrade: s.grade!.value,
+    CertNumber: s.cert?.value ?? '',
+    Variety: base.Variety ?? s.variety,
+    CardNumber: base.CardNumber ?? s.number,
+    Brand: longer(base.Brand, s.brand),
+  };
   return { state: null, ready: { payload: { PSACert }, complete: !!s.cert } };
 }
 
