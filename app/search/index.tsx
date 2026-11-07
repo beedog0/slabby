@@ -9,6 +9,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Animated, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { sheetTop } from '../../src/lib/sheetTop';
 import { ArtImage } from '../../src/components/ArtImage';
 import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/sheet/useSheetDrag';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
@@ -241,7 +242,7 @@ export default function Search() {
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
           scrollEventThrottle={16}
           scrollIndicatorInsets={{ top: headerH }}
-          style={{ paddingTop: insets.top }}
+          style={{ paddingTop: sheetTop(insets.top, con) }}
           ListEmptyComponent={hint ? <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text> : undefined}
           numColumns={layout === 'grid' ? 2 : 1}
           keyExtractor={(c) => String(c.productId)}
@@ -454,8 +455,14 @@ function CheckRow({ label, detail, on, onPress }: { label: string; detail?: stri
 
 type ResultProps = { card: Found; con: boolean; trade?: boolean; rules: PricingRules; change: number | null; days: number };
 
+// Con mode's Buying goes straight to "They're asking" for the card (the full card page is a link
+// there); the trade calculator opens the card page with "Add to their side".
 const openCard = (card: Found, con: boolean, trade = false) =>
-  router.push(trade ? `/search/${card.productId}?trade=1` : con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`);
+  trade
+    ? router.push(`/search/${card.productId}?trade=1`)
+    : con
+      ? router.push({ pathname: '/con/buy/[id]', params: { id: String(card.productId), grade: 'psa10' } })
+      : router.push(`/search/${card.productId}`);
 
 /** Grid tile: the card photo, then name, set · number and price, like home's grid. */
 function ResultTile({ card, width, con, trade, rules, change, days }: ResultProps & { width: number }) {

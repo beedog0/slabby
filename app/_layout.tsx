@@ -14,7 +14,16 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.canvas } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.canvas } }}>
+        {/* Con mode's Buying: search, then "They're asking", each a sheet over the last (swipe down
+            to go back a step) instead of full pages. */}
+        <Stack.Screen
+          name="search/index"
+          options={({ route }) => ({ presentation: (route.params as { con?: string } | undefined)?.con === '1' ? 'modal' : 'card' })}
+        />
+        <Stack.Screen name="con/buy/[id]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="con/want/[id]" options={{ presentation: 'modal' }} />
+      </Stack>
       <ShareCardHost />
       <MenuHost />
       <DropdownHost />

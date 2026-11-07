@@ -8,6 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { sheetTop } from '../../../src/lib/sheetTop';
 import { Keypad } from '../../../src/components/Keypad';
 import { PriceChart } from '../../../src/components/PriceChart';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../../src/components/ui';
@@ -102,7 +103,7 @@ export default function WishlistPrice() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: sheetTop(insets.top) }}>
       <View style={styles.nav}>
         <IconButton label="Back" onPress={() => router.back()}>
           <BackIcon />
