@@ -30,6 +30,8 @@ type Props = {
 
 const REST_YAW = parseFloat(slabPose.rotateY);
 const REST_PITCH = parseFloat(slabPose.rotateX);
+/** The card screen's slab rests square to the screen; it only angles while you tilt it. */
+const UPRIGHT = 0;
 const TILT_YAW = 28;
 const TILT_PITCH = 22;
 
@@ -57,8 +59,8 @@ export function SlabView({ card, width = size.heroW, posed = true, shadow: floor
 
 
 function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; width: number; height: number; label: string; onDragChange?: (d: boolean) => void }) {
-  const yaw = useRef(new Animated.Value(REST_YAW)).current;
-  const pitch = useRef(new Animated.Value(REST_PITCH)).current;
+  const yaw = useRef(new Animated.Value(UPRIGHT)).current;
+  const pitch = useRef(new Animated.Value(UPRIGHT)).current;
   const [open, setOpen] = useState(false);
   const cb = useRef(onDragChange);
   cb.current = onDragChange;
@@ -78,8 +80,8 @@ function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; wi
         cb.current?.(true);
       },
       onPanResponderMove: (_, s) => {
-        yaw.setValue(REST_YAW + TILT_YAW * Math.tanh(s.dx / 110));
-        pitch.setValue(REST_PITCH - TILT_PITCH * Math.tanh(s.dy / 110));
+        yaw.setValue(UPRIGHT + TILT_YAW * Math.tanh(s.dx / 110));
+        pitch.setValue(UPRIGHT - TILT_PITCH * Math.tanh(s.dy / 110));
       },
       onPanResponderRelease: (_, s) => {
         cb.current?.(false);
@@ -96,8 +98,8 @@ function TiltSlab({ card, width, height, label, onDragChange }: { card: Card; wi
 
   function springBack() {
     Animated.parallel([
-      Animated.spring(yaw, { toValue: REST_YAW, friction: 5, tension: 55, useNativeDriver: false }),
-      Animated.spring(pitch, { toValue: REST_PITCH, friction: 5, tension: 55, useNativeDriver: false }),
+      Animated.spring(yaw, { toValue: UPRIGHT, friction: 5, tension: 55, useNativeDriver: false }),
+      Animated.spring(pitch, { toValue: UPRIGHT, friction: 5, tension: 55, useNativeDriver: false }),
     ]).start();
   }
 

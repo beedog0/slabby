@@ -15,8 +15,10 @@ import { SLAB_ASPECT } from './geometry';
 import { Slab3D } from './Slab3D';
 import { Sleeve } from './Sleeve';
 
-const REST_YAW = parseFloat(slabPose.rotateY);
-const REST_PITCH = parseFloat(slabPose.rotateX);
+// The viewer rests square to the screen, front or back. (slabPose stays imported: the raw-card
+// sleeve in this viewer, from the print-picker work, uses it.)
+const REST_YAW = 0;
+const REST_PITCH = 0;
 const DEG_PER_PT = 0.55; // sideways drag → spin
 const PITCH_MAX = 38;
 const ZOOM_MAX = 2.4;
