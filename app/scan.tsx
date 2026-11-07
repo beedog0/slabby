@@ -46,7 +46,7 @@ import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
 import { usePrices } from '../src/store/prices';
-import { parseLabel, stepAutoRead, type AutoRead, type ParsedLabel } from '../src/services/label';
+import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
 import { LabelReader } from '../modules/label-reader';
 import type { Card } from '../src/types';
@@ -103,6 +103,7 @@ export default function Scan() {
   const [active, setActive] = useState(AppState.currentState === 'active');
   // A label was read once and we're waiting for a second matching read.
   const [spotted, setSpotted] = useState(false);
+  const [progress, setProgress] = useState<AutoProgress>(autoProgress(null));
   // The read succeeded: the frame closes solid with a check for a beat, then the sheet rises.
   const [locked, setLocked] = useState(false);
   const sheetIn = useRef(new Animated.Value(0)).current;
@@ -116,6 +117,8 @@ export default function Scan() {
   // The last card read. Once it's in the vault, auto-read ignores it, so the slab just added (and
   // still in frame after the sheet closes) isn't read again. A tap still reads it.
   const lastRead = useRef<string | null>(null);
+  // Where the frame sits on screen, for keeping only the text inside it.
+  const frameRect = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const win = useWindowDimensions();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
@@ -225,6 +228,7 @@ export default function Scan() {
     match.current = null;
     setConfirmAgain(false);
     setAsking(false);
+    setProgress(autoProgress(null));
     setLabelMiss(false);
     setResult(null);
     setCost(EMPTY_COST);
@@ -292,6 +296,7 @@ export default function Scan() {
     auto.current = null;
     lastRead.current = readId(parsed);
     setSpotted(false);
+    setProgress(autoProgress(null));
     setLabelMiss(false);
     setLocked(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
@@ -319,7 +324,10 @@ export default function Scan() {
     try {
       const photo = await camera.current.takePictureAsync({ quality: manual ? 0.9 : 0.7, shutterSound: false });
       uri = photo?.uri;
-      const lines = uri ? await LabelReader.recognize(uri) : [];
+      const all = uri ? await LabelReader.recognize(uri) : [];
+      // Only text inside the frame: a laptop screen or the next slab behind it never gets read.
+      const inFrame = photo ? linesInFrame(all, photo, win, frameRect.current) : all;
+      const lines = manual && !inFrame.length ? all : inFrame;
       const parsed = parseLabel(lines);
       // A grader label means slab. Otherwise a collector number means a loose card. Raw cards print
       // "©2023 Pokémon", which can pass for a label's year and brand, so the number decides.
@@ -329,14 +337,17 @@ export default function Scan() {
       // Slab reads gather across frames; a loose card's frame doesn't feed the slab reader.
       const step = stepAutoRead(auto.current, slabbed || !loose ? parsed : null);
       if (asked) {
-        // A tap takes whatever is readable, topped up with what earlier frames saw of the same card.
-        const best = step.ready ?? step.state?.label ?? parsed;
+        // A tap takes this frame, topped up with the grade or cert earlier frames read.
+        const best = step.ready ?? withVotes(auto.current, parsed);
         if (best?.payload.PSACert.Subject && (slabbed || !loose)) return accept(best);
         if (loose) return acceptCard(loose);
         setSeen(lines.slice(0, 4).map((l) => l.text).join(' · '));
         setLabelMiss(true);
         auto.current = null;
         setSpotted(false);
+      setProgress(autoProgress(null));
+        setProgress(autoProgress(null));
+    setProgress(autoProgress(null));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         return;
       }
@@ -361,12 +372,16 @@ export default function Scan() {
       if (step.ready && justAdded(step.ready)) {
         auto.current = null;
         setSpotted(false);
+      setProgress(autoProgress(null));
+        setProgress(autoProgress(null));
+    setProgress(autoProgress(null));
         return;
       }
       if (step.ready) return accept(step.ready);
       if (step.state && !auto.current) Haptics.selectionAsync().catch(() => {});
       auto.current = step.state;
       setSpotted(!!step.state);
+      setProgress(autoProgress(step.state));
       if (step.state) setLabelMiss(false);
     } catch {
       if (manualAsk.current) setLabelMiss(true);
@@ -438,6 +453,8 @@ export default function Scan() {
       auto.current = null;
       lastKey.current = null;
       setSpotted(false);
+      setProgress(autoProgress(null));
+    setProgress(autoProgress(null));
     };
   }, [autoOn]);
 
@@ -449,6 +466,7 @@ export default function Scan() {
   const frameH = labelMode ? Math.round(frameW * slabRatio) : frameW;
   const labelH = Math.round(frameH * LABEL_SHARE);
   const frameTop = insets.top + space.s + NAV_H + (labelMode ? space.xl : space.xxxl);
+  frameRect.current = { x: (win.width - frameW) / 2, y: frameTop, width: frameW, height: frameH };
   const hint = locked
     ? 'Got it'
     : busy
@@ -529,6 +547,23 @@ export default function Scan() {
       <View style={[styles.below, { top: frameTop + frameH + space.xl }]}>
         <View style={styles.hint}>
           <Text style={[type.text, { color: color.onInk, textAlign: 'center' }]}>{hint}</Text>
+          {spotted && !locked ? (
+            // What the read has so far, so a stuck scan shows what it can't make out.
+            <View style={styles.progress}>
+              {(
+                [
+                  ['Name', progress.name === 'sure', progress.name === 'seen'],
+                  ['Grade', progress.grade, false],
+                  ['Cert', progress.cert, false],
+                ] as const
+              ).map(([label, done, partly]) => (
+                <View key={label} style={styles.progressItem}>
+                  <View style={[styles.dot, done ? styles.dotDone : partly ? styles.dotPartly : null]} />
+                  <Text style={[type.secondary, { color: done ? color.onInk : color.scanGuide }]}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </View>
         {added ? (
           <Pressable
@@ -1112,6 +1147,11 @@ const styles = StyleSheet.create({
     paddingVertical: space.s,
   },
   corner: { position: 'absolute', width: 24, height: 24, borderColor: color.conFill, borderRadius: 4 },
+  progress: { flexDirection: 'row', justifyContent: 'center', gap: space.l, paddingTop: space.xs },
+  progressItem: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  dot: { width: 6, height: 6, borderRadius: 3, borderWidth: 1, borderColor: color.scanGuide },
+  dotPartly: { borderColor: color.conFill },
+  dotDone: { backgroundColor: color.conFill, borderColor: color.conFill },
   labelLine: { position: 'absolute', left: space.s, right: space.s, height: size.hairline, backgroundColor: color.scanGuide },
   frameDone: { borderWidth: 3, backgroundColor: color.scanLocked },
   check: {
