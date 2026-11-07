@@ -7,7 +7,7 @@
 
 import catalogJson from '../mocks/catalog.json';
 import type { CatalogCard } from './search';
-import { displayName, fromRow, type Row } from './search';
+import { displayName, fromRow, searchCards, type Row } from './search';
 import { supabase } from './supabase';
 import type { LabelLine } from './label';
 
@@ -30,6 +30,8 @@ export type ParsedCard = {
   language: ScanLanguage | null;
   /** Every recognized word, upper-cased, for matching the card name. */
   words: Set<string>;
+  /** The card's name as read from the top line ("Snivy", "Charizard ex"); null when none looks like one. */
+  name?: string | null;
 };
 
 // A grader label in the frame: then it's a slab, never a raw card.
@@ -105,6 +107,26 @@ function languageOf(t: string): ScanLanguage | null {
   return null;
 }
 
+// Words at the top of a card that aren't its name.
+const NOT_NAME = /^(BASIC|STAGE ?[12]?|MEGA|TRAINER|ITEM|SUPPORTER|STADIUM|POK[EÉ]MON TOOL|ENERGY|EVOLVES FROM.*|HP.*|ILLUS.*|TERA|ACE SPEC|ABILITY)$/i;
+
+/**
+ * The card's name: the highest line that reads like one (letters, an optional "ex"/"V"/"GX"
+ * suffix, not a stage word or HP). Used only to suggest similar cards when the number finds none.
+ */
+export function readName(input: (LabelLine | string)[]): string | null {
+  const lines = input
+    .map((l, i) => (typeof l === 'string' ? { text: l, y: i } : l))
+    .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').replace(/\s*(HP|нр|Hp)\s*\d+.*$/, '').trim() }))
+    .sort((a, b) => a.y - b.y);
+  for (const l of lines) {
+    const t = l.text.replace(/^(BASIC|STAGE ?[12])\s+/i, '');
+    if (NOT_NAME.test(t)) continue;
+    if (/^[A-Z][A-Za-z'é.\- ]{2,24}$/.test(t) && !/\d/.test(t) && t.split(' ').length <= 4) return t;
+  }
+  return null;
+}
+
 /** Pull the collector number, set code and words from a raw card's recognized text. Null without a number. */
 export function parseCardText(input: (LabelLine | string)[]): ParsedCard | null {
   const texts = textRows(input);
@@ -175,7 +197,7 @@ export function parseCardText(input: (LabelLine | string)[]): ParsedCard | null 
   if (!numbers.length) return null;
   // Korean cards print the same codes as Japanese ones; Hangul in the name or text tells them apart.
   if (texts.some((t) => /[\uAC00-\uD7A3]/.test(t))) language = 'ko';
-  return { numbers, codes, language: language ?? (jpCode ? 'ja' : null), words };
+  return { numbers, codes, language: language ?? (jpCode ? 'ja' : null), words, name: readName(input) };
 }
 
 /** Auto-read key: two frames with the same first number mean the card is held steady. */
@@ -282,6 +304,34 @@ export function missReason(p: ParsedCard): string {
   const n = p.numbers[0];
   if (n?.code) return `${printedNumber(n)} isn’t in TCGplayer’s catalog yet, so there’s no price source yet. New promos usually show up within a few weeks.`;
   return 'It may be misread or not in the catalog yet. Search for it by name instead.';
+}
+
+/**
+ * Cards with the name read when the number finds nothing: promos with no set (McDonald's,
+ * regional prints), or a set the catalog doesn't carry. Same number first, then the read
+ * language, then the pricier (likelier collected) print. Korean and Chinese prints get none:
+ * an English or Japanese card's price would be wrong for them.
+ */
+export async function findSimilarCards(p: ParsedCard): Promise<CatalogCard[]> {
+  if (!p.name || p.language === 'ko' || p.language === 'zh') return [];
+  const found = await searchCards(p.name, 'pokemon');
+  return rankSimilar(found, p).slice(0, 8);
+}
+
+/** Order similar cards: printed number first, then language, then name fit, then price. */
+export function rankSimilar(cards: CatalogCard[], p: ParsedCard): CatalogCard[] {
+  const nums = new Set(p.numbers.map((n) => strip(n.num)));
+  const want = (p.name ?? '').toUpperCase();
+  const score = (c: CatalogCard) => {
+    const num = strip((c.number ?? '').split('/')[0].toUpperCase());
+    const base = displayName(c.name).toUpperCase().replace(/\s*\(.*$/, '');
+    return (nums.has(num) ? 4 : 0) + (p.language && c.language === p.language ? 2 : 0) + (base === want ? 1 : 0);
+  };
+  return cards
+    .filter((c) => displayName(c.name).toUpperCase().includes(want))
+    .map((c) => ({ c, s: score(c) }))
+    .sort((a, b) => b.s - a.s || (b.c.marketCents ?? 0) - (a.c.marketCents ?? 0))
+    .map((x) => x.c);
 }
 
 /** Printings to offer when the catalog has none yet (Pokémon only; other games print one way). */

@@ -1,4 +1,4 @@
-import { cardSteadyKey, findScannedCard, fitsRead, isConfident, looksLikeSlab, missReason, numberVariants, parseCardText, printedNumber, printName, printOptions, rankCards } from '../cardScan';
+import { cardSteadyKey, findScannedCard, findSimilarCards, fitsRead, rankSimilar, readName, isConfident, looksLikeSlab, missReason, numberVariants, parseCardText, printedNumber, printName, printOptions, rankCards } from '../cardScan';
 import type { CatalogCard } from '../search';
 
 jest.mock('../supabase', () => ({ supabase: null }));
@@ -270,5 +270,32 @@ describe('promo matching', () => {
   it('says so plainly when the promo isn’t in the catalog', async () => {
     expect(await findScannedCard(read)).toEqual([]);
     expect(missReason(read)).toMatch(/MEP 049 isn’t in TCGplayer’s catalog yet/);
+  });
+});
+
+describe('similar cards when the number finds nothing', () => {
+  it('reads the name from the top line, past stage words and HP', () => {
+    expect(readName(['Snivy', 'нр60X', 'Vine Whip', 'J MEP IN) 049'])).toBe('Snivy');
+    expect(readName(['BASIC', 'Oshawott', 'Flip a coin If heads, this attack de'])).toBe('Oshawott');
+    expect(readName(['BASIC Pikachu HP 60'])).toBe('Pikachu');
+    expect(readName([{ text: '051 ★', x: 0.1, y: 0.9 }, { text: 'Oshawott', x: 0.2, y: 0.05 }])).toBe('Oshawott');
+  });
+
+  it('puts the same number first, then the read language, then price', () => {
+    const p = parseCardText(['Pikachu', '1/25'])!;
+    const ranked = rankSimilar(
+      [
+        card({ productId: 1, name: 'Pikachu - 25/102', number: '25/102', marketCents: 5000 }),
+        card({ productId: 2, name: 'Pikachu (McDonald’s) - 1/25', number: '1/25', marketCents: 300 }),
+        card({ productId: 3, name: 'Raichu', number: '1/25', marketCents: 900 }),
+      ],
+      p,
+    );
+    expect(ranked.map((c) => c.productId)).toEqual([2, 1]);
+  });
+
+  it('offers nothing for Korean prints or when no name was read', async () => {
+    expect(await findSimilarCards(parseCardText(['피카츄', 'SV2a 025/165'])!)).toEqual([]);
+    expect(await findSimilarCards(parseCardText(['J MEP EN 049'])!)).toEqual([]);
   });
 });

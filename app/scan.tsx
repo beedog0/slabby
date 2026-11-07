@@ -22,7 +22,7 @@ import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { cardPrice, gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, cardFromDetails, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
-import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, missReason, parseCardText, printedNumber, printName, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { cardSteadyKey, findScannedCard, findSimilarCards, isConfident, looksLikeSlab, missReason, parseCardText, printedNumber, printName, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
 import { cardNumber, displayName, nameAndVariant, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
@@ -160,7 +160,14 @@ export default function Scan() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     findScannedCard(read)
       .catch(() => [] as CardMatch[])
-      .then((matches) => setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !isConfident(matches) } : r)));
+      .then((matches) => {
+        setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !isConfident(matches), similar: matches.length ? undefined : null } : r));
+        // No card with this number (a promo with no set, a print the catalog lacks): offer cards with the same name.
+        if (!matches.length)
+          findSimilarCards(read)
+            .catch(() => [] as CatalogCard[])
+            .then((similar) => setRaw((r) => (r && r.read === read ? { ...r, similar } : r)));
+      });
   };
 
   const accept = (parsed: ParsedLabel) => {
@@ -508,7 +515,14 @@ export default function Scan() {
   );
 }
 
-type RawRead = { read: ParsedCard; matches: CardMatch[] | null; pick: number; choosing: boolean };
+type RawRead = {
+  read: ParsedCard;
+  matches: CardMatch[] | null;
+  pick: number;
+  choosing: boolean;
+  /** Cards with the read name, when the number found none (null while looking). */
+  similar?: CatalogCard[] | null;
+};
 
 /**
  * A loose card as it would be saved: raw, priced at TCGplayer market. A print the scan can't see
@@ -605,7 +619,43 @@ function RawSheet({
           <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
             {missReason(raw.read)}
           </Text>
-          <PrimaryButton title="Search cards" onPress={() => router.replace('/search')} />
+          {raw.similar?.length ? (
+            <>
+              <Text style={[type.text, { color: color.secondary, paddingBottom: space.s }]}>
+                Similar cards named {raw.read.name}. Pick yours if it’s here.
+              </Text>
+              <ScrollView style={{ maxHeight: size.rowVault * 4 }}>
+                {raw.similar.map((c, i) => (
+                  <View key={c.productId}>
+                    {i ? <Hairline /> : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setRaw((r) => (r ? { ...r, matches: [{ card: c, score: 0 }], pick: 0, choosing: false } : r))}
+                      style={({ pressed }) => [styles.pickRow, pressed && { opacity: 0.6 }]}
+                    >
+                      <SlabView card={rawCard(c, null, 'hold')} width={size.thumbW} posed={false} />
+                      <View style={{ flex: 1 }}>
+                        <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>
+                          {nameAndVariant(c.name).name}
+                        </Text>
+                        <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
+                          {[c.setName, c.number ? `#${cardNumber(c.number)}` : null, c.language === 'ja' ? 'Japanese' : null].filter(Boolean).join(' · ')}
+                        </Text>
+                      </View>
+                      <Text style={[type.rowPrice, { color: color.ink }]}>{c.marketCents ? cardPrice(c.marketCents) : '—'}</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+              <Pressable accessibilityRole="button" onPress={() => router.replace('/search')} style={styles.quiet}>
+                <Text style={[type.text, { color: color.secondary }]}>Search cards</Text>
+              </Pressable>
+            </>
+          ) : raw.similar === null ? (
+            <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>Looking for similar cards</Text>
+          ) : (
+            <PrimaryButton title="Search cards" onPress={() => router.replace('/search')} />
+          )}
           {again}
         </>
       ) : choosingPrint ? (
