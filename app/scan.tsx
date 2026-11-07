@@ -12,10 +12,11 @@ import { Animated, AppState, Easing, Linking, Platform, Pressable, StyleSheet, T
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { SlabView } from '../src/components/SlabView';
+import { ScanPills } from '../src/components/scan/ScanPills';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
-import { cardFromCert, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
+import { cardFromCert, gradeFrom, lookupCert, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
 import { matchNewCard, priceFor, refreshPrices } from '../src/services/comps';
 import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
@@ -122,7 +123,10 @@ export default function Scan() {
     auto.current = null;
     lastRead.current = readId(parsed);
     setSpotted(false);
-    setProgress(autoProgress(null));
+    // Light every pill with what was read while the frame shows the lock.
+    const c = parsed.payload.PSACert;
+    const field = (value?: string) => (value ? { state: 'done' as const, value } : { state: 'none' as const });
+    setProgress({ name: field(c.Subject), grade: field(c.CardGrade), cert: field(c.CertNumber) });
     setLabelMiss(false);
     setLocked(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
@@ -338,24 +342,17 @@ export default function Scan() {
       <View style={[styles.below, { top: frameTop + frameH + space.xl }]}>
         <View style={styles.hint}>
           <Text style={[type.text, { color: color.onInk, textAlign: 'center' }]}>{hint}</Text>
-          {spotted && !locked ? (
-            // What the read has so far, so a stuck scan shows what it can't make out.
-            <View style={styles.progress}>
-              {(
-                [
-                  ['Name', progress.name === 'sure', progress.name === 'seen'],
-                  ['Grade', progress.grade, false],
-                  ['Cert', progress.cert, false],
-                ] as const
-              ).map(([label, done, partly]) => (
-                <View key={label} style={styles.progressItem}>
-                  <View style={[styles.dot, done ? styles.dotDone : partly ? styles.dotPartly : null]} />
-                  <Text style={[type.secondary, { color: done ? color.onInk : color.scanGuide }]}>{label}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
         </View>
+        {labelMode && canUseCamera && !result ? (
+          // What the read has so far: each pill lights up with its value once confirmed.
+          <ScanPills
+            pills={[
+              { key: 'name', label: 'Name', ...progress.name, value: progress.name.value && titleName(progress.name.value) },
+              { key: 'grade', label: 'Grade', ...progress.grade, value: progress.grade.value && `PSA ${gradeFrom(progress.grade.value) ?? progress.grade.value}` },
+              { key: 'cert', label: 'Cert', ...progress.cert },
+            ]}
+          />
+        ) : null}
         {!canUseCamera ? (
           <View style={styles.manual}>
             {Platform.OS !== 'web' && permission && !permission.granted ? (
@@ -541,11 +538,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.s,
   },
   corner: { position: 'absolute', width: 24, height: 24, borderColor: color.conFill, borderRadius: 4 },
-  progress: { flexDirection: 'row', justifyContent: 'center', gap: space.l, paddingTop: space.xs },
-  progressItem: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  dot: { width: 6, height: 6, borderRadius: 3, borderWidth: 1, borderColor: color.scanGuide },
-  dotPartly: { borderColor: color.conFill },
-  dotDone: { backgroundColor: color.conFill, borderColor: color.conFill },
   labelLine: { position: 'absolute', left: space.s, right: space.s, height: size.hairline, backgroundColor: color.scanGuide },
   frameDone: { borderWidth: 3, backgroundColor: color.scanLocked },
   check: {

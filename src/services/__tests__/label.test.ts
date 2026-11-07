@@ -124,9 +124,13 @@ describe('stepAutoRead', () => {
   });
 
   it('reports progress', () => {
-    expect(autoProgress(null)).toEqual({ name: 'none', grade: false, cert: false });
+    expect(autoProgress(null)).toEqual({ name: { state: 'none' }, grade: { state: 'none' }, cert: { state: 'none' } });
     const one = run([['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']]);
-    expect(autoProgress(one.state)).toEqual({ name: 'seen', grade: false, cert: true });
+    expect(autoProgress(one.state)).toEqual({
+      name: { state: 'seen', value: 'SURFING PIKACHU VMAX' },
+      grade: { state: 'none' },
+      cert: { state: 'done', value: '138092551' },
+    });
   });
 });
 

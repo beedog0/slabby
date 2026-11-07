@@ -171,8 +171,9 @@ export type AutoRead = {
   misses: number;
 } | null;
 
-/** What the frame has confirmed so far, for the progress row on the scan screen. */
-export type AutoProgress = { name: 'none' | 'seen' | 'sure'; grade: boolean; cert: boolean };
+/** What the frames have confirmed so far, for the pills on the scan screen. */
+type Field = { state: 'none' | 'seen' | 'done'; value?: string };
+export type AutoProgress = { name: Field; grade: Field; cert: Field };
 
 const norm = (s?: string) => (s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 const graded = (g?: string) => !!g && (/\d$/.test(g) || /^AUTH/.test(g));
@@ -188,7 +189,12 @@ function topName(state: NonNullable<AutoRead>) {
 
 export function autoProgress(state: AutoRead): AutoProgress {
   const top = state ? topName(state) : null;
-  return { name: !top ? 'none' : top.count >= 2 ? 'sure' : 'seen', grade: !!state?.grade, cert: !!state?.cert };
+  const one = (v?: Vote | null): Field => (v ? { state: 'done', value: v.value } : { state: 'none' });
+  return {
+    name: !top ? { state: 'none' } : top.count >= 2 ? { state: 'done', value: top.value } : { state: 'seen', value: top.value },
+    grade: one(state?.grade),
+    cert: one(state?.cert),
+  };
 }
 
 /**
