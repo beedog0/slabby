@@ -34,7 +34,7 @@ import { CostField, EMPTY_COST, paidCentsOf, toCost, type CostInput } from '../s
 import { ask as ruleAsk } from '../src/pricing/rules';
 import { useRules } from '../src/store/rules';
 import { useSellDraft, type SellDraft } from '../src/store/sellDraft';
-import { ScanPills } from '../src/components/scan/ScanPills';
+import { ScanPills, type ScanPill } from '../src/components/scan/ScanPills';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
@@ -108,6 +108,8 @@ export default function Scan() {
   // A label was read once and we're waiting for a second matching read.
   const [spotted, setSpotted] = useState(false);
   const [progress, setProgress] = useState<AutoProgress>(autoProgress(null));
+  // Loose cards get their own pills (Number, Set) while auto-read is on one; null shows the slab's.
+  const [rawPills, setRawPills] = useState<ScanPill[] | null>(null);
   // The read succeeded: the frame closes solid with a check for a beat, then the sheet rises.
   const [locked, setLocked] = useState(false);
   const sheetIn = useRef(new Animated.Value(0)).current;
@@ -264,6 +266,7 @@ export default function Scan() {
     setConfirmAgain(false);
     setAsking(false);
     setProgress(autoProgress(null));
+    setRawPills(null);
     setLabelMiss(false);
     setResult(null);
     setCost(EMPTY_COST);
@@ -292,6 +295,7 @@ export default function Scan() {
 
   const acceptCard = (read: ParsedCard) => {
     lastKey.current = null;
+    setRawPills(null);
     setSpotted(false);
     setLabelMiss(false);
     setRaw({ read, matches: null, pick: 0, choosing: false });
@@ -362,6 +366,7 @@ export default function Scan() {
     const c = parsed.payload.PSACert;
     const field = (value?: string) => (value ? { state: 'done' as const, value } : { state: 'none' as const });
     setProgress({ name: field(c.Subject), grade: field(c.CardGrade), cert: field(c.CertNumber) });
+    setRawPills(null);
     setLabelMiss(false);
     setLocked(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
@@ -411,6 +416,7 @@ export default function Scan() {
         auto.current = null;
         setSpotted(false);
         setProgress(autoProgress(null));
+        setRawPills(null);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         return;
       }
@@ -418,6 +424,11 @@ export default function Scan() {
         // A loose card: two matching reads of its number in a row add it.
         auto.current = step.state;
         const key = cardSteadyKey(loose);
+        const n = loose.numbers[0];
+        setRawPills([
+          { key: 'number', label: 'Number', state: key && key === lastKey.current ? 'done' : 'seen', value: n ? printedNumber(n) : undefined },
+          { key: 'set', label: 'Set', state: loose.codes[0] ? 'done' : 'none', value: loose.codes[0] },
+        ]);
         if (!key) {
           lastKey.current = null;
           setSpotted(false);
@@ -432,10 +443,12 @@ export default function Scan() {
         return;
       }
       lastKey.current = null;
+      setRawPills(null);
       if (step.ready && justAdded(step.ready)) {
         auto.current = null;
         setSpotted(false);
         setProgress(autoProgress(null));
+        setRawPills(null);
         return;
       }
       if (step.ready) return accept(step.ready);
@@ -516,6 +529,7 @@ export default function Scan() {
       lastKey.current = null;
       setSpotted(false);
       setProgress(autoProgress(null));
+      setRawPills(null);
     };
   }, [autoOn]);
 
@@ -612,7 +626,7 @@ export default function Scan() {
         {labelMode && canUseCamera && !result ? (
           // What the read has so far: each pill lights up with its value once confirmed.
           <ScanPills
-            pills={[
+            pills={rawPills ?? [
               { key: 'name', label: 'Name', ...progress.name, value: progress.name.value && titleName(progress.name.value) },
               { key: 'grade', label: 'Grade', ...progress.grade, value: progress.grade.value && `PSA ${gradeFrom(progress.grade.value) ?? progress.grade.value}` },
               { key: 'cert', label: 'Cert', ...progress.cert },
