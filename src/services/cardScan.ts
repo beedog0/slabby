@@ -175,8 +175,32 @@ export async function findScannedCard(p: ParsedCard): Promise<CardMatch[]> {
 /** Printings to offer when the catalog has none yet (Pokémon only; other games print one way). */
 const FALLBACK_PRINTS = ['Normal', 'Holofoil', 'Reverse Holofoil', '1st Edition'];
 
-/** The prints a scanned card can be, base first. Unpriced fallbacks until the catalog has them. */
+/**
+ * The print a card most likely is when the catalog doesn't list its printings yet: commons and
+ * uncommons (and plain "Rare") are Normal; holo rares, ultra, illustration, secret and promo
+ * cards are Holofoil.
+ */
+export function likelyPrint(rarity: string | null): string {
+  const r = (rarity ?? '').toLowerCase();
+  if (!r || /^(common|uncommon|rare)$/.test(r)) return 'Normal';
+  return 'Holofoil';
+}
+
+/**
+ * The prints a scanned card can be, the catalog's own (base) print first, so index 0 is the
+ * default. Unpriced fallbacks, led by the likely print, until the catalog lists them.
+ */
 export function printOptions(c: CatalogCard): { name: string; marketCents: number | null }[] {
   if (c.printings?.length) return c.printings.map((x) => ({ name: x.name, marketCents: x.marketCents }));
-  return c.game === 'pokemon' ? FALLBACK_PRINTS.map((name) => ({ name, marketCents: null })) : [];
+  if (c.game !== 'pokemon') return [];
+  const first = likelyPrint(c.rarity);
+  return [first, ...FALLBACK_PRINTS.filter((n) => n !== first)].map((name, i) => ({ name, marketCents: i === 0 ? c.marketCents : null }));
+}
+
+/** TCGplayer's print names in plain words: "Reverse Holofoil" → "Reverse holo". */
+export function printName(name: string): string {
+  return name
+    .replace(/Holofoil/g, 'holo')
+    .replace(/^holo$/, 'Holo')
+    .replace(/^(\w)/, (m) => m.toUpperCase());
 }

@@ -1,4 +1,4 @@
-import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, numberVariants, parseCardText, printOptions, rankCards } from '../cardScan';
+import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, numberVariants, parseCardText, printName, printOptions, rankCards } from '../cardScan';
 import type { CatalogCard } from '../search';
 
 jest.mock('../supabase', () => ({ supabase: null }));
@@ -111,5 +111,17 @@ describe('printOptions', () => {
   it('falls back to the usual Pokémon prints before the catalog has them', () => {
     expect(printOptions(card({})).map((x) => x.name)).toContain('Reverse Holofoil');
     expect(printOptions(card({ game: 'onepiece' }))).toEqual([]);
+  });
+});
+
+describe('likely print before the catalog lists prints', () => {
+  it('leads with Holofoil for illustration rares and Normal for commons, priced at the catalog market', () => {
+    const sir = printOptions(card({ rarity: 'Special Illustration Rare', marketCents: 800 }));
+    expect(sir[0]).toEqual({ name: 'Holofoil', marketCents: 800 });
+    expect(sir[1].marketCents).toBeNull();
+    expect(printOptions(card({ rarity: 'Common' }))[0].name).toBe('Normal');
+  });
+  it('names prints in plain words', () => {
+    expect(['Holofoil', 'Reverse Holofoil', '1st Edition Holofoil', 'Normal'].map(printName)).toEqual(['Holo', 'Reverse holo', '1st Edition holo', 'Normal']);
   });
 });
