@@ -6,13 +6,15 @@
 
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CardThumb } from '../../src/components/CardThumb';
 import { Keypad } from '../../src/components/Keypad';
+import { PriceLine, type Tick } from '../../src/components/PriceLine';
 import { ConGrid } from '../../src/components/con/ConGrid';
-import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
-import { money } from '../../src/lib/format';
+import { BackIcon, IconButton, PrimaryButton } from '../../src/components/ui';
+import { money, rowTitle } from '../../src/lib/format';
 import { inputsFor, rowFor, type CardRow } from '../../src/pricing/portfolio';
 import { bundle, verdictAt } from '../../src/pricing/rules';
 import { splitTotal } from '../../src/pricing/split';
@@ -39,8 +41,11 @@ export default function Bundle() {
   const [counter, setCounter] = useState<number | null>(null);
   /** A sale at a loss waiting for its second tap: the price. */
   const [confirm, setConfirm] = useState<number | null>(null);
-  const [sold, setSold] = useState<{ ids: string[]; cents: number; before: Partial<Record<string, CardRow['card']>> } | null>(null);
+  const [sold, setSold] = useState<{ cards: CardRow['card'][]; cents: number; paidCents: number } | null>(null);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+  }, []);
 
   // On the table: for sale or trade only, with a price to work from.
   const rows = useMemo(
@@ -105,7 +110,7 @@ export default function Bundle() {
             <PrimaryButton title={`Price ${n} cards · ask ${money(q.askCents)}`} onPress={() => setStep('price')} />
           ) : (
             <Text style={[type.text, styles.hint, { color: color.secondary }]}>
-              {unpriced && n < 2 ? 'Cards without comps can’t be priced yet' : 'Pick two or more cards'}
+              {n === 1 ? `1 picked · ask ${money(q.askCents)} · pick one more` : unpriced ? 'Cards without comps can’t be priced yet' : 'Pick two or more cards'}
             </Text>
           )}
         </View>
@@ -151,31 +156,31 @@ export default function Bundle() {
     }
     const shares = splitTotal(cents, chosen.map((r) => r.price?.marketCents ?? null));
     const at = new Date().toISOString();
-    const before: Record<string, CardRow['card']> = {};
-    chosen.forEach((r, i) => {
-      before[r.card.id] = r.card;
-      update(r.card.id, { status: 'sold', soldCents: shares[i], soldAt: at, soldWhere: where });
-    });
+    // Keep the cards as they were (for Undo) and what the lot cost: the rows drop off the table now.
+    const before = chosen.map((r) => r.card);
+    chosen.forEach((r, i) => update(r.card.id, { status: 'sold', soldCents: shares[i], soldAt: at, soldWhere: where }));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    setSold({ ids: chosen.map((r) => r.card.id), cents, before });
+    setSold({ cards: before, cents, paidCents: q.paidCents });
   };
 
   const undo = () => {
     if (!sold) return;
-    for (const id of sold.ids) {
-      const c = sold.before[id];
-      if (c) update(id, { status: c.status, soldCents: c.soldCents, soldAt: c.soldAt, soldWhere: c.soldWhere });
-    }
+    for (const c of sold.cards) update(c.id, { status: c.status, soldCents: c.soldCents, soldAt: c.soldAt, soldWhere: c.soldWhere });
     setSold(null);
   };
 
   if (sold) {
-    const profit = q.paidCents ? sold.cents - q.paidCents : null;
+    const profit = sold.paidCents ? sold.cents - sold.paidCents : null;
     return (
       <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
         {nav('Bundle sold')}
-        <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: 'center', gap: space.s }}>
-          <Text style={[type.text, { color: color.secondary }]}>Sold {sold.ids.length} cards for</Text>
+        <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: 'center', alignItems: 'center', gap: space.s }}>
+          <View style={styles.thumbs}>
+            {sold.cards.map((c) => (
+              <CardThumb key={c.id} card={c} />
+            ))}
+          </View>
+          <Text style={[type.text, { color: color.secondary, paddingTop: space.l }]}>Sold {sold.cards.length} cards for</Text>
           <Text style={[type.displayL, { color: color.ink }]}>{money(sold.cents)}</Text>
           {profit != null ? (
             <Text style={[type.body, { color: color.ink }]}>
@@ -183,10 +188,10 @@ export default function Bundle() {
                 {profit >= 0 ? '+' : '−'}
                 {money(Math.abs(profit))}
               </Text>{' '}
-              on {money(q.paidCents)} paid
+              on {money(sold.paidCents)} paid
             </Text>
           ) : null}
-          <Text style={[type.secondary, { color: color.secondary }]}>Each card’s price is its share by market.</Text>
+          <Text style={[type.secondary, { color: color.secondary }]}>Each card’s sale price is its share by market.</Text>
         </View>
         <View style={[styles.footer, { paddingBottom: insets.bottom + space.l, gap: space.s }]}>
           <PrimaryButton title="Back to con mode" onPress={() => router.dismissTo({ pathname: '/con', params: { tab: 'sold', at: String(Date.now()) } })} />
@@ -223,26 +228,25 @@ export default function Bundle() {
       quiet = { title: `Counter ${money(v.counterAt)}`, onPress: () => makeCounter(v.counterAt) };
     }
   }
+  const ticks: Tick[] = [];
+  if (q.paidCents) ticks.push({ value: q.paidCents, label: 'Paid', color: color.ink });
+  ticks.push({ value: q.floorCents, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 });
+  ticks.push({ value: q.marketCents, label: 'Market', color: color.secondary });
+
   const quietText = confirm != null ? `Tap again to sell at a ${money(q.paidCents - confirm)} loss` : quiet?.title;
   const quietPress = confirm != null ? () => sellAll(confirm) : quiet?.onPress;
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
-      {nav(`${q.count} cards`)}
+      {nav('Bundle')}
       <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: 'space-evenly' }}>
-        <View style={styles.stats}>
-          <Stat label="Ask" value={money(q.askCents)} />
-          <Stat label="Floor" value={money(q.floorCents)} tint={color.loss} />
-          <Stat label="Market" value={money(q.marketCents)} />
+        <View style={{ gap: 2 }}>
+          <Text style={[type.body, { color: color.ink }]}>{chosen.map((r) => rowTitle(r.card)).join(' + ')}</Text>
+          <Text style={[type.secondary, { color: color.secondary }]}>
+            {q.count} cards · ask {money(q.askCents)} ·{' '}
+            {q.floorBasis === 'paid' ? 'floor = what they cost you' : q.floorBasis === 'ask' ? 'floor = ask' : 'floor = their floors added up'}
+          </Text>
         </View>
-        <Text style={[type.secondary, { color: color.secondary }]}>
-          {q.floorBasis === 'paid'
-            ? `Floor = what the ${q.count} cost you`
-            : q.floorBasis === 'ask'
-              ? 'Floor = ask: they cost you more than the ask'
-              : `Floor = each card’s floor added up${rules.neverBelowPaid && q.paidCents ? `, above the ${money(q.paidCents)} you paid` : ''}`}
-        </Text>
-        <Hairline />
         <View style={{ alignItems: 'center' }}>
           <Text style={[type.text, { color: color.secondary }]}>{awaiting ? 'You countered' : 'Their offer'}</Text>
           <Text adjustsFontSizeToFit numberOfLines={1} style={[type.displayL, { color: hasOffer || awaiting ? color.ink : color.hairline }]}>
@@ -250,6 +254,11 @@ export default function Bundle() {
           </Text>
           <Text style={[type.section, { minHeight: 26 }]}>{verdictNode}</Text>
         </View>
+        <PriceLine
+          ticks={ticks}
+          fill={(hasOffer || awaiting) && q.paidCents ? { from: q.paidCents, to: awaiting ? counter! : offer, color: color.conFill } : undefined}
+          dot={hasOffer || awaiting ? { value: awaiting ? counter! : offer, color: color.conFill } : undefined}
+        />
         {primary ? (
           <View style={{ gap: space.s }}>
             <PrimaryButton title={primary.title} onPress={primary.onPress} />
@@ -278,15 +287,6 @@ export default function Bundle() {
   );
 }
 
-function Stat({ label, value, tint }: { label: string; value: string; tint?: string }) {
-  return (
-    <View style={{ flex: 1, gap: 2 }}>
-      <Text style={[type.secondary, { color: tint ?? color.secondary }]}>{label}</Text>
-      <Text style={[type.rowPrice, { color: color.ink }]}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   nav: {
     height: size.touch + space.l,
@@ -296,6 +296,6 @@ const styles = StyleSheet.create({
   },
   footer: { paddingHorizontal: space.gutter, paddingTop: space.s },
   hint: { textAlign: 'center', minHeight: size.button, textAlignVertical: 'center', paddingTop: space.l },
-  stats: { flexDirection: 'row', gap: space.l },
+  thumbs: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space.s },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center' },
 });

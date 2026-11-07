@@ -25,7 +25,7 @@ import { openConStatusMenu, takeScanAdded } from '../../src/components/conStatus
 import { BuyingPane } from '../../src/components/con/BuyingPane';
 import { TableSheet, type TableSheetOpen } from '../../src/components/con/TableSheet';
 import { openMenu } from '../../src/components/menu/Menu';
-import { Hairline, IconButton, MoreIcon, PlusIcon, PrimaryButton } from '../../src/components/ui';
+import { Hairline, MoreIcon, PlusIcon, PrimaryButton } from '../../src/components/ui';
 import { conTabFor, type ConStatus } from '../../src/lib/conStatus';
 import { clockTime, elapsed, money, rulePct } from '../../src/lib/format';
 import { arrange, type SortKey } from '../../src/pricing/arrange';
@@ -94,18 +94,32 @@ export default function ConMode() {
   const [refreshing, setRefreshing] = useState(0);
   const [refreshFailed, setRefreshFailed] = useState(false);
 
+  // Ending con mode (Done) clears the session while this screen is still up; don't start another.
+  const ending = useRef(false);
   useEffect(() => {
-    if (!session) {
+    if (!session && !ending.current) {
       start(DEFAULT_CON_NAME);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
   }, [session, start]);
 
   // Con-day prep, once per con: fresh prices for the table and the wishlist, photos cached.
+  // Prep isn't saved across launches (src/store/con.ts), so a run cut short by a quit runs again.
+  const prepping = useRef(false);
   const runPrep = useCallback(async (conId: string) => {
+    if (prepping.current) return;
+    prepping.current = true;
     setPrep({ conId, at: null, failed: false });
-    const r = await prepCon(useVault.getState().cards, useWishlist.getState().items, useWishlist.getState().seeMarket);
+    let r: { at: string; failed: boolean } = { at: new Date().toISOString(), failed: true };
+    try {
+      r = await prepCon(useVault.getState().cards, useWishlist.getState().items, useWishlist.getState().seeMarket);
+    } catch {
+      // Keep r: failed, so the line says so and a pull tries again.
+    } finally {
+      prepping.current = false;
+    }
     if (useCon.getState().session?.id === conId) setPrep({ conId, ...r });
+    return r;
   }, [setPrep]);
   useEffect(() => {
     if (session && prep?.conId !== session.id) runPrep(session.id);
@@ -132,22 +146,25 @@ export default function ConMode() {
   const pull = async () => {
     setRefreshing(1);
     // Same as con-day prep: the table and the wishlist. Cards written in the last hour are skipped.
-    setPrep({ conId: session.id, at: null, failed: false });
-    const r = await prepCon(useVault.getState().cards, useWishlist.getState().items, useWishlist.getState().seeMarket);
-    setPrep({ conId: session.id, ...r });
-    setRefreshFailed(r.failed);
+    const r = await runPrep(session.id);
+    if (r) setRefreshFailed(r.failed);
     setRefreshing(0);
   };
   const lastDay = lastDayActive(rules);
   const cutPct = rules.lastDayCutPct ?? LAST_DAY_CUT_PCT;
-  // Under the totals: last-day prices when on, else a stale/failed warning, else prep status.
-  const prepLine =
-    prep?.conId !== session.id ? null : !prep.at ? 'Getting prices ready for the con' : `Prices ready · ${clockTime(prep.at)}`;
-  const statusLine = freshness ?? prepLine;
+  // One line under the totals (last-day prices take its place while on): prep running, else a
+  // failed refresh, else how old prices are when they're behind, else when prep brought them up to date.
+  const prepped = prep?.conId === session.id ? prep : null;
+  const statusLine =
+    prepped && !prepped.at
+      ? 'Getting prices ready for the con'
+      : refreshFailed || prepped?.failed
+        ? "Couldn't update every price · pull to refresh"
+        : (freshness ?? (prepped?.at ? `Prices ready · ${clockTime(prepped.at)}` : null));
 
   const more = () =>
     openMenu({
-      title: session.name,
+      title: 'Con tools',
       items: [
         [
           { label: 'Price a bundle', onPress: () => router.push('/con/bundle') },
@@ -187,6 +204,7 @@ export default function ConMode() {
       : undefined;
 
   const done = () => {
+    ending.current = true;
     end();
     stopLastDay();
     router.canGoBack() ? router.back() : router.replace('/');
@@ -212,9 +230,9 @@ export default function ConMode() {
             {session.name}
           </Text>
         </View>
-        <IconButton label="Con tools" onPress={more}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Con tools" onPress={more} style={[styles.done, styles.more]}>
           <MoreIcon />
-        </IconButton>
+        </Pressable>
         <Pressable accessibilityRole="button" onPress={done} style={styles.done}>
           <Text style={[type.text, { color: color.ink, fontWeight: '500' }]}>Done</Text>
         </Pressable>
@@ -253,6 +271,8 @@ export default function ConMode() {
               <Text style={[type.secondary, { color: color.secondary }]}>left at floor</Text>
             </View>
           </View>
+          {/* One fixed-height slot, so the tabs below never move when the line changes. */}
+          <View style={styles.statusSlot}>
           {lastDay ? (
             <Pressable accessibilityRole="button" accessibilityHint="Turns last-day prices off" onPress={stopLastDay} style={styles.lastDay}>
               <View style={styles.dot} />
@@ -260,13 +280,13 @@ export default function ConMode() {
                 Last-day prices · floors {rulePct(-cutPct)} until midnight
               </Text>
             </Pressable>
+          ) : statusLine ? (
+            <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>{statusLine}</Text>
           ) : null}
-          {statusLine ? (
-            <Text style={[type.secondary, styles.freshness, { color: color.secondary }]}>{statusLine}</Text>
-          ) : null}
+          </View>
 
           <Segmented<Tab>
-            style={{ marginHorizontal: space.gutter, marginTop: space.xl }}
+            style={{ marginHorizontal: space.gutter, marginTop: space.l }}
             value={tab}
             onChange={setTab}
             options={[
@@ -419,7 +439,9 @@ const styles = StyleSheet.create({
     paddingTop: space.s,
   },
   freshness: { paddingHorizontal: space.gutter, paddingTop: space.s },
-  lastDay: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.gutter, paddingTop: space.s, minHeight: size.touch - space.l },
+  more: { width: 36, paddingHorizontal: 0 },
+  statusSlot: { height: 28, justifyContent: 'center', paddingHorizontal: space.gutter, marginTop: space.xs },
+  lastDay: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28 },
   add: {
     width: size.button,
     height: size.button,

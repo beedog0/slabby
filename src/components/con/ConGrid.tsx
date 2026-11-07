@@ -21,9 +21,11 @@ type Props = {
   flash?: (id: string) => ReactNode;
   /** Picking cards (bundle, trade): the picked ones get the select outline. */
   selected?: Set<string>;
+  /** Show market instead of the ask (the trade picker, which counts at market). */
+  market?: boolean;
 };
 
-export function ConGrid({ rows, width, onPress, onLongPress, flash, selected }: Props) {
+export function ConGrid({ rows, width, onPress, onLongPress, flash, selected, market }: Props) {
   const cellW = Math.floor((width - GAP * (COLS - 1)) / COLS);
   const slabW = Math.floor(cellW * 0.82);
   return (
@@ -51,9 +53,9 @@ export function ConGrid({ rows, width, onPress, onLongPress, flash, selected }: 
               <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
                 {gradeLabel(r.card.grader, r.card.grade, r.card.condition)}
                 {' · '}
-                <PriceText row={r} />
+                <PriceText row={r} market={market} />
               </Text>
-              {r.card.status === 'owned' && r.card.plan !== 'trade' && r.floor != null ? (
+              {!market && r.card.status === 'owned' && r.card.plan !== 'trade' && r.floor != null ? (
                 <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
                   floor {bare(r.floor)}
                 </Text>
@@ -66,8 +68,9 @@ export function ConGrid({ rows, width, onPress, onLongPress, flash, selected }: 
   );
 }
 
-function PriceText({ row }: { row: CardRow }) {
+function PriceText({ row, market }: { row: CardRow; market?: boolean }) {
   const { card, price } = row;
+  if (market) return <Text style={{ color: color.ink }}>{price ? money(price.marketCents) : 'no comps yet'}</Text>;
   if (card.status === 'sold') {
     return (
       <>

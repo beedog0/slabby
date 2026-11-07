@@ -15,7 +15,9 @@ import { BackIcon, Hairline, IconButton, PlusIcon, PrimaryButton } from '../../s
 import { cardLabel, money, rowTitle } from '../../src/lib/format';
 import { rowFor, type CardRow } from '../../src/pricing/portfolio';
 import { TRADE_LABEL, trade } from '../../src/pricing/rules';
-import { gradeLabel, type SearchGrade } from '../../src/services/search';
+import { gradeLabel, nameAndVariant, type SearchGrade } from '../../src/services/search';
+import { setTitle } from '../../src/components/search/CardAnalytics';
+import { openMenu } from '../../src/components/menu/Menu';
 import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
 import { useTrade, type TheirCard } from '../../src/store/trade';
@@ -47,6 +49,8 @@ export default function Trade() {
   );
   const unpriced = mineRows.filter((r) => !r.price).length;
   const empty = !mineRows.length && !theirs.length;
+  // A verdict needs something on both sides; one side alone isn't a trade yet.
+  const both = mineRows.length > 0 && theirs.length > 0;
 
   const nav = (title: string, onBack: () => void, right?: React.ReactNode) => (
     <View style={styles.nav}>
@@ -69,6 +73,7 @@ export default function Trade() {
             rows={owned}
             width={width - space.gutter * 2}
             selected={picked}
+            market
             onLongPress={() => undefined}
             onPress={(r) => {
               Haptics.selectionAsync().catch(() => {});
@@ -77,7 +82,7 @@ export default function Trade() {
           />
         </ScrollView>
         <View style={[styles.footer, { paddingBottom: insets.bottom + space.l }]}>
-          <PrimaryButton title={mine.length ? `Done · ${mine.length} picked` : 'Done'} onPress={() => setPicking(false)} />
+          <PrimaryButton title={mineRows.length ? `Done · ${mineRows.length} picked` : 'Done'} onPress={() => setPicking(false)} />
         </View>
       </View>
     );
@@ -109,8 +114,10 @@ export default function Trade() {
           </View>
         </View>
         <View style={styles.verdict}>
-          {empty ? (
-            <Text style={[type.text, { color: color.secondary }]}>Add cards to both sides to see who comes out ahead.</Text>
+          {!both ? (
+            <Text style={[type.text, { color: color.secondary }]}>
+              {empty ? 'Add cards to both sides to see who comes out ahead.' : mineRows.length ? 'Now add what they’re offering.' : 'Now add what you’d give.'}
+            </Text>
           ) : (
             <>
               <Text style={[type.section, { color: color.ink }]}>{TRADE_LABEL[t.kind]}</Text>
@@ -131,11 +138,15 @@ export default function Trade() {
           )}
         </View>
 
-        <Side title="Yours" total={t.mineCents} addLabel={mineRows.length ? 'Change your cards' : 'Add from your vault'} onAdd={() => setPicking(true)}>
+        <Side title="Yours" addLabel={mineRows.length ? 'Change your cards' : 'Add from your vault'} onAdd={() => setPicking(true)}>
           {mineRows.map((r, i) => (
             <View key={r.card.id}>
               {i ? <Hairline inset={size.thumbW + space.m} /> : null}
-              <Pressable accessibilityRole="button" accessibilityHint="Takes it off your side" onPress={() => toggleMine(r.card.id)} style={styles.row}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => openMenu({ card: r.card, items: [{ label: 'Take off the trade', onPress: () => toggleMine(r.card.id) }] })}
+                style={styles.row}
+              >
                 <CardThumb card={r.card} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={[type.body, { color: color.ink }]}>{rowTitle(r.card)}</Text>
@@ -147,28 +158,28 @@ export default function Trade() {
           ))}
         </Side>
 
-        <Side title="Theirs" total={t.theirsCents} addLabel="Search their card" onAdd={() => router.push('/search?trade=1')}>
+        <Side title="Theirs" addLabel="Search their card" onAdd={() => router.push('/search?trade=1')}>
           {theirs.map((c, i) => (
             <View key={c.key}>
               {i ? <Hairline inset={size.thumbW + space.m} /> : null}
-              <TheirRow c={c} onRemove={() => removeTheirs(c.key)} />
+              <TheirRow
+                c={c}
+                onPress={() => openMenu({ title: c.name, items: [{ label: 'Take off the trade', onPress: () => removeTheirs(c.key) }] })}
+              />
             </View>
           ))}
         </Side>
-        <Text style={[type.secondary, { color: color.secondary, paddingTop: space.xl }]}>
-          Tap a card to take it off. Values are market for each card’s grade, the same numbers as the rest of Slabby.
-        </Text>
+        <Text style={[type.secondary, { color: color.secondary, paddingTop: space.xl }]}>Values are market for each card’s grade.</Text>
       </ScrollView>
     </View>
   );
 }
 
-function Side({ title, total, addLabel, onAdd, children }: { title: string; total: number; addLabel: string; onAdd: () => void; children: React.ReactNode }) {
+function Side({ title, addLabel, onAdd, children }: { title: string; addLabel: string; onAdd: () => void; children: React.ReactNode }) {
   return (
     <View style={{ paddingTop: space.xxl }}>
       <View style={styles.sideHead}>
         <Text style={[type.section, { color: color.ink }]}>{title}</Text>
-        <Text style={[type.numberM, { color: color.secondary }]}>{money(total)}</Text>
       </View>
       <Hairline />
       {children}
@@ -181,13 +192,15 @@ function Side({ title, total, addLabel, onAdd, children }: { title: string; tota
   );
 }
 
-function TheirRow({ c, onRemove }: { c: TheirCard; onRemove: () => void }) {
-  const detail = [c.setName, gradeLabel(c.grade as SearchGrade | 'raw')].filter(Boolean).join(' · ');
+function TheirRow({ c, onPress }: { c: TheirCard; onPress: () => void }) {
+  // Name on one line; variant, set (without its "SWSH07:" code) and grade on the next.
+  const { name, variant } = nameAndVariant(c.name);
+  const detail = [variant, setTitle(c.setName), gradeLabel(c.grade as SearchGrade | 'raw')].filter(Boolean).join(' · ');
   return (
-    <Pressable accessibilityRole="button" accessibilityHint="Takes it off their side" onPress={onRemove} style={styles.row}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.row}>
       <View style={styles.art}>{c.imageUrl ? <ArtImage uri={c.imageUrl} recyclingKey={c.key} style={{ flex: 1 }} /> : null}</View>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={[type.body, { color: color.ink }]}>{c.name}</Text>
+        <Text style={[type.body, { color: color.ink }]}>{name}</Text>
         <Text style={[type.secondary, { color: color.secondary }]}>{detail}</Text>
       </View>
       <Text style={[type.numberM, { color: color.ink }]}>{money(c.marketCents)}</Text>

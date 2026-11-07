@@ -34,7 +34,12 @@ export const useCon = create<ConState>()(
         set({ session: { id: `con-${Date.now()}`, name, startedAt: new Date().toISOString() }, mode: 'sell' }),
       end: () => set({ session: null, prep: null }),
     }),
-    { name: 'slabby.con', storage: createJSONStorage(() => AsyncStorage) },
+    {
+      name: 'slabby.con',
+      storage: createJSONStorage(() => AsyncStorage),
+      // Prep is per app run: a run cut short by a quit starts over on the next launch.
+      partialize: (s) => ({ session: s.session, mode: s.mode }),
+    },
   ),
 );
 

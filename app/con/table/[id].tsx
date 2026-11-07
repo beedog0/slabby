@@ -14,7 +14,8 @@ import { SoldState } from '../../../src/components/SoldState';
 import { TrendSentence } from '../../../src/components/TrendSentence';
 import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, Stepper } from '../../../src/components/ui';
 import { cardLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
-import { LAST_DAY_CUT_PCT, minFloorOverride } from '../../../src/pricing/rules';
+import { LAST_DAY_CUT_PCT, floor as ruleFloor, minFloorOverride } from '../../../src/pricing/rules';
+import { inputsFor } from '../../../src/pricing/portfolio';
 import { freshnessLine, freshnessWorthShowing, trendSentence, trendVerdict } from '../../../src/pricing/trend';
 import { useCardRow } from '../../../src/pricing/useCardRow';
 import { useCardRefresh } from '../../../src/services/useRefresh';
@@ -133,6 +134,10 @@ export default function BeforeTheTable() {
   const overridden = card.floorOverrideCents != null;
   const minFloor = minFloorOverride({ paidCents: card.paidCents, rules });
   const atMin = row.floor <= minFloor;
+  // A per-card floor is never cut by last-day prices, so the stepper starts from the uncut floor:
+  // otherwise one tap would keep the cut past midnight.
+  const stepFrom =
+    row.floorBasis === 'lastDay' ? ruleFloor(inputsFor(card, price, { ...rules, lastDayUntil: null })) : row.floor!;
   const setFloor = (v: number) => update(card.id, { floorOverrideCents: Math.max(minFloor, Math.min(v, row.ask!)) });
   const raw = card.grader === 'raw';
   const em = (s: string) => <Text style={{ color: color.ink, fontWeight: '600' }}>{s}</Text>;
@@ -145,7 +150,7 @@ export default function BeforeTheTable() {
       <>floor = ask</>
     ) : row.floorBasis === 'lastDay' ? (
       <>
-        last-day floor {em(rulePct(-(rules.lastDayCutPct ?? LAST_DAY_CUT_PCT)))}
+        floor = {raw ? 'low' : '30d low'} {em(rulePct(rules.floorPct))}, last day {em(rulePct(-(rules.lastDayCutPct ?? LAST_DAY_CUT_PCT)))}
       </>
     ) : (
       <>
@@ -242,8 +247,8 @@ export default function BeforeTheTable() {
                 <Stepper
                   label="floor for this card"
                   value={money(row.floor)}
-                  onMinus={() => setFloor(row.floor! - step)}
-                  onPlus={() => setFloor(row.floor! + step)}
+                  onMinus={() => setFloor(stepFrom - step)}
+                  onPlus={() => setFloor(stepFrom + step)}
                   minusDisabled={atMin}
                 />
               </View>

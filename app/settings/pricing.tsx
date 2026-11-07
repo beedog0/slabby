@@ -79,9 +79,7 @@ export default function PricingRulesScreen() {
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={[type.body, { color: color.ink }]}>Last-day prices</Text>
-            <Text style={[type.secondary, { color: color.secondary }]}>
-              how far floors drop when you turn it on in con mode
-            </Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>floor cut in con mode</Text>
           </View>
           <Stepper
             label="Last-day prices"

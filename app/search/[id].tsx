@@ -33,6 +33,7 @@ import {
   cardNumber,
   catalogCard,
   displayName,
+  nameAndVariant,
   firstLowGrade,
   gradeLabel,
   isQuiet,
@@ -171,7 +172,7 @@ export default function SearchedCard() {
   const change = hist && !quiet ? hist.change : null;
   const no = cardNumber(ready.number);
   const detail = [no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
-  const openSet = () => openSetPage(ready, groupId);
+  const openSet = () => openSetPage(ready, groupId, { trade: trading });
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
   const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
   // The sheet's market wins: for a raw card it's the print you picked.
@@ -195,10 +196,12 @@ export default function SearchedCard() {
 
         <View style={styles.titleRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={2} style={[type.title, { color: color.ink }]}>
-              {displayName(ready.name)}
-            </Text>
-            <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
+            {/* Name on its own line, the variant ("Alternate Art Secret") on the next: nothing truncates. */}
+            <Text style={[type.title, { color: color.ink }]}>{nameAndVariant(ready.name).name}</Text>
+            {nameAndVariant(ready.name).variant ? (
+              <Text style={[type.text, { color: color.secondary }]}>{nameAndVariant(ready.name).variant}</Text>
+            ) : null}
+            <Text style={[type.text, { color: color.secondary }]}>
               {/* The set name opens the whole set. */}
               <Text onPress={openSet} accessibilityRole="link" style={{ color: color.ink }}>
                 {setTitle(ready.setName)}
@@ -293,7 +296,7 @@ export default function SearchedCard() {
             )}
           </View>
 
-          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} />
+          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} trade={trading} />
           {prices?.capped ? (
             <Text style={[type.secondary, { color: color.secondary, paddingTop: space.m }]}>
               Graded prices for new cards are paused until tomorrow to save credits for your scans.
