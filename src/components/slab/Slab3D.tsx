@@ -153,7 +153,6 @@ export const Slab3D = memo(function Slab3D({ card, width, yaw: yawIn, pitch: pit
         </View>
         {foil ? <FoilSheen kind={foil} L={L} s={s} sa={sa} /> : null}
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: L.corner, overflow: 'hidden' }]}>
-          {dark ? <DarkFalloff /> : null}
           {glare}
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: frontShade }]} />
         </View>
@@ -163,21 +162,10 @@ export const Slab3D = memo(function Slab3D({ card, width, yaw: yawIn, pitch: pit
 });
 
 /**
- * Dark mode only. On black a flat white case reads as a cut-out photo, so it's lit like an object
- * under a light from above: the face falls off toward the bottom, and the acrylic
- * edges sit in shade. The label band at the top is left untouched, so grader colors stay true.
+ * Dark mode only. On black a flat white case reads as a cut-out photo; shading the acrylic edges
+ * gives it thickness. The face itself stays evenly lit, so grader colors stay true.
  */
-const DARK_LIGHT = { edge: 0.38, bottom: 0.28 } as const;
-
-const DarkFalloff = memo(function DarkFalloff() {
-  return (
-    <LinearGradient
-      colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0)', `rgba(0,0,0,${DARK_LIGHT.bottom})`]}
-      locations={[0, 0.3, 1]}
-      style={StyleSheet.absoluteFill}
-    />
-  );
-});
+const DARK_LIGHT = { edge: 0.38 } as const;
 
 const FloorShadow = memo(function FloorShadow({ L, scale }: { L: SlabLayout; scale: number }) {
   return (

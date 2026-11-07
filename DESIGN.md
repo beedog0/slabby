@@ -92,7 +92,7 @@ A 2 px rule with ticks. Used on Slab detail, Before the table, and Offer at the 
 - Row thumbnail: 36×50 pt, frame 18, contact shadow only.
 - Shadows: contact `0 1px 2px rgba(0,0,0,0.14)` + `0 0 0 0.5px rgba(0,0,0,0.06)`; ambient `0 28px 48px -20px rgba(0,0,0,0.28)`.
 - Raw cards: no slab, drawn in a penny sleeve at the same card scale.
-- Dark mode: the slab keeps its colors but is lit like an object in a dark display case. The face falls off toward the bottom (label band untouched), the acrylic edges sit in shade, and a slab or single shown on its own (card page, swipe view) gets a soft white pool of light behind it. Raw singles get the same treatment and stand on the swipe view's reflection like slabs.
+- Dark mode: the slab keeps its colors but is lit like an object in a dark display case. The face stays evenly lit, the acrylic edges sit in shade, and a slab or single shown on its own (card page, swipe view) gets a soft warm pool of light (#FFC65C at 17%) centred behind it. Raw singles get the same treatment and stand on the swipe view's reflection like slabs.
 
 ## Motion
 
