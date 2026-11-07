@@ -21,7 +21,10 @@ Deno.serve(async (req) => {
   const known = await admin.from('card_refs').select('*').eq('card_key', c.cardKey).maybeSingle();
   // A matched card is final. An unmatched one is tried again: matching improves, and the card's
   // details may have been fixed since.
-  if (known.data?.tcgplayer_id) {
+  // A Pokémon card with no set read ("psa:10::3:ja") is shared by every Japanese #3 PSA 10, so a
+  // stored match for it is a guess about one of them: never final, match again (and overwrite).
+  const noSet = (c.game ?? 'pokemon') === 'pokemon' && !c.setCode && !c.setName && !c.tcgPlayerId;
+  if (known.data?.tcgplayer_id && !noSet) {
     if (known.data.matched_name || (known.data.game ?? 'pokemon') !== 'pokemon') return json(known.data);
     // Matched before names were kept: look the name up once so the app can fix label misreads.
     const id = known.data.tcgplayer_id;
