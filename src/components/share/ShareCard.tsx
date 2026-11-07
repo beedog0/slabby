@@ -7,7 +7,9 @@ import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Alert, Platform, Share, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { gradeLabel, rowTitle } from '../../lib/format';
-import { color, size, space, type } from '../../theme/tokens';
+// The image is always light, whatever the app's appearance: it's posted and printed.
+import { light as color, light, size, space, type } from '../../theme/tokens';
+import { PaletteScope } from '../../theme/theme';
 import type { Card } from '../../types';
 import { SlabView } from '../SlabView';
 
@@ -79,45 +81,49 @@ export function ShareCardHost() {
 
   if (cards && group) {
     return (
-      <View pointerEvents="none" style={styles.offscreen}>
-        <View ref={ref} collapsable={false} style={[styles.canvas, { height, paddingTop: space.xxl }]}>
-          <View style={[styles.grid, { columnGap: GROUP_GAP, rowGap: GROUP_GAP }]}>
-            {cards.map((c) => (
-              <View key={c.id} style={{ width: group.cellW, alignItems: 'center' }}>
-                <SlabView card={c} width={group.slabW} posed={false} />
-                <Text numberOfLines={1} style={[type.caption, { color: color.ink, paddingTop: space.s, maxWidth: group.cellW }]}>
-                  {rowTitle(c)}
-                </Text>
-              </View>
-            ))}
+      <PaletteScope palette={light}>
+        <View pointerEvents="none" style={styles.offscreen}>
+          <View ref={ref} collapsable={false} style={[styles.canvas, { height, paddingTop: space.xxl }]}>
+            <View style={[styles.grid, { columnGap: GROUP_GAP, rowGap: GROUP_GAP }]}>
+              {cards.map((c) => (
+                <View key={c.id} style={{ width: group.cellW, alignItems: 'center' }}>
+                  <SlabView card={c} width={group.slabW} posed={false} />
+                  <Text numberOfLines={1} style={[type.caption, { color: color.ink, paddingTop: space.s, maxWidth: group.cellW }]}>
+                    {rowTitle(c)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={{ flex: 1 }} />
+            <Text style={[type.caption, styles.mark]}>Slabby</Text>
           </View>
-          <View style={{ flex: 1 }} />
-          <Text style={[type.caption, styles.mark]}>Slabby</Text>
         </View>
-      </View>
+      </PaletteScope>
     );
   }
 
   if (!card) return null;
   return (
-    <View pointerEvents="none" style={styles.offscreen}>
-      <View ref={ref} collapsable={false} style={styles.canvas}>
-        <View style={styles.slab}>
-          {/* Straight on: the hero pose's turn (rotateY −7°, rotateX 3°) reads as a lean in a
-              still photo, so the export faces the camera square and keeps only the shadow. */}
-          <SlabView card={card} width={190} posed={false} shadow />
+    <PaletteScope palette={light}>
+      <View pointerEvents="none" style={styles.offscreen}>
+        <View ref={ref} collapsable={false} style={styles.canvas}>
+          <View style={styles.slab}>
+            {/* Straight on: the hero pose's turn (rotateY −7°, rotateX 3°) reads as a lean in a
+                still photo, so the export faces the camera square and keeps only the shadow. */}
+            <SlabView card={card} width={190} posed={false} shadow />
+          </View>
+          <Text numberOfLines={1} style={[type.section, { color: color.ink }]}>
+            {rowTitle(card)}
+          </Text>
+          <Text numberOfLines={1} style={[type.secondary, { color: color.secondary, paddingTop: 2 }]}>
+            {[gradeLabel(card.grader, card.grade, card.condition), card.setName && !/^\d+$/.test(card.setName) ? card.setName : null, card.year]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
+          <Text style={[type.caption, styles.mark]}>Slabby</Text>
         </View>
-        <Text numberOfLines={1} style={[type.section, { color: color.ink }]}>
-          {rowTitle(card)}
-        </Text>
-        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary, paddingTop: 2 }]}>
-          {[gradeLabel(card.grader, card.grade, card.condition), card.setName && !/^\d+$/.test(card.setName) ? card.setName : null, card.year]
-            .filter(Boolean)
-            .join(' · ')}
-        </Text>
-        <Text style={[type.caption, styles.mark]}>Slabby</Text>
       </View>
-    </View>
+    </PaletteScope>
   );
 }
 

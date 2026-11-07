@@ -21,11 +21,14 @@ import { useCardRefresh } from '../../../src/services/useRefresh';
 import { useCon, type ConMode } from '../../../src/store/con';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
-import { color, size, space, type } from '../../../src/theme/tokens';
+import { size, space, type } from '../../../src/theme/tokens';
+import { themed, useColors } from '../../../src/theme/theme';
 
 type Mode = ConMode;
 
 export default function BeforeTheTable() {
+  const color = useColors();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const row = useCardRow(id);
@@ -260,7 +263,7 @@ export default function BeforeTheTable() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   page: { flex: 1, backgroundColor: color.canvas },
   gutter: { paddingHorizontal: space.gutter },
   center: { alignItems: 'center', paddingHorizontal: space.gutter },
@@ -275,4 +278,4 @@ const styles = StyleSheet.create({
   formula: { minHeight: 56, flexDirection: 'row', alignItems: 'center' },
   trend: { minHeight: 56, justifyContent: 'center' },
   override: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: space.m },
-});
+}));

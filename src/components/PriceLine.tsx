@@ -9,7 +9,8 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { money } from '../lib/format';
-import { color, type } from '../theme/tokens';
+import { light, type, type Palette } from '../theme/tokens';
+import { themed, useColors } from '../theme/theme';
 
 export type Tick = {
   value: number;
@@ -68,7 +69,7 @@ export type Placed = {
  * Markers at the same spot share a label. Pinned labels go under the line first; the rest,
  * left to right, go under the line if they fit, else above it, else to the nearest free spot.
  */
-export function layoutLabels(ticks: Tick[], x: (v: number) => number, w: number): Placed[] {
+export function layoutLabels(ticks: Tick[], x: (v: number) => number, w: number, color: Palette = light): Placed[] {
   const labelled = ticks.filter((t) => t.label).sort((a, b) => a.value - b.value);
 
   const groups: Tick[][] = [];
@@ -124,12 +125,14 @@ export function layoutLabels(ticks: Tick[], x: (v: number) => number, w: number)
 }
 
 export function PriceLine({ ticks, fill, dot, reserveAbove }: Props) {
+  const color = useColors();
+  const styles = useStyles();
   const [w, setW] = useState(0);
   const all = [...ticks.map((t) => t.value), ...(dot ? [dot.value] : []), ...(fill ? [fill.from, fill.to] : [])];
   const pos = scale(all);
   const x = (v: number) => pos(v) * w;
 
-  const labels = w > 0 ? layoutLabels(ticks, x, w) : [];
+  const labels = w > 0 ? layoutLabels(ticks, x, w, color) : [];
   const above = reserveAbove || labels.some((l) => l.lane === 'above');
   const top = above ? LANE_H + LANE_GAP : 0; // where the track starts
 
@@ -218,8 +221,8 @@ export function PriceLine({ ticks, fill, dot, reserveAbove }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   rule: { position: 'absolute', height: RULE, backgroundColor: color.hairline },
   line: { lineHeight: LINE_H },
   price: { fontWeight: '600' },
-});
+}));

@@ -6,7 +6,7 @@ Taste references: Apple, Nothing, Daisy. Minimal but intentional. The slab is th
 
 | Token | Value | Use |
 | --- | --- | --- |
-| canvas | #FFFFFF | Page background, always |
+| canvas | #FFFFFF | Page background |
 | well | #F2F2F4 | Segmented controls, input fields, keypad background |
 | ink | #0A0A0A | Text, primary buttons |
 | secondary | #6E6E73 | Secondary text, labels |
@@ -16,7 +16,30 @@ Taste references: Apple, Nothing, Daisy. Minimal but intentional. The slab is th
 | con | #B8650A text, #FFB020 dot/fill | Con mode indicator and the offer price line only |
 | psaRed | #D01C2A | The red frame printed on a PSA label, nowhere else (the grade itself is black, 10 included) |
 
-Rules: one accent (black). No gradients on UI. Green and red appear on numbers, never on buttons or backgrounds. Dark mode is deferred; when it comes, con mode may go true black.
+Rules: one accent (black, white in dark). No gradients on UI. Green and red appear on numbers, never on buttons or backgrounds.
+
+## Dark mode
+
+Follows the phone by default; home `…` → Appearance picks System, Light or Dark (saved on the phone). Ink and canvas swap, so primary buttons turn white with black text. Sheets, menus and dropdowns sit one step above the page because shadows don't read on black.
+
+| Token | Light | Dark | Use |
+| --- | --- | --- | --- |
+| canvas | #FFFFFF | #0A0A0A | Page |
+| sheet | #FFFFFF | #161617 | Bottom sheets, menus, dropdowns |
+| well | #F2F2F4 | #1F1F21 | Segmented controls, fields, keypad |
+| raised | #FFFFFF | #333336 | The on segment, keypad keys |
+| ink | #0A0A0A | #F4F4F5 | Text, primary buttons |
+| onInk | #FFFFFF | #0A0A0A | Text on a primary button |
+| secondary | #6E6E73 | #8C8C91 | Secondary text |
+| hairline | #E5E5EA | #2A2A2C | Dividers |
+| gain | #1D9A5B | #34C77B | Up numbers only |
+| loss | #D9372B | #FF5A4F | Down numbers, walk-away price |
+| con | #B8650A / #FFB020 | #FFB020 | Con indicator, offer line |
+| ghost | #D8D8DE | #2E2E31 | Empty slab outline |
+| shelf | #B48A5E / #8C6239 | #8F6C49 / #6A4A2B | Wood ledge, a shade dimmer |
+| scrim | 28% black | 60% black | Behind sheets |
+
+Never changes with the theme: the slab itself (case, label colors: PSA white/red, Beckett black, CGC blue), the pin and copies marks on it, the camera chrome on Scan, the share image and the printed sell sheet. In code, components read `useColors()` or build styles with `themed()` from `src/theme/theme.tsx`; only those fixed things import `light` directly (a test enforces it).
 
 ## Type
 

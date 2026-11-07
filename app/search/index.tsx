@@ -37,13 +37,16 @@ import {
 } from '../../src/services/searchFilters';
 import { useDisplay } from '../../src/store/display';
 import { useRules } from '../../src/store/rules';
-import { color, radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 import type { PricingRules } from '../../src/types';
 
 type GameFilter = 'all' | Game;
 const GRID_GAP = space.l;
 
 export default function Search() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   // Con mode opens search with ?con=1: each result also shows what to pay, from the buying rules.
   const params = useLocalSearchParams<{ con?: string; q?: string }>();
@@ -274,6 +277,7 @@ export default function Search() {
 
 /** Small dropdown under the sort control. */
 function SortMenu({ open, top, sort, onSort, onClose }: { open: boolean; top: number; sort: Sort; onSort: (s: Sort) => void; onClose: () => void }) {
+  const styles = useStyles();
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
@@ -317,6 +321,8 @@ function FilterSheet({
   onClose: () => void;
   bottom: number;
 }) {
+  const color = useColors();
+  const styles = useStyles();
   const [mounted, setMounted] = useState(open);
   const [sheetH, setSheetH] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
@@ -434,6 +440,8 @@ function FilterSheet({
 }
 
 function CheckRow({ label, detail, on, onPress }: { label: string; detail?: string; on: boolean; onPress: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="menuitem"
@@ -456,6 +464,8 @@ const openCard = (card: Found, con: boolean) => router.push(con ? `/search/${car
 
 /** Grid tile: the card photo, then name, set · number and price, like home's grid. */
 function ResultTile({ card, width, con, rules, change, days }: ResultProps & { width: number }) {
+  const color = useColors();
+  const styles = useStyles();
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
   return (
@@ -485,6 +495,8 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
 }
 
 function ResultRow({ card, con, rules, change, days }: { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number }) {
+  const color = useColors();
+  const styles = useStyles();
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
   const sub = [card.setName, no && `#${no}`, card.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
@@ -524,7 +536,7 @@ function ResultRow({ card, con, rules, change, days }: { card: Found; con: boole
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   field: {
@@ -560,7 +572,7 @@ const styles = StyleSheet.create({
     right: space.gutter,
     width: 230,
     borderRadius: radius.field,
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     paddingVertical: space.xs,
     ...shadow.menu,
   },
@@ -572,7 +584,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     maxHeight: '80%',
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingTop: space.s,
@@ -604,4 +616,4 @@ const styles = StyleSheet.create({
   gridRow: { gap: GRID_GAP, paddingHorizontal: space.gutter, paddingBottom: space.xxl },
   tileArt: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
   thumb: { width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, backgroundColor: color.well, overflow: 'hidden' },
-});
+}));

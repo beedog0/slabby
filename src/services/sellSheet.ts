@@ -5,7 +5,8 @@ import * as Print from 'expo-print';
 import { Platform, Share } from 'react-native';
 import { gradeLabel, money, rowTitle } from '../lib/format';
 import type { CardRow } from '../pricing/portfolio';
-import { color } from '../theme/tokens';
+// The printed sheet is always light: it's paper.
+import { light as color } from '../theme/tokens';
 
 /** Cards for sale or trade, highest ask first. */
 export function sellSheetRows(rows: CardRow[]): CardRow[] {

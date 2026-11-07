@@ -2,10 +2,12 @@
 // slabs that aren't picked, so the shelf still looks like the shelf.
 
 import { View } from 'react-native';
-import { color, size } from '../../theme/tokens';
+import { size } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 import { slabLayout } from '../slab/geometry';
 
 export function SelectOutline({ on, slabW }: { on: boolean; slabW: number }) {
+  const color = useColors();
   if (!on) return null;
   const gap = size.selectGap;
   return (

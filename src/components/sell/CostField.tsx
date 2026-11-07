@@ -5,7 +5,8 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { Cost } from '../../pricing/sell';
 import { KEYBOARD_DONE } from '../KeyboardDone';
-import { color, radius, size, space, type } from '../../theme/tokens';
+import { radius, size, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 
 export type CostInput = { mode: 'amount' | 'pulled' | 'unknown'; dollars: string };
 export const EMPTY_COST: CostInput = { mode: 'amount', dollars: '' };
@@ -27,6 +28,8 @@ export function paidCentsOf(c: CostInput): number | null {
 }
 
 export function CostField({ value, onChange }: { value: CostInput; onChange: (c: CostInput) => void }) {
+  const color = useColors();
+  const styles = useStyles();
   const pick = (mode: 'pulled' | 'unknown') => onChange(value.mode === mode ? EMPTY_COST : { mode, dollars: '' });
   return (
     <View style={styles.wrap}>
@@ -54,6 +57,8 @@ export function CostField({ value, onChange }: { value: CostInput; onChange: (c:
 }
 
 function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -67,7 +72,7 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   wrap: { paddingBottom: space.m },
   row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   input: { color: color.ink, textAlign: 'right', width: 140 },
@@ -82,4 +87,4 @@ const styles = StyleSheet.create({
     backgroundColor: color.well,
   },
   chipOn: { borderColor: color.ink, backgroundColor: color.canvas },
-});
+}));
