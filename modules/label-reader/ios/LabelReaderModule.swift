@@ -9,6 +9,12 @@ public class LabelReaderModule: Module {
   public func definition() -> ModuleDefinition {
     Name("LabelReader")
 
+    // The scan screen reads a frame every second or so; drop each photo once it's been read.
+    Function("discard") { (uri: String) in
+      let url = URL(string: uri) ?? URL(fileURLWithPath: uri)
+      if url.isFileURL { try? FileManager.default.removeItem(at: url) }
+    }
+
     AsyncFunction("recognize") { (uri: String, promise: Promise) in
       guard let image = Self.loadImage(uri), let cgImage = image.cgImage else {
         promise.reject("E_IMAGE", "Couldn't open the photo")

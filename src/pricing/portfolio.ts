@@ -27,6 +27,8 @@ export type CardRow = {
   floorBasis: FloorBasis | null;
   buyTarget: number | null;
   buyMax: number | null;
+  /** Home views: how many identical raw singles this one row stands for (see stackCopies). */
+  copies?: number;
 };
 
 export function rowFor(card: Card, rules: PricingRules, price = priceFor(card)): CardRow {
@@ -125,11 +127,16 @@ export function collection(rows: CardRow[], filter: CollectionFilter): { rows: C
   return { rows: sorted, totalCents: sorted.reduce((s, r) => s + value(r), 0) };
 }
 
-/** Up, down or flat across a series (first point to last). Drives green/red on prices and lines. */
-export function trendOf(series: number[]): 'up' | 'down' | 'flat' {
+/**
+ * Up, down or flat across a series (first point to last). Drives green/red on prices and lines.
+ * Moves within ±`threshold` (a fraction of the first point) read as flat.
+ */
+export function trendOf(series: number[], threshold = 0): 'up' | 'down' | 'flat' {
   if (series.length < 2) return 'flat';
-  const d = series[series.length - 1] - series[0];
-  return d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
+  const first = series[0];
+  const d = series[series.length - 1] - first;
+  const limit = Math.abs(first) * threshold;
+  return d > limit ? 'up' : d < -limit ? 'down' : 'flat';
 }
 
 /**
@@ -197,4 +204,49 @@ export function soldSeries(rows: CardRow[], days = 30, now = new Date()): number
   }
   let run = before;
   return out.map((v) => (run += v));
+}
+
+export type ConBuySummary = { spentCents: number; count: number; underMarketCents: number };
+
+/** The market a buy is measured against: what it was when you paid, else today's. */
+export function buyMarket(r: CardRow): number | null {
+  return r.card.boughtMarketCents ?? r.price?.marketCents ?? null;
+}
+
+/** Slabs bought in Buying during this con session, newest first. Slabs added while selling don't count. */
+export function boughtIn(rows: CardRow[], conId: string): CardRow[] {
+  return rows
+    .filter((r) => r.card.boughtConId === conId && r.card.paidCents != null)
+    .sort((a, b) => b.card.createdAt.localeCompare(a.card.createdAt));
+}
+
+/** Buying side of a con: what you spent and how far under market, per the market when you paid. */
+export function conBuySummary(rows: CardRow[], conId: string): ConBuySummary {
+  let spentCents = 0, count = 0, underMarketCents = 0;
+  for (const r of boughtIn(rows, conId)) {
+    const paid = r.card.paidCents ?? 0;
+    spentCents += paid;
+    count++;
+    const m = buyMarket(r);
+    if (m != null) underMarketCents += m - paid;
+  }
+  return { spentCents, count, underMarketCents };
+}
+
+export type WeekChange = { cents: number; fraction: number };
+
+/**
+ * How a slab's market price moved over the last 7 days, for the small colored figure in the grid
+ * and swipe views. Null when there's under a week of history, when the slab is sold, or when the
+ * move rounds to nothing (under $1 and under 1%), so a quiet week shows no number at all.
+ */
+export function weekChange(row: CardRow, days = 7): WeekChange | null {
+  const p = row.price;
+  if (!p || row.card.status === 'sold' || p.series90.length <= days) return null;
+  const from = p.series90[p.series90.length - 1 - days];
+  if (!from) return null;
+  const cents = p.marketCents - from;
+  const fraction = cents / from;
+  if (Math.abs(cents) < 100 && Math.abs(fraction) < 0.005) return null;
+  return { cents, fraction };
 }

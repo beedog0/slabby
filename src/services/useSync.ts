@@ -6,24 +6,33 @@ import { useVault } from '../store/vault';
 import { supabase } from './supabase';
 import { refreshPrices } from './comps';
 import { repairCard } from './psa';
-import { mergeVault, pull, pushCards, pushRules } from './sync';
+import { deleteCards, mergeVault, pull, pushCards, pushRules } from './sync';
 
 export function useSync() {
   useEffect(() => {
     if (!supabase) return;
     let ready = false;
 
+    // Retry server deletes for slabs removed on this phone (offline at a con, or before sign-in).
+    const flushRemoved = () => {
+      const ids = useVault.getState().removedIds;
+      if (ids.length) deleteCards(ids).then((done) => useVault.getState().clearRemoved(done)).catch(() => {});
+    };
+
     const onSignIn = async () => {
       const remote = await pull();
       if (!remote) return;
-      const { merged, toPush } = mergeVault(useVault.getState().cards, remote.cards);
+      const { cards: local, removedIds } = useVault.getState();
+      const { merged, toPush } = mergeVault(local, remote.cards, removedIds);
       const repaired = merged.map(repairCard);
       const fixed = repaired.filter((c, i) => c !== merged[i]);
       useVault.setState({ cards: repaired });
       if (remote.rules) useRules.setState({ rules: remote.rules });
       else await pushRules(useRules.getState().rules);
-      await pushCards([...toPush.filter((c) => !fixed.some((f) => f.id === c.id)), ...fixed]);
+      const stale = repaired.filter((c) => remote.staleKeys.includes(c.id) && !fixed.includes(c));
+      await pushCards([...toPush.filter((c) => !fixed.some((f) => f.id === c.id)), ...fixed, ...stale]);
       ready = true;
+      flushRemoved();
       // Prices and photos need the session, so load them now rather than only on first render.
       await refreshPrices(useVault.getState().cards);
     };
@@ -43,6 +52,7 @@ export function useSync() {
       if (!ready || s.cards === prev.cards) return;
       const before = new Map(prev.cards.map((c) => [c.id, c]));
       pushCards(s.cards.filter((c) => before.get(c.id) !== c)).catch(() => {});
+      if (s.cards.length < prev.cards.length) flushRemoved();
     });
     const unRules = useRules.subscribe((s, prev) => {
       if (ready && s.rules !== prev.rules) pushRules(s.rules).catch(() => {});

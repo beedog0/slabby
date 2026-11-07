@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { money } from '../lib/format';
 import type { CardRow } from '../pricing/portfolio';
 import { useVault } from '../store/vault';
+import { backToCon } from './conStatusMenu';
 import { color, size, space, type } from '../theme/tokens';
 import { PriceLine, type Tick } from './PriceLine';
 import { PrimaryButton } from './ui';
@@ -45,7 +46,7 @@ export function SoldState({ row, bottomInset }: { row: CardRow; bottomInset: num
         {ticks.length > 1 ? <PriceLine ticks={ticks} fill={card.paidCents ? { from: card.paidCents, to: sold, color: color.ink } : undefined} dot={{ value: sold, color: color.ink }} /> : null}
       </View>
       <View style={[styles.footer, { paddingBottom: bottomInset + space.l }]}>
-        <PrimaryButton title="Back to con" onPress={() => router.dismissTo('/con')} />
+        <PrimaryButton title="Back to con" onPress={() => backToCon('sold', card.id)} />
         <Pressable accessibilityRole="button" onPress={undo} style={styles.quiet}>
           <Text style={[type.body, { color: color.ink }]}>Undo sale</Text>
         </Pressable>

@@ -53,6 +53,14 @@ export function ScanIcon({ s = 24 }: { s?: number }) {
   );
 }
 
+export function PlusIcon({ s = 24 }: { s?: number }) {
+  return (
+    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={1.75} strokeLinecap="round">
+      <Path d="M12 5v14M5 12h14" />
+    </Svg>
+  );
+}
+
 export function BackIcon() {
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -148,6 +156,14 @@ export function SlidersIcon() {
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={1.75} strokeLinecap="round">
       <Path d="M4 8h9M19 8h1M4 16h1M11 16h9" />
       <Path d="M16 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 18.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" />
+    </Svg>
+  );
+}
+
+export function SearchIcon({ s = 24, tint = color.ink }: { s?: number; tint?: string }) {
+  return (
+    <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={tint} strokeWidth={1.75} strokeLinecap="round">
+      <Path d="M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15ZM16 16l4.5 4.5" />
     </Svg>
   );
 }

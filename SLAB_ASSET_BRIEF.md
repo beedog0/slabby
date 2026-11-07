@@ -26,7 +26,7 @@ Label layout (left block, hairline, right block):
 | Cert number | 10 pt, 55% opacity | from PSA data |
 | Barcode | one small Code-128, bottom-left | no QR in the render |
 | Grade descriptor | 8 pt tracked caps | GEM MT, MINT, NM-MT |
-| Grade numeral | 34 pt Inter Tight bold | red #D01C2A only for a 10; black otherwise |
+| Grade numeral | 34 pt Inter Tight bold | black for every grade, 10 included (label frame is red #D01C2A) |
 
 The label is drawn in the app from data, so the render ships with an empty label pocket.
 

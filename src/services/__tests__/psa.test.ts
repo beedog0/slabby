@@ -1,4 +1,4 @@
-import { cardFromCert, gradeFrom, lookupCert, parseBrand, parseCertFromQr, repairCard, splitSuffix, titleName } from '../psa';
+import { cardFromCert, gradeFrom, lookupCert, nameFromMatch, parseBrand, parseCertFromQr, repairCard, splitSuffix, titleName } from '../psa';
 
 
 describe('parseCertFromQr', () => {
@@ -28,9 +28,9 @@ describe('PSA payload mapping', () => {
     expect(titleName('UMBREON VMAX')).toBe('Umbreon VMAX');
   });
   it('parses the brand line', () => {
-    expect(parseBrand('POKEMON JAPANESE SV2a-POKEMON CARD 151')).toEqual({ language: 'ja', setCode: 'SV2a', setName: '151' });
+    expect(parseBrand('POKEMON JAPANESE SV2a-POKEMON CARD 151')).toEqual({ game: 'pokemon', language: 'ja', setCode: 'SV2a', setName: '151' });
     expect(parseBrand('POKEMON SWORD & SHIELD EVOLVING SKIES')).toMatchObject({ language: 'en', setCode: null });
-    expect(parseBrand('POKEMON SV8a JP-TERASTAL FEST ex')).toEqual({ language: 'ja', setCode: 'SV8a', setName: 'Terastal Fest ex' });
+    expect(parseBrand('POKEMON SV8a JP-TERASTAL FEST ex')).toEqual({ game: 'pokemon', language: 'ja', setCode: 'SV8a', setName: 'Terastal Fest ex' });
     expect(parseBrand('POKEMON SV-P JP PROMO')).toMatchObject({ language: 'ja', setCode: 'SV-P' });
     expect(parseBrand('POKEMON JPN SV2a-POKEMON CARD 151')).toMatchObject({ language: 'ja', setCode: 'SV2a' });
   });
@@ -55,5 +55,44 @@ describe('lookupCert on mocks', () => {
   });
   it('reports unknown certs', async () => {
     expect((await lookupCert('12345678')).status).toBe('not_found');
+  });
+});
+
+describe('nameFromMatch', () => {
+  it('replaces a label code that is not a name with the matched card name', () => {
+    // 2024 POKEMON JPN SV8a / PZA #236: the label line under the brand is a code, not the name.
+    expect(nameFromMatch('Pza', 'Pikachu ex')).toBe('Pikachu ex');
+  });
+  it('keeps a label name that agrees with the match', () => {
+    expect(nameFromMatch('Mew ex', 'Mew ex')).toBeNull();
+    expect(nameFromMatch('Charizard-holo', 'Charizard')).toBeNull();
+    expect(nameFromMatch('Pikachu', 'Pikachu ex')).toBeNull();
+  });
+  it('does nothing without a matched name', () => {
+    expect(nameFromMatch('Pza', null)).toBeNull();
+    expect(nameFromMatch('Pza', '  ')).toBeNull();
+  });
+});
+
+describe('cardFromDetails game', () => {
+  const base = { cert: null, grader: 'raw' as const, grade: 10, name: 'Luffy', setName: 'OP05', number: 'OP05-119', language: 'en', paidCents: null, plan: 'hold' as const };
+  it('keeps the game it was given', () => {
+    const { cardFromDetails } = require('../psa');
+    expect(cardFromDetails({ ...base, game: 'onepiece' }).game).toBe('onepiece');
+    expect(cardFromDetails({ ...base, game: 'pokemon' }).game).toBe('pokemon');
+  });
+});
+
+describe('parseBrand languages', () => {
+  it('reads KO and KR as Korean', () => {
+    expect(parseBrand('POKEMON SV-P KO')).toMatchObject({ language: 'ko', setCode: 'SV-P' });
+    expect(parseBrand('POKEMON KOREAN SV8a')).toMatchObject({ language: 'ko', setCode: 'SV8a' });
+  });
+  it('reads a hyphenated promo code with no language as Japanese', () => {
+    expect(parseBrand('POKEMON SV-P')).toMatchObject({ language: 'ja', setCode: 'SV-P' });
+  });
+  it('leaves English sets English', () => {
+    expect(parseBrand('POKEMON SVP EN-SV BLACK STAR PROMO').language).toBe('en');
+    expect(parseBrand('POKEMON XY EVOLUTIONS').language).toBe('en');
   });
 });

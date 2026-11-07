@@ -13,7 +13,11 @@ export type PptCard = {
   imageCdnUrl400?: string;
   prices?: { market?: number | null; low?: number | null };
   priceHistory?: { conditions?: Record<string, { history: { date: string; market: number | null }[] }> };
-  ebay?: { priceHistory?: Record<string, Record<string, { average: number; count: number }>> };
+  ebay?: {
+    priceHistory?: Record<string, Record<string, { average: number; count: number }>>;
+    /** Individual sold listings per grade; PPT Business plan only. Parsed defensively. */
+    soldListings?: Record<string, unknown>;
+  };
 };
 
 async function get(path: string, params: Record<string, string>): Promise<unknown> {
@@ -56,6 +60,8 @@ function score(d: PptCard, c: { name: string; setName: string | null; setCode?: 
  * the best name and set fit. Null when nothing has the card number.
  */
 export async function matchCard(c: { name: string; number: string | null; language: string; setName: string | null; setCode?: string | null }) {
+  // PPT lists English and Japanese cards only; searching English for a Korean card finds another card.
+  if (c.language !== 'en' && c.language !== 'ja') return null;
   const want = bareNumber(c.number);
   const full = c.name
     .replace(/\b(alt art|SAR|SIR|AR)\b/gi, '')
@@ -68,9 +74,15 @@ export async function matchCard(c: { name: string; number: string | null; langua
     const body = (await get('/cards', { search, language: lang(c.language), limit: '100' })) as { data: PptCard[] };
     const hits = (body.data ?? []).filter((d) => !want || bareNumber(d.cardNumber) === want);
     if (!hits.length) continue;
-    const best = hits.map((h) => ({ h, s: score(h, c) })).sort((x, y) => y.s - x.s)[0].h;
+    const ranked = hits.map((h) => ({ h, s: score(h, c) })).sort((x, y) => y.s - x.s);
+    // Several sets print a Pikachu #3. Without a set to tell them apart (or when the set fits
+    // none of them), don't guess: the TCGplayer catalog gets a try, else the card stays unmatched.
+    const setFit = (h: PptCard) => score(h, { name: '', setName: c.setName, setCode: c.setCode }) > 0;
+    const distinct = new Set(hits.map((h) => h.tcgPlayerId)).size;
+    if (distinct > 1 && !setFit(ranked[0].h)) return null;
+    const best = ranked[0].h;
     const image = best.imageCdnUrl400 ?? `https://tcgplayer-cdn.tcgplayer.com/product/${best.tcgPlayerId}_400w.jpg`;
-    return { tcgPlayerId: String(best.tcgPlayerId), image, setName: best.setName };
+    return { tcgPlayerId: String(best.tcgPlayerId), image, setName: best.setName, name: best.name };
   }
   return null;
 }
@@ -86,4 +98,11 @@ export async function fetchComps(tcgPlayerId: string, language: string): Promise
     maxDataPoints: '120',
   })) as { data: PptCard | PptCard[] };
   return Array.isArray(body.data) ? body.data[0] : body.data;
+}
+
+/** Just the product title for a TCGplayer id, to name cards matched before names were kept. */
+export async function productTitle(tcgPlayerId: string, language: string): Promise<string | null> {
+  const body = (await get('/cards', { tcgPlayerId, language: lang(language) })) as { data: PptCard | PptCard[] };
+  const d = Array.isArray(body.data) ? body.data[0] : body.data;
+  return d?.name ?? null;
 }

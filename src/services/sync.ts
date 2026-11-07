@@ -2,7 +2,8 @@
 // every change is pushed, and on sign-in the server copy is pulled. Last write wins per card.
 
 import { cardKey } from '../pricing/cardKey';
-import type { Card, PricingRules } from '../types';
+import { gameOf } from '../lib/games';
+import type { Card, Game, PricingRules } from '../types';
 import { supabase } from './supabase';
 
 /** RFC 4122 v4. Card ids must be uuids to match the slabs table. */
@@ -18,6 +19,7 @@ export const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-
 export type CardRowDb = {
   id: string;
   user_id: string;
+  game: Game;
   cert_number: string | null;
   grader: Card['grader'];
   grade: number | null;
@@ -25,6 +27,7 @@ export type CardRowDb = {
   set_name: string | null;
   set_code: string | null;
   number: string | null;
+  variety: string | null;
   language: string;
   year: number | null;
   image_front_url: string | null;
@@ -46,6 +49,7 @@ export function toRow(c: Card, userId: string): CardRowDb {
   return {
     id: c.id,
     user_id: userId,
+    game: gameOf(c),
     cert_number: c.certNumber,
     grader: c.grader,
     grade: c.grade,
@@ -53,6 +57,7 @@ export function toRow(c: Card, userId: string): CardRowDb {
     set_name: c.setName,
     set_code: c.setCode,
     number: c.number,
+    variety: c.variety ?? null,
     language: c.language,
     year: c.year,
     image_front_url: c.imageFrontUrl,
@@ -74,6 +79,7 @@ export function toRow(c: Card, userId: string): CardRowDb {
 export function fromRow(r: CardRowDb): Card {
   return {
     id: r.id,
+    game: r.game ?? 'pokemon',
     certNumber: r.cert_number,
     grader: r.grader,
     grade: r.grade == null ? null : Number(r.grade),
@@ -81,6 +87,7 @@ export function fromRow(r: CardRowDb): Card {
     setName: r.set_name,
     setCode: r.set_code,
     number: r.number,
+    ...(r.variety ? { variety: r.variety } : {}),
     language: r.language ?? 'en',
     year: r.year,
     imageFrontUrl: r.image_front_url,
@@ -137,6 +144,17 @@ export async function pushCards(cards: Card[]): Promise<void> {
   await supabase.from('slabs').upsert(cards.filter((c) => isUuid(c.id)).map((c) => toRow(c, uid)));
 }
 
+/** Delete slabs on the server. Returns the ids it confirmed, so failed ones are retried later. */
+export async function deleteCards(ids: string[]): Promise<string[]> {
+  const uid = await userId();
+  // Mock seed cards (non-uuid ids) never reached the server; they're done as soon as they're gone.
+  const local = ids.filter((id) => !isUuid(id));
+  const remote = ids.filter(isUuid);
+  if (!supabase || !uid || !remote.length) return local;
+  const { error } = await supabase.from('slabs').delete().in('id', remote);
+  return error ? local : ids;
+}
+
 export async function pushRules(rules: PricingRules): Promise<void> {
   const uid = await userId();
   if (!supabase || !uid) return;
@@ -144,7 +162,7 @@ export async function pushRules(rules: PricingRules): Promise<void> {
 }
 
 /** Server copy of the vault and rules, or null when signed out. */
-export async function pull(): Promise<{ cards: Card[]; rules: PricingRules | null } | null> {
+export async function pull(): Promise<{ cards: Card[]; rules: PricingRules | null; staleKeys: string[] } | null> {
   const uid = await userId();
   if (!supabase || !uid) return null;
   const [cards, rules] = await Promise.all([
@@ -155,15 +173,31 @@ export async function pull(): Promise<{ cards: Card[]; rules: PricingRules | nul
   return {
     cards: (cards.data as CardRowDb[]).map(fromRow),
     rules: rules.data ? rulesFromRow(rules.data) : null,
+    // Rows whose card_key was computed by an older cardKey(): push them again so the server
+    // (nightly comps, comps-refresh's ownership check) uses today's key.
+    staleKeys: (cards.data as CardRowDb[]).filter((r) => r.card_key !== cardKey(fromRow(r))).map((r) => r.id),
   };
 }
 
 /**
  * Merge after sign-in: server cards win by id; local-only cards (added while signed out) are
  * kept and pushed. Mock seed cards (non-uuid ids) are dropped once a real vault exists.
+ * Slabs removed on this phone whose server delete hasn't landed yet stay removed.
  */
-export function mergeVault(local: Card[], remote: Card[]): { merged: Card[]; toPush: Card[] } {
+export function mergeVault(
+  local: Card[],
+  remoteAll: Card[],
+  removedIds: string[] = [],
+): { merged: Card[]; toPush: Card[] } {
+  const removed = new Set(removedIds);
+  const remote = remoteAll.filter((c) => !removed.has(c.id));
   const remoteIds = new Set(remote.map((c) => c.id));
   const toPush = local.filter((c) => isUuid(c.id) && !remoteIds.has(c.id));
-  return { merged: [...toPush, ...remote], toPush };
+  // Con buys are phone-only notes (not columns yet): keep them on the server's copy.
+  const localById = new Map(local.map((c) => [c.id, c]));
+  const kept = remote.map((r) => {
+    const l = localById.get(r.id);
+    return l?.boughtConId ? { ...r, boughtConId: l.boughtConId, boughtMarketCents: l.boughtMarketCents ?? null } : r;
+  });
+  return { merged: [...toPush, ...kept], toPush };
 }
