@@ -22,7 +22,7 @@ import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, cardFromDetails, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
-import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, parseCardText, printName, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, missReason, parseCardText, printedNumber, printName, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
 import { cardNumber, displayName, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
@@ -549,7 +549,7 @@ function RawSheet({
   const add = useVault((s) => s.add);
   const owned = useVault((s) => s.cards);
   const n = raw.read.numbers[0];
-  const printed = n.total ? `${n.num}/${n.total}` : n.num;
+  const printed = printedNumber(n);
   const best = raw.matches?.[raw.pick]?.card ?? null;
   // Print: null is the catalog's own (base) printing. Holo vs reverse holo can't be told from a photo.
   const [print, setPrint] = useState<number | null>(null);
@@ -600,7 +600,7 @@ function RawSheet({
         <>
           <Text style={[type.section, { color: color.ink }]}>Couldn’t find card {printed}</Text>
           <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
-            It may be misread or not in the catalog yet. Search for it by name instead.
+            {missReason(raw.read)}
           </Text>
           <PrimaryButton title="Search cards" onPress={() => router.replace('/search')} />
           {again}

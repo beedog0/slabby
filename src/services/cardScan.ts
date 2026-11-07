@@ -12,18 +12,22 @@ import { supabase } from './supabase';
 import type { LabelLine } from './label';
 
 export type CardNumber = {
-  /** As printed, without the set size: "199", "TG05", "OP05-119", "SWSH123". */
+  /** As printed, without the set size: "199", "TG05", "OP05-119", "SWSH123", "049". */
   num: string;
-  /** Set size when printed: "165", "TG30". */
+  /** Set size when printed: "165", "TG30", "SV-P" (Japanese promos print the promo code here). */
   total: string | null;
+  /** Promo set code printed on the same line, for promos with no set size: "MEP", "SVP". */
+  code?: string;
 };
+
+export type ScanLanguage = 'en' | 'ja' | 'ko' | 'zh';
 
 export type ParsedCard = {
   numbers: CardNumber[];
-  /** Set code candidates near the number, upper-cased: "SV8A", "MEW", "PAL". */
+  /** Set code candidates near the number, upper-cased: "SV8A", "MEW", "PAL", "MEP". */
   codes: string[];
-  /** Language hint from the bottom line: "EN" printed → en; a JP-style code without EN → ja. */
-  language: 'en' | 'ja' | null;
+  /** Language from the bottom line: "EN" → en, "KO"/"KOR" → ko, a JP-style code without EN → ja. */
+  language: ScanLanguage | null;
   /** Every recognized word, upper-cased, for matching the card name. */
   words: Set<string>;
 };
@@ -40,13 +44,30 @@ function fixDigits(t: string): string {
     .replace(/\s*\/\s*/g, '/');
 }
 
-const SLASH = /(?<![A-Z0-9])([A-Z]{0,3}\d{1,3})\/([A-Z]{0,3}\d{2,3})(?![0-9])/g;
-// One Piece (OP05-119, ST01-012, EB01-001, PRB01-…), Riftbound (OGN-301), Pokémon promos (SWSH123).
-const DASH = /(?<![A-Z0-9])((?:OP|ST|EB|PRB)\d{2}-\d{3}|[A-Z]{3}-\d{3})(?![0-9])/g;
-const PROMO = /(?<![A-Z0-9])((?:SWSH|SM|XY|BW)\d{2,3})(?![0-9])/g;
-// Set codes printed beside the number: SV8a, S12a, SM12a, SV-P, or three capitals (MEW, PAL, SVI).
-const CODE = /(?<![A-Za-z0-9])(SV\d{1,2}[a-zA-Z]?|S\d{1,2}[a-zA-Z]?|SM\d{1,2}[a-zA-Z]?|SV-?P|[A-Z]{3})(?![A-Za-z0-9])/g;
-const NOT_CODES = new Set(['HP', 'EN', 'JP', 'GX', 'EX', 'VMAX', 'VSTAR', 'TAG', 'THE', 'AND', 'FOR', 'ILL', 'LV']);
+// Every format below has a test in __tests__/cardScan.test.ts; see the table at the top of it.
+// Main sets and subsets: 199/165, 4/102, TG05/TG30, GG01/GG70, SV001/SV122, RC1/RC32, H1/H32.
+const SLASH = /(?<![A-Z0-9])([A-Z]{0,3}\d{1,3}[A-Z]?)\/([A-Z]{0,3}\d{2,3})(?![0-9])/g;
+// Japanese promos print the promo code as the set size: 001/SV-P, 123/S-P, 401/SM-P, 238/XY-P,
+// 100/BW-P, 001/M-P, 013/30th-P (30th anniversary). OCR sometimes drops the dash.
+const JP_PROMO = /(?<![A-Z0-9])(\d{1,3})\/((?:SV|SM|XY|BW|DP|S|M|30TH)-?P)(?![A-Z0-9])/g;
+// One Piece (OP05-119, ST01-012, EB01-001, PRB01-001, P-001), Riftbound (OGN-301), Pokémon
+// Japanese-style S-P without a number ahead.
+const DASH = /(?<![A-Z0-9])((?:OP|ST|EB|PRB)\d{2}-\d{3}|P-\d{3}|[A-Z]{3}-\d{3})(?![0-9])/g;
+// English black star promos with the code fused to the number: SWSH123, SM100, XY67, BW04,
+// HGSS01, DP45. (Wizards and Nintendo promos print a bare number; too ambiguous to read alone.)
+const PROMO = /(?<![A-Z0-9])((?:SWSH|HGSS|SM|XY|BW|DP)\d{2,3})(?![0-9])/g;
+// Newer English promos print code, language, number with no set size: "SVP EN 049", "MEP EN 051".
+// The language may be misread ("IN)", "EN)") or missing; the code must be in capitals as printed.
+const LANG_TOKEN = '(?:EN|[EI]N\\)?|FN|JP|JPN|KO|KOR|ZH|CHS|CHT|DE|FR|IT|ES|PT)';
+const PROMO_LINE = new RegExp(`(?<![A-Za-z0-9])(SVP|MEP|SV-P|SWSHP|[A-Z]{2,4})\\s+${LANG_TOKEN}\\s*(\\d{1,3})(?![0-9/])`, 'g');
+// Known promo codes also read without the language, or glued to it ("SVPEN 197").
+const PROMO_BARE = /(?<![A-Za-z0-9])(SVP|MEP)(?:EN)?\s*(\d{1,3})(?![0-9/])/g;
+// Some lines put the number first: "#094 · MEP EN".
+const PROMO_AFTER = /(?<![A-Za-z0-9/])#?(\d{3})\s*[·•.]?\s*(SVP|MEP)\s*EN\b/g;
+// Set codes printed beside the number: SV8a, S12a, SM12a, SV-P, or three capitals (MEW, PAL, SVI, MEP).
+// Also 30C (30th Celebration) and Chinese codes (CSV1C, CS1a, AC2b).
+const CODE = /(?<![A-Za-z0-9])(SV\d{1,2}[a-zA-Z]?|S\d{1,2}[a-zA-Z]?|SM\d{1,2}[a-zA-Z]?|SV-?P|30C|CS[VM]?\d{1,2}[a-zA-Z]?|AC\d[a-zA-Z]?|[A-Z]{3,4})(?![A-Za-z0-9])/g;
+const NOT_CODES = new Set(['HP', 'EN', 'JP', 'JPN', 'KO', 'KOR', 'ZH', 'CHS', 'CHT', 'GX', 'EX', 'VMAX', 'VSTAR', 'TAG', 'THE', 'AND', 'FOR', 'ILL', 'LV', 'ILLUS', 'BASIC', 'STAGE']);
 
 /** True when the frame shows a grader label (front cert number, PSA/BGS/CGC, grade words). */
 export function looksLikeSlab(input: (LabelLine | string)[]): boolean {
@@ -56,50 +77,105 @@ export function looksLikeSlab(input: (LabelLine | string)[]): boolean {
   });
 }
 
+/**
+ * The text to search, line by line. The recognizer often splits the tiny bottom line into pieces
+ * ("J", "MEP EN", "049 ★"); pieces at the same height are also joined left to right.
+ */
+function textRows(input: (LabelLine | string)[]): string[] {
+  const clean = (t: string) => t.replace(/\s+/g, ' ').trim();
+  const out = input.map((l) => clean(typeof l === 'string' ? l : l.text));
+  const placed = input.filter((l): l is LabelLine => typeof l !== 'string' && Number.isFinite(l.y));
+  const used = new Set<LabelLine>();
+  for (const l of placed) {
+    if (used.has(l)) continue;
+    const row = placed.filter((m) => !used.has(m) && Math.abs(m.y - l.y) < 0.012);
+    row.forEach((m) => used.add(m));
+    if (row.length > 1) out.push(clean(row.sort((a, b) => a.x - b.x).map((m) => m.text).join(' ')));
+  }
+  return out;
+}
+
+function languageOf(t: string): ScanLanguage | null {
+  // Simplified Chinese set codes start CS (CSV1C, CS1a, CSM1a); traditional ones AC (AC1a).
+  if (/(?<![A-Za-z0-9])(CS[VM]?\d|AC\d[a-z])/.test(t)) return 'zh';
+  if (/(?<![A-Z])(KO|KOR)(?![A-Z])/.test(t)) return 'ko';
+  if (/(?<![A-Z])(ZH|CHS|CHT)(?![A-Z])/.test(t)) return 'zh';
+  if (/(?<![A-Z])(JP|JPN)(?![A-Z])/.test(t)) return 'ja';
+  if (/(?<![A-Z])(EN|[EI]N\))(?![A-Z])/.test(t)) return 'en';
+  return null;
+}
+
 /** Pull the collector number, set code and words from a raw card's recognized text. Null without a number. */
 export function parseCardText(input: (LabelLine | string)[]): ParsedCard | null {
-  const texts = input.map((l) => (typeof l === 'string' ? l : l.text)).map((t) => t.replace(/\s+/g, ' ').trim());
+  const texts = textRows(input);
   const numbers: CardNumber[] = [];
   const codes: string[] = [];
-  let en = false;
+  let language: ScanLanguage | null = null;
   let jpCode = false;
   const words = new Set<string>();
   const push = (n: CardNumber) => {
     if (!numbers.some((m) => m.num === n.num && m.total === n.total)) numbers.push(n);
   };
+  const addCode = (c: string) => {
+    if (!NOT_CODES.has(c) && !codes.includes(c)) codes.push(c);
+  };
 
   for (const raw of texts) {
     for (const w of raw.toUpperCase().split(/[^A-Z0-9'é.-]+/i)) if (w.length >= 2) words.add(w.toUpperCase());
     const t = fixDigits(raw);
+    const up = t.toUpperCase();
     let found = false;
-    for (const m of t.toUpperCase().matchAll(SLASH)) {
+    for (const m of up.matchAll(JP_PROMO)) {
+      const total = m[2].replace(/(?<!-)P$/, '-P').replace(/^-/, '');
+      push({ num: m[1], total });
+      addCode(total);
+      jpCode = true;
+      found = true;
+    }
+    for (const m of up.matchAll(SLASH)) {
       const [num, total] = [m[1], m[2]];
       // "1/2" style fractions in attack text are too short to be a set size.
       if (!/\d{2}/.test(total)) continue;
       push({ num, total });
       found = true;
     }
-    for (const m of t.toUpperCase().matchAll(DASH)) {
+    for (const m of up.matchAll(DASH)) {
       push({ num: m[1], total: null });
       found = true;
     }
-    for (const m of t.toUpperCase().matchAll(PROMO)) {
+    for (const m of up.matchAll(PROMO)) {
       push({ num: m[1], total: null });
       found = true;
+    }
+    // Case-sensitive: attack text ("Vine Whip 20") isn't in capitals; the printed code is.
+    for (const m of t.matchAll(PROMO_AFTER)) {
+      push({ num: m[1], total: null, code: m[2] });
+      addCode(m[2]);
+      found = true;
+    }
+    for (const re of [PROMO_LINE, PROMO_BARE]) {
+      for (const m of t.matchAll(re)) {
+        const code = m[1].replace('-', '');
+        if (NOT_CODES.has(code)) continue;
+        push({ num: m[2], total: null, code });
+        addCode(code);
+        found = true;
+      }
     }
     if (!found) continue;
     // The bottom line: set code and language sit on the same line as the number.
-    if (/\bEN\b/.test(t)) en = true;
+    language = language ?? languageOf(t);
     for (const m of t.matchAll(CODE)) {
       const c = m[1].toUpperCase();
-      if (NOT_CODES.has(c)) continue;
-      if (!codes.includes(c)) codes.push(c);
+      addCode(c);
       // Japanese sets print "SV8a" or "S12a" with no EN beside it.
       if (/^(SV|S|SM)\d/.test(c) && /[a-z]$/.test(m[1])) jpCode = true;
     }
   }
   if (!numbers.length) return null;
-  return { numbers, codes, language: en ? 'en' : jpCode ? 'ja' : null, words };
+  // Korean cards print the same codes as Japanese ones; Hangul in the name or text tells them apart.
+  if (texts.some((t) => /[\uAC00-\uD7A3]/.test(t))) language = 'ko';
+  return { numbers, codes, language: language ?? (jpCode ? 'ja' : null), words };
 }
 
 /** Auto-read key: two frames with the same first number mean the card is held steady. */
@@ -116,7 +192,11 @@ export function numberVariants(n: CardNumber): string[] {
   const nums = [n.num, strip(n.num)];
   if (n.total && /^\d+$/.test(n.num)) nums.push(n.num.padStart(n.total.replace(/\D/g, '').length, '0'));
   if (/^\d+$/.test(n.num)) nums.push(n.num.padStart(3, '0'));
-  for (const x of nums) out.add(n.total ? `${x}/${n.total}` : x);
+  for (const x of nums) {
+    out.add(n.total ? `${x}/${n.total}` : x);
+    // TCGplayer writes the 30th anniversary promo code in lower case: "013/30th-P".
+    if (n.total?.includes('TH-')) out.add(`${x}/${n.total.replace('TH-', 'th-')}`);
+  }
   return [...out];
 }
 
@@ -128,8 +208,8 @@ export type CardMatch = { card: CatalogCard; score: number };
  */
 export function scoreCard(c: CatalogCard, p: ParsedCard): number {
   let s = 0;
-  const code = (c.setCode ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (code && p.codes.some((k) => k.replace(/[^A-Z0-9]/g, '') === code)) s += 4;
+  const code = compact(c.setCode);
+  if (code && p.codes.some((k) => compact(k) === code)) s += 4;
   const nameWords = displayName(c.name)
     .toUpperCase()
     .replace(/\(.*?\)/g, ' ')
@@ -140,6 +220,18 @@ export function scoreCard(c: CatalogCard, p: ParsedCard): number {
   if (p.language && c.language === p.language) s += 1;
   if (c.marketCents) s += 0.25;
   return s;
+}
+
+const compact = (s: string | null | undefined) => (s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/**
+ * Whether a catalog card can be the one read. A promo printed with its code and a bare number
+ * ("MEP EN 049") only fits cards from that promo set: plenty of other promos are also "049", and
+ * a wrong card with a confident price is worse than none.
+ */
+export function fitsRead(c: CatalogCard, p: ParsedCard): boolean {
+  if (!c.number) return false;
+  return p.numbers.some((n) => numberVariants(n).includes(c.number!) && (!n.code || compact(c.setCode) === compact(n.code)));
 }
 
 /** Rank candidates best first. */
@@ -160,6 +252,9 @@ const mockCatalog = catalogJson as CatalogCard[];
 /** Catalog cards printed with any of the read numbers, best match first (at most 8). */
 export async function findScannedCard(p: ParsedCard): Promise<CardMatch[]> {
   const variants = [...new Set(p.numbers.slice(0, 3).flatMap(numberVariants))];
+  // TCGplayer lists no Korean or Chinese Pokémon. Their numbers match Japanese cards, whose
+  // price would be wrong, so these say there's no price source instead.
+  if (!variants.length || p.language === 'ko' || p.language === 'zh') return [];
   let cards: CatalogCard[];
   if (!supabase) {
     cards = mockCatalog.filter((c) => c.number && variants.includes(c.number));
@@ -169,7 +264,24 @@ export async function findScannedCard(p: ParsedCard): Promise<CardMatch[]> {
     if (error) throw error;
     cards = ((data ?? []) as Row[]).map(fromRow);
   }
-  return rankCards(cards, p).slice(0, 8);
+  return rankCards(
+    cards.filter((c) => fitsRead(c, p)),
+    p,
+  ).slice(0, 8);
+}
+
+/** The number as printed, for the sheet: "199/165", "MEP 049", "SWSH123". */
+export function printedNumber(n: CardNumber): string {
+  return n.total ? `${n.num}/${n.total}` : n.code ? `${n.code} ${n.num}` : n.num;
+}
+
+/** Why a read card found nothing: a language or promo set TCGplayer doesn't carry yet, or a misread. */
+export function missReason(p: ParsedCard): string {
+  if (p.language === 'ko') return 'Korean cards have no price source yet.';
+  if (p.language === 'zh') return 'Chinese cards have no price source yet.';
+  const n = p.numbers[0];
+  if (n?.code) return `${printedNumber(n)} isn’t in TCGplayer’s catalog yet, so there’s no price source yet. New promos usually show up within a few weeks.`;
+  return 'It may be misread or not in the catalog yet. Search for it by name instead.';
 }
 
 /** Printings to offer when the catalog has none yet (Pokémon only; other games print one way). */
