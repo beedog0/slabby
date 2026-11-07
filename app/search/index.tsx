@@ -35,9 +35,11 @@ type GameFilter = 'all' | Game;
 export default function Search() {
   const insets = useSafeAreaInsets();
   // Con mode opens search with ?con=1: each result also shows what to pay, from the buying rules.
-  const con = useLocalSearchParams<{ con?: string }>().con === '1';
+  const params = useLocalSearchParams<{ con?: string; q?: string }>();
+  const con = params.con === '1';
   const rules = useRules((s) => s.rules);
-  const [f, setF] = useState<Query>(EMPTY_QUERY);
+  // The scan's "Search cards" opens with the name it read already typed (?q=Snivy).
+  const [f, setF] = useState<Query>(() => ({ ...EMPTY_QUERY, q: typeof params.q === 'string' ? params.q : '' }));
   const set = (patch: Partial<Query>) => setF((prev) => ({ ...prev, ...patch }));
   const [results, setResults] = useState<Found[]>([]);
   const [facets, setFacets] = useState<Facets | null>(null);

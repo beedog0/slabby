@@ -1,4 +1,4 @@
-import { cardSteadyKey, findScannedCard, findSimilarCards, fitsRead, rankSimilar, readName, isConfident, looksLikeSlab, missReason, numberVariants, parseCardText, printedNumber, printName, printOptions, rankCards } from '../cardScan';
+import { cardSteadyKey, correctionKey, findScannedCard, findSimilarCards, searchName, similarForSlab, withCorrection, fitsRead, rankSimilar, readName, isConfident, looksLikeSlab, missReason, numberVariants, parseCardText, printedNumber, printName, printOptions, rankCards } from '../cardScan';
 import type { CatalogCard } from '../search';
 
 jest.mock('../supabase', () => ({ supabase: null }));
@@ -297,5 +297,41 @@ describe('similar cards when the number finds nothing', () => {
   it('offers nothing for Korean prints or when no name was read', async () => {
     expect(await findSimilarCards(parseCardText(['피카츄', 'SV2a 025/165'])!)).toEqual([]);
     expect(await findSimilarCards(parseCardText(['J MEP EN 049'])!)).toEqual([]);
+  });
+});
+
+describe('Not this card?', () => {
+  it('cleans PSA subjects into catalog names', () => {
+    expect(searchName('FA/CHARIZARD EX')).toBe('CHARIZARD EX');
+    expect(searchName('PIKACHU-HOLO')).toBe('PIKACHU');
+    expect(searchName('Umbreon VMAX')).toBe('Umbreon VMAX');
+    expect(searchName('DARK GYARADOS-REV.FOIL')).toBe('DARK GYARADOS');
+  });
+
+  it('keys a raw read by number and name, so a second scan finds the correction', () => {
+    const a = parseCardText(['Snivy', 'J MEP EN 049'])!;
+    const b = parseCardText(['Snivy', 'J MEP IN) 49'])!;
+    expect(correctionKey(a)).toBe(correctionKey(b));
+    expect(correctionKey(a)).not.toBe(correctionKey(parseCardText(['Oshawott', 'J MEP EN 049'])!));
+  });
+
+  it('puts a remembered card first and makes it the confident pick', async () => {
+    const m = [
+      { card: card({ productId: 7, name: 'A' }), score: 5 },
+      { card: card({ productId: 8, name: 'B' }), score: 1 },
+    ];
+    const out = await withCorrection(m, 8);
+    expect(out.map((x) => x.card.productId)).toEqual([8, 7]);
+    expect(isConfident(out)).toBe(true);
+    expect(await withCorrection(m, undefined)).toBe(m);
+  });
+
+  it('fetches a remembered card the number didn’t find', async () => {
+    const out = await withCorrection([], 9000004);
+    expect(out[0].card.name).toMatch(/Mew ex/);
+  });
+
+  it('offers no other prints for Korean slabs', async () => {
+    expect(await similarForSlab({ name: 'PIKACHU', number: '25', language: 'ko' })).toEqual([]);
   });
 });

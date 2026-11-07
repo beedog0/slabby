@@ -7,7 +7,7 @@
 
 import catalogJson from '../mocks/catalog.json';
 import type { CatalogCard } from './search';
-import { displayName, fromRow, searchCards, type Row } from './search';
+import { catalogCard, displayName, fromRow, searchCards, type Row } from './search';
 import { supabase } from './supabase';
 import type { LabelLine } from './label';
 
@@ -265,7 +265,7 @@ export function rankCards(cards: CatalogCard[], p: ParsedCard): CardMatch[] {
 
 /** True when the best match is clearly ahead, so the sheet needn't offer a pick list first. */
 export function isConfident(ranked: CardMatch[]): boolean {
-  if (ranked.length === 1) return true;
+  if (ranked.length === 1 || ranked[0]?.score === Infinity) return true;
   return ranked.length > 1 && ranked[0].score - ranked[1].score >= 2;
 }
 
@@ -316,6 +316,46 @@ export async function findSimilarCards(p: ParsedCard): Promise<CatalogCard[]> {
   if (!p.name || p.language === 'ko' || p.language === 'zh') return [];
   const found = await searchCards(p.name, 'pokemon');
   return rankSimilar(found, p).slice(0, 8);
+}
+
+/**
+ * A slab's card name as the catalog would write it: PSA subjects carry print and art words
+ * ("FA/CHARIZARD EX", "PIKACHU-HOLO", "REV.FOIL") that no catalog name has.
+ */
+export function searchName(name: string): string {
+  return name
+    .replace(/^[A-Z0-9.]+\//i, '')
+    .replace(/[-\s]*(REV(?:ERSE)?\.?\s?(?:FOIL|HOLO)|HOLO|1ST EDITION|SHADOWLESS|FULL ART|SPECIAL ILLUSTRATION RARE|ILLUSTRATION RARE|SECRET|ALT(?:ERNATE)? ART)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Cards a slab might really be, for its "Not this card?" list: same name, same number first. */
+export async function similarForSlab(c: { name: string; number: string | null; language: string }): Promise<CatalogCard[]> {
+  if (c.language === 'ko' || c.language === 'zh') return [];
+  const name = searchName(c.name);
+  const num = (c.number ?? '').replace(/^#/, '').split('/')[0];
+  return findSimilarCards({
+    numbers: num ? [{ num, total: null }] : [],
+    codes: [],
+    language: c.language === 'ja' ? 'ja' : 'en',
+    words: new Set(),
+    name,
+  });
+}
+
+/** Key a raw read is remembered under once corrected: the number as printed plus the name read. */
+export function correctionKey(p: ParsedCard): string {
+  return `card:${cardSteadyKey(p)}|${(p.name ?? '').toUpperCase()}`;
+}
+
+/** The read's matches with a remembered correction put first (fetched when the number missed it). */
+export async function withCorrection(matches: CardMatch[], productId: number | undefined): Promise<CardMatch[]> {
+  if (!productId) return matches;
+  const i = matches.findIndex((m) => m.card.productId === productId);
+  if (i >= 0) return [{ ...matches[i], score: Infinity }, ...matches.filter((_, j) => j !== i)];
+  const card = await catalogCard(productId).catch(() => null);
+  return card ? [{ card, score: Infinity }, ...matches] : matches;
 }
 
 /** Order similar cards: printed number first, then language, then name fit, then price. */
