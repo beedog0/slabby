@@ -323,7 +323,9 @@ export async function fillArt(cards: Card[]): Promise<void> {
     saveName(key, ref?.matched_name);
     const art = artFor(ref);
     if (art && needsArt) saveArt(key, art);
-    const ask = (needsArt && !art) || (!error && !!ref?.tcgplayer_id && !ref.matched_name);
+    // No row at all: a new card_key (cardKey() now keys set-code-less Pokémon cards by set name),
+    // so match it once to get its photo and prices under the new key.
+    const ask = !ref || (needsArt && !art) || (!error && !!ref.tcgplayer_id && !ref.matched_name);
     if (ask && !retried.has(key)) {
       const card = owned.find((c) => cardKey(c) === key)!;
       // Only a real answer counts as tried; a failed call is retried on the next refresh.

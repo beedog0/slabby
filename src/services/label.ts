@@ -35,6 +35,34 @@ const YEAR_ONLY = /^((?:19|20)\d{2})$/;
 const CERT = /^\d{8,10}$/;
 const VARIETY = /^(HOLO|REVERSE HOLO|1ST EDITION|SHADOWLESS|FULL ART|ALT(?:ERNATE)? ART|SPECIAL ART RARE|ILLUSTRATION RARE|SPECIAL ILLUSTRATION RARE|SECRET|RAINBOW|GOLD|PROMO|STAFF|ART RARE|SUPER RARE|ULTRA RARE|HYPER RARE|PARALLEL|MANGA|SP|SPECIAL|1ST ANNIVERSARY|TREASURE RARE|SIGNATURE|OVERNUMBERED|SHOWCASE|FOIL)\b/i;
 
+// Product and event lines PSA prints where a set or variety goes, never a card name:
+// "25TH ANNIV-GOLDEN BOX", "METAMONG PROJECT STMP RLY", "PRIZE PACK SERIES".
+const SET_LINE = /\b(?:ANNIV(?:ERSARY)?|BOX|COLLECTION|PROMO|DECK|STMP|STAMP|PROJECT|TOURNAMENT|PRIZE|CHAMPIONSHIPS?|PREMIUM|GIFT|TIN|BLISTER|STARTER|SERIES|PACK)\b|\b\d+(?:ST|ND|RD|TH)\b/i;
+
+// Short words real card names use: "M CHARIZARD EX", "MR. MIME", "N", "PIKACHU V".
+const SHORT_WORDS = new Set(['EX', 'GX', 'V', 'M', 'MR', 'DR', 'JR', 'LV', 'X', 'Y', 'N', 'OF', 'UP', 'ON', 'TO', 'DE']);
+
+/** A misread line: mostly one- and two-letter fragments ("TT TH AN NY - COLDEN BOX"). */
+function garbled(t: string): boolean {
+  const words = t.split(/[\s-]+/).filter((w) => /[A-Z]/i.test(w));
+  if (words.length < 3) return false;
+  const frags = words.filter((w) => {
+    const l = w.replace(/[^A-Z]/gi, '').toUpperCase();
+    return l.length <= 2 && !SHORT_WORDS.has(l);
+  }).length;
+  return frags >= 2 && frags * 2 >= words.length;
+}
+
+/** A product or event line ("25TH ANNIV-GOLDEN BOX"): it names the set when the brand line doesn't. */
+export function setLine(t: string | null | undefined): boolean {
+  return !!t && SET_LINE.test(t);
+}
+
+/** Whether a line can be a card name, not a set/product line or an OCR misread. */
+export function nameLike(t: string): boolean {
+  return !!t && !SET_LINE.test(t) && !garbled(t);
+}
+
 export type ParsedLabel = {
   payload: PsaCertPayload;
   /** True when name, grade and cert were all found. */
@@ -75,7 +103,7 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
       const after = yb[2].match(/#\s*[A-Z0-9-]+\s+(.+)$/i)?.[1];
       if (after) {
         const nameOnly = after.split(GRADE_WORDS)[0].replace(/\b\d{8,10}\b/, '').trim();
-        if (nameOnly) name = nameOnly;
+        if (nameOnly && nameLike(nameOnly)) name = nameOnly;
       }
     }
 
@@ -153,10 +181,12 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
     for (let i = brandIndex + 1; i < lines.length; i++) {
       const t = freeText(lines[i].text);
       if (!t) continue;
-      if (VARIETY.test(t)) {
+      if (VARIETY.test(t) || SET_LINE.test(t)) {
         variety ??= t.replace(/\s(10|[1-9](?:\.5)?)$/, '');
         continue;
       }
+      // A misread name line: better no name (the next frame tries again) than a wrong one.
+      if (garbled(t)) break;
       name = t;
       nameIndex = i;
       break;

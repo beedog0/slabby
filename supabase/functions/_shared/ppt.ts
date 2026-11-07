@@ -74,7 +74,13 @@ export async function matchCard(c: { name: string; number: string | null; langua
     const body = (await get('/cards', { search, language: lang(c.language), limit: '100' })) as { data: PptCard[] };
     const hits = (body.data ?? []).filter((d) => !want || bareNumber(d.cardNumber) === want);
     if (!hits.length) continue;
-    const best = hits.map((h) => ({ h, s: score(h, c) })).sort((x, y) => y.s - x.s)[0].h;
+    const ranked = hits.map((h) => ({ h, s: score(h, c) })).sort((x, y) => y.s - x.s);
+    // Several sets print a Pikachu #3. Without a set to tell them apart (or when the set fits
+    // none of them), don't guess: the TCGplayer catalog gets a try, else the card stays unmatched.
+    const setFit = (h: PptCard) => score(h, { name: '', setName: c.setName, setCode: c.setCode }) > 0;
+    const distinct = new Set(hits.map((h) => h.tcgPlayerId)).size;
+    if (distinct > 1 && !setFit(ranked[0].h)) return null;
+    const best = ranked[0].h;
     const image = best.imageCdnUrl400 ?? `https://tcgplayer-cdn.tcgplayer.com/product/${best.tcgPlayerId}_400w.jpg`;
     return { tcgPlayerId: String(best.tcgPlayerId), image, setName: best.setName, name: best.name };
   }

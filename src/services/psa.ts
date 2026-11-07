@@ -4,6 +4,7 @@
 //   3. The PSA token lives only in Edge Function secrets.
 // Screens call `lookupCert`; nothing else talks to PSA.
 
+import { setLine } from './label';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import certsJson from '../mocks/certs.json';
 import { GAMES, gameFromBrand, gameOf } from '../lib/games';
@@ -222,7 +223,8 @@ export function cardFromCert(payload: PsaCertPayload, extra: { paidCents: number
     grade: gradeFrom(p.CardGrade ?? p.GradeDescription),
     // The glued-suffix fix ("PIKACHUex") is Pokémon-only; other games have names ending in "ex".
     name: titleName(brand.game === 'pokemon' ? splitSuffix(p.Subject ?? 'Unknown card') : p.Subject ?? 'Unknown card'),
-    setName: brand.setName,
+    // "2021 POKEMON JPN" names no set; PSA puts the product on the variety line ("25TH ANNIV-GOLDEN BOX").
+    setName: brand.setName ?? (!brand.setCode && setLine(p.Variety) ? titleName(p.Variety!.trim()) : null),
     setCode: brand.setCode,
     number: p.CardNumber ?? null,
     variety: p.Variety?.trim() || null,

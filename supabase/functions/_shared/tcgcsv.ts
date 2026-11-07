@@ -86,7 +86,9 @@ async function matchIn(category: number, c: MatchInput) {
   const group =
     (code && groups.find((g) => compact(g.abbreviation) === code)) ||
     (code && groups.find((g) => compact(g.name).startsWith(code))) ||
-    (c.setName && groups.find((g) => compact(g.name).includes(compact(c.setName))));
+    (c.setName && groups.find((g) => compact(g.name).includes(compact(c.setName)))) ||
+    // Abbreviated label sets: "25TH ANNIV-GOLDEN BOX" is "25th Anniversary Golden Box".
+    (c.setName && groups.find((g) => wordsPrefix(c.setName!, g.name)));
   if (!group) return null;
 
   const products = await results<Product>(`/${category}/${group.groupId}/products`);
@@ -128,6 +130,14 @@ const SAME: Record<string, string[]> = { parallel: ['parallel', 'alternate', 'al
 function varietyWords(v: string | null | undefined): string[] {
   const words = (v ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !['art', 'rare', 'holo', 'the'].includes(w));
   return [...new Set(words.flatMap((w) => SAME[w] ?? [w]))];
+}
+
+/** Every word of the label's set starts a word of the group's name, in any order. */
+function wordsPrefix(label: string, group: string): boolean {
+  const split = (t: string) => t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const want = split(label);
+  const have = split(group);
+  return want.length >= 2 && want.every((w) => have.some((h) => h.startsWith(w)));
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
