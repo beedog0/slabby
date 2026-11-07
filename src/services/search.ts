@@ -166,9 +166,22 @@ function mockPrices(productId: number): SearchPrices | null {
   };
 }
 
-/** TCGplayer titles carry the number ("Mew ex - 205/165"); the vault shows the name alone. */
+/**
+ * TCGplayer titles carry the number ("Mew ex - 205/165", "Snorunt - 046/217 (Love Ball)"); the
+ * vault shows the name alone, keeping a variant in brackets: "Snorunt (Love Ball)".
+ */
 export function displayName(name: string): string {
-  return name.replace(/\s+-\s+(?=[\w/-]*\d)[\w/-]+$/, '').trim();
+  return name
+    .replace(/\s+-\s+(?=[\w/-]*\d)[\w/-]+(?=\s*\(|$)/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** A card's name and its variant apart: "Snorunt - 046/217 (Love Ball)" → Snorunt, Love Ball. */
+export function nameAndVariant(name: string): { name: string; variant: string | null } {
+  const n = displayName(name);
+  const m = n.match(/^(.*?)\s*\(([^()]+)\)$/);
+  return m ? { name: m[1], variant: m[2] } : { name: n, variant: null };
 }
 
 /** The printed number without the set size: "205/165" → "205". One Piece "OP05-119" stays. */

@@ -3,6 +3,11 @@
 const MINUS = '−';
 
 /** 1248000 → "$12,480". Drops cents unless asked. */
+/** A card price: whole dollars, but cents under $10 so a $0.25 common doesn't read as $0. */
+export function cardPrice(cents: number): string {
+  return money(cents, { cents: Math.abs(cents) < 1000 && cents % 100 !== 0 });
+}
+
 export function money(cents: number, opts: { cents?: boolean } = {}): string {
   const neg = cents < 0;
   const abs = Math.abs(cents) / 100;

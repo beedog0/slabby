@@ -20,10 +20,10 @@ import Svg, { Path } from 'react-native-svg';
 import { SlabView } from '../src/components/SlabView';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
-import { gradeLabel, money, rowTitle } from '../src/lib/format';
+import { cardPrice, gradeLabel, money, rowTitle } from '../src/lib/format';
 import { cardFromCert, cardFromDetails, lookupCert, parseCertFromQr, type CertResult } from '../src/services/psa';
 import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, missReason, parseCardText, printedNumber, printName, printOptions, type CardMatch, type ParsedCard } from '../src/services/cardScan';
-import { cardNumber, displayName, type CatalogCard } from '../src/services/search';
+import { cardNumber, displayName, nameAndVariant, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
@@ -581,6 +581,9 @@ function RawSheet({
     router.replace(`/card/${card.id}`);
   };
 
+  // Candidates usually share a set (variants of one card); then the set goes in the header once.
+  const sets = new Set(raw.matches?.map((m) => m.card.setName) ?? []);
+  const oneSet = sets.size === 1 ? [...sets][0] : null;
   const choose = (i: number) => setRaw((r) => (r ? { ...r, pick: i, choosing: false } : r));
   const again = (
     <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
@@ -624,7 +627,7 @@ function RawSheet({
                   style={({ pressed }) => [styles.field, pressed && { opacity: 0.6 }]}
                 >
                   <Text style={[type.body, { color: color.ink, fontWeight: (print ?? 0) === i ? '600' : '400' }]}>{printName(x.name)}</Text>
-                  <Text style={[type.rowPrice, { color: color.ink }]}>{x.marketCents ? money(x.marketCents) : ''}</Text>
+                  <Text style={[type.rowPrice, { color: color.ink }]}>{x.marketCents ? cardPrice(x.marketCents) : ''}</Text>
                 </Pressable>
               </View>
             ))}
@@ -637,7 +640,7 @@ function RawSheet({
         <>
           <Text style={[type.section, { color: color.ink }]}>Which card is it?</Text>
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
-            {raw.matches.length} cards are numbered {printed}.
+            {raw.matches.length} cards {oneSet ? `in ${oneSet} ` : ''}are numbered {printed}.
           </Text>
           <ScrollView style={{ maxHeight: size.rowVault * 5 }}>
             {raw.matches.map((m, i) => (
@@ -650,15 +653,21 @@ function RawSheet({
                 >
                   <SlabView card={rawCard(m.card, null, 'hold')} width={size.thumbW} posed={false} />
                   <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
-                      {displayName(m.card.name)}
+                    <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>
+                      {nameAndVariant(m.card.name).name}
                     </Text>
-                    <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                      {m.card.setName}
-                      {m.card.language === 'ja' ? ' · Japanese' : ''}
+                    {/* The variant is what tells these apart, so it gets its own line; the set only when they differ. */}
+                    <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
+                      {[
+                        nameAndVariant(m.card.name).variant ?? 'Regular',
+                        oneSet ? null : m.card.setName,
+                        m.card.language === 'ja' ? 'Japanese' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </Text>
                   </View>
-                  <Text style={[type.rowPrice, { color: color.ink }]}>{m.card.marketCents ? money(m.card.marketCents) : '—'}</Text>
+                  <Text style={[type.rowPrice, { color: color.ink }]}>{m.card.marketCents ? cardPrice(m.card.marketCents) : '—'}</Text>
                 </Pressable>
               </View>
             ))}
@@ -682,7 +691,7 @@ function RawSheet({
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{priceCents ? money(priceCents) : '—'}</Text>
+              <Text style={[type.displayS, { color: color.ink, fontSize: 26 }]}>{priceCents ? cardPrice(priceCents) : '—'}</Text>
               <Text style={[type.secondary, { color: color.secondary }]}>{priceCents ? 'TCGplayer market' : 'no price for this print'}</Text>
             </View>
           </View>
