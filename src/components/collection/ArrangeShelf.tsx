@@ -218,7 +218,7 @@ export function ArrangeShelf({ rows, width, pinnedId, order, onOrder, onDragChan
               }}
               style={{ opacity: id === pinnedId ? 0.5 : 1 }}
             >
-              <SlabView card={row.card} width={slabW} posed={false} />
+              <SlabView card={row.card} width={slabW} posed={false} anchor="bottom" />
             </Pressable>
           </Animated.View>
         );
