@@ -61,6 +61,8 @@ export type Row = {
   set_name: string;
   set_code: string | null;
   image_url: string | null;
+  /** Backup picture when TCGplayer has none (0021_catalog_alt_images.sql). */
+  image_alt_url?: string | null;
   market_cents: number | null;
   low_cents: number | null;
   printings?: { name: string; market_cents: number | null; low_cents: number | null }[] | null;
@@ -76,7 +78,7 @@ export const fromRow = (r: Row): CatalogCard => ({
   rarity: r.rarity,
   setName: r.set_name,
   setCode: r.set_code,
-  imageUrl: r.image_url,
+  imageUrl: r.image_alt_url ?? r.image_url,
   marketCents: r.market_cents,
   lowCents: r.low_cents,
   printings: (r.printings ?? []).map((x) => ({ name: x.name, marketCents: x.market_cents, lowCents: x.low_cents })),

@@ -19,7 +19,7 @@ export function CardThumb({ card }: { card: Card }) {
   if (card.grader === 'raw') {
     return (
       <View style={{ width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, backgroundColor: art, overflow: 'hidden' }}>
-        {card.imageFrontUrl ? <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={{ flex: 1 }} /> : null}
+        {card.imageFrontUrl ? <ArtImage uri={card.imageFrontUrl} label={card.name} recyclingKey={card.id} style={{ flex: 1 }} /> : null}
       </View>
     );
   }
@@ -39,7 +39,7 @@ export function CardThumb({ card }: { card: Card }) {
     >
       <View style={{ height: 8, backgroundColor: color.well }} />
       <View style={{ flex: 1, backgroundColor: art, overflow: 'hidden' }}>
-        {card.imageFrontUrl ? <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} style={{ flex: 1 }} /> : null}
+        {card.imageFrontUrl ? <ArtImage uri={card.imageFrontUrl} label={card.name} recyclingKey={card.id} style={{ flex: 1 }} /> : null}
       </View>
     </View>
   );

@@ -587,7 +587,7 @@ function ResultTile({ card, width, con, trade, rules, change, days }: ResultProp
     <Pressable accessibilityRole="button" onPress={() => openCard(card, con, trade)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
       {/* A box photo sits on the canvas, whole; a card fills its card-shaped tile. */}
       <View style={[sealed ? styles.tileSealed : styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
-        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} /> : null}
+        <ArtImage uri={card.imageUrl} label={card.name} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} />
       </View>
       <View style={{ gap: 2, paddingTop: space.m }}>
         <CardName name={sealed ? card.name : displayName(card.name)} language={card.language} numberOfLines={sealed ? 3 : 1} style={[type.text, { color: color.ink, fontWeight: '500' }]} />
@@ -622,7 +622,7 @@ function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.5 }]}
     >
       <View style={sealed ? styles.thumbSealed : styles.thumb}>
-        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} /> : null}
+        <ArtImage uri={card.imageUrl} label={card.name} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <CardName name={sealed ? card.name : displayName(card.name)} language={card.language} numberOfLines={sealed ? 2 : 1} style={[type.body, { color: color.ink }]} />

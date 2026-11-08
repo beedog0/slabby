@@ -122,7 +122,7 @@ export function SetRow({ setName, cards, onAll, con, trade }: { setName: string;
             style={styles.setCard}
           >
             <View style={[styles.setArt, shadow.thumb]}>
-              {c.imageUrl ? <ArtImage uri={c.imageUrl} recyclingKey={String(c.productId)} style={{ flex: 1, borderRadius: radius.thumb * 2 }} /> : null}
+              <ArtImage uri={c.imageUrl} label={c.name} recyclingKey={String(c.productId)} style={{ flex: 1, borderRadius: radius.thumb * 2 }} />
             </View>
             <Text numberOfLines={1} style={[type.secondary, { color: color.ink, paddingTop: space.s }]}>
               {displayName(c.name)}
