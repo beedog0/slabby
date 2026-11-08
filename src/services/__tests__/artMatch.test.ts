@@ -214,3 +214,22 @@ describe('combine with the same card in two sets', () => {
     expect(combine(byNumber, null, noRead).confident).toBe(false);
   });
 });
+
+describe('combine with a shaky number the art doesn’t back', () => {
+  // Backtest run 2: Bidoof 011/017 read as "1" on the closer look, the art near Bidoof but not sure.
+  const read: ParsedCard = { numbers: [{ num: '1', total: null }], codes: [], language: null, words: new Set(), name: null };
+  const wrong = { card: cardOf(9, 'Pikachu', '1'), score: 3 };
+  it('asks, with the art’s nearest cards in the list', () => {
+    const id = combine([wrong], { hits: [hit(1, 'Bidoof', 30), hit(2, 'Eevee', 36)], edge: true }, read);
+    expect(id.confident).toBe(false);
+    expect(id.matches.map((m) => m.card.productId)).toEqual([9, 1, 2]);
+  });
+  it('takes the number when the art backs it, or there is no near art', () => {
+    expect(combine([wrong], { hits: [{ card: wrong.card, distance: 30 }, hit(1, 'Bidoof', 33)], edge: true }, read).matches[0].card.productId).toBe(9);
+    expect(combine([wrong], { hits: [hit(1, 'Bidoof', 60)], edge: true }, read).confident).toBe(true);
+  });
+  it('counts a closer-look read as shaky even with a set size', () => {
+    const close: ParsedCard = { ...read, numbers: [{ num: '20', total: '230' }], closeLook: true };
+    expect(combine([wrong], { hits: [hit(1, 'Bidoof', 26)], edge: true }, close).confident).toBe(false);
+  });
+});

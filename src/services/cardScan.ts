@@ -32,6 +32,8 @@ export type ParsedCard = {
   words: Set<string>;
   /** The card's name as read from the top line ("Snivy", "Charizard ex"); null when none looks like one. */
   name?: string | null;
+  /** Read only on the enlarged-pieces pass: small print at arm's length, more often misread. */
+  closeLook?: boolean;
 };
 
 // A grader label in the frame: then it's a slab, never a raw card.

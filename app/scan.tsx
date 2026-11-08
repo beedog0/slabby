@@ -652,7 +652,7 @@ export default function Scan() {
         const pieces = await readInTiles(uri).catch(() => []);
         seenLines = [...first, ...pieces];
         const again = [readPhoto(pieces), readPhoto(seenLines)].find((x) => !short(x)) ?? readPhoto(seenLines);
-        if (r.kind === 'miss' ? again.kind !== 'miss' : !short(again)) r = again;
+        if (r.kind === 'miss' ? again.kind !== 'miss' : !short(again)) r = again.kind === 'card' ? { ...again, card: { ...again.card, closeLook: true } } : again;
       }
       // The art's best guesses, to pick from, beat asking the AI or a miss.
       if (r.kind === 'miss' && byArt) return acceptCard(byArt.read, Promise.resolve(byArt.art), byArt.id);

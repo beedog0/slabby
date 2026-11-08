@@ -179,6 +179,15 @@ export function combine(byNumber: CardMatch[], art: { hits: ArtHit[]; edge: bool
   if (byNumber.length && (weakNumber(read) || (hits[0] && sameSetSize(read, hits[0].card))) && art && artSure(hits, art.edge) && !byNumber.some((m) => m.score === Infinity || m.card.productId === hits[0].card.productId)) {
     return { matches: [{ card: hits[0].card, score: Infinity }, ...byNumber], confident: true, byArt: true };
   }
+  // A number that's easy to misread (short and bare, from the closer look, or one digit off in the
+  // card's set) and that the art doesn't back: ask, with the art's nearest cards in the list too.
+  const top = byNumber[0];
+  const shaky = weakNumber(read) || !!read?.closeLook || (!!hits[0] && sameSetSize(read, hits[0].card));
+  const near = hits.filter((h) => h.distance <= ART_MAYBE);
+  if (top && top.score !== Infinity && shaky && near.length && !byNumber.some((m) => (dist.get(m.card.productId) ?? Infinity) <= ART_MAYBE)) {
+    const extra = near.filter((h) => !byNumber.some((m) => m.card.productId === h.card.productId)).slice(0, 3);
+    return { matches: [...byNumber, ...extra.map((h) => ({ card: h.card, score: 0 }))], confident: false, byArt: false };
+  }
   if (byNumber.length) {
     // Both close enough to max out the bonus: the nearer art still goes first.
     const far = (m: CardMatch) => dist.get(m.card.productId) ?? Infinity;
@@ -199,7 +208,6 @@ export function combine(byNumber: CardMatch[], art: { hits: ArtHit[]; edge: bool
     return { matches, confident: matches.length === 1 || a.score === Infinity || a.score - b.score >= 2, byArt: false };
   }
   // The art alone, a read name pulling its cards forward.
-  const near = hits.filter((h) => h.distance <= ART_MAYBE);
   if (!near.length) return { matches: [], confident: false, byArt: true };
   const named = read && (read.name || read.words.size) ? near.filter((h) => nameFits(h.card, read)) : [];
   const pool = named.length ? named : near;
