@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { SortKey } from '../pricing/arrange';
 import type { CollectionFilter } from '../pricing/portfolio';
-import type { GameFilter } from '../lib/games';
+import type { CardPick } from '../lib/games';
 
 export type DisplayMode = 'shelf' | 'scroll' | 'grid';
 /** Card search results: rows or a two-across grid of card photos. */
@@ -14,9 +14,9 @@ export type SearchLayout = 'list' | 'grid';
 type DisplayState = {
   mode: DisplayMode;
   filter: CollectionFilter;
-  /** Home's game filter: All, or only Pokémon / One Piece / Riftbound. */
-  game: GameFilter;
-  setGame: (g: GameFilter) => void;
+  /** Home's filter button: every card, or one game, or one set in a game. */
+  pick: CardPick;
+  setPick: (p: CardPick) => void;
   sort: SortKey;
   /** Card ids in the order the user arranged their shelf. */
   order: string[];
@@ -42,8 +42,8 @@ export const useDisplay = create<DisplayState>()(
     (set) => ({
       mode: 'shelf',
       filter: 'all',
-      game: 'all',
-      setGame: (game) => set({ game }),
+      pick: { game: 'all', set: null },
+      setPick: (pick) => set({ pick }),
       sort: 'value',
       order: [],
       pinnedId: null,
