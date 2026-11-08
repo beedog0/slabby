@@ -13,7 +13,8 @@ import { money, pct } from '../../src/lib/format';
 import { cardNumber, displayName, type Game } from '../../src/services/search';
 import type { Found } from '../../src/services/searchFilters';
 import { arrangeSet, cardsInSet, rarities, SET_SORTS, setMeta, type SetMeta, type SetSort } from '../../src/services/setCards';
-import { color, radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 
 const COLS = 3;
 const GAP = space.m;
@@ -21,7 +22,9 @@ const fmtDate = (d: string) => new Date(d.replace(/\//g, '-') + 'T12:00:00').toL
 const titleOf = (name: string) => name.replace(/^[A-Za-z0-9.\- ]{1,10}:\s+/, '');
 
 export default function SetPage() {
-  const p = useLocalSearchParams<{ id: string; name?: string; language?: string; game?: string }>();
+  const color = useColors();
+  const styles = useStyles();
+  const p = useLocalSearchParams<{ id: string; name?: string; language?: string; game?: string; trade?: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [cards, setCards] = useState<Found[] | null | 'error'>(null);
@@ -149,7 +152,7 @@ export default function SetPage() {
             {cards === null ? 'Loading the set…' : cards === 'error' ? 'Can’t load this set right now.' : sort === 'rising' || sort === 'falling' ? 'No price moves this week yet.' : picked.length ? 'No cards with those rarities.' : 'No cards here.'}
           </Text>
         }
-        renderItem={({ item }) => <Tile card={item} w={cellW} />}
+        renderItem={({ item }) => <Tile card={item} w={cellW} trade={p.trade === '1'} />}
       />
       <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setSortOpen(false)} accessibilityLabel="Close" />
@@ -176,6 +179,7 @@ export default function SetPage() {
 }
 
 function Stat({ label, value, tint }: { label: string; value: string; tint?: string }) {
+  const color = useColors();
   return (
     <View style={{ flex: 1, gap: 2 }}>
       <Text style={[type.secondary, { color: color.secondary }]}>{label}</Text>
@@ -185,6 +189,8 @@ function Stat({ label, value, tint }: { label: string; value: string; tint?: str
 }
 
 function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, on && { backgroundColor: color.ink }]}>
       <Text style={[type.secondary, { color: on ? color.onInk : color.ink, fontWeight: on ? '600' : '400' }]}>{label}</Text>
@@ -192,12 +198,13 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
   );
 }
 
-function Tile({ card, w }: { card: Found; w: number }) {
+function Tile({ card, w, trade }: { card: Found; w: number; trade?: boolean }) {
+  const color = useColors();
   const no = cardNumber(card.number);
   return (
     <Pressable
       style={{ width: w }}
-      onPress={() => router.push(`/search/${card.productId}`)}
+      onPress={() => router.push(`/search/${card.productId}${trade ? '?trade=1' : ''}`)}
       accessibilityRole="button"
       accessibilityLabel={`${displayName(card.name)}${no ? ` number ${no}` : ''}, ${card.marketCents != null ? money(card.marketCents) : 'no price'}`}
     >
@@ -218,15 +225,15 @@ function Tile({ card, w }: { card: Found; w: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   logo: { width: '70%', height: 76, marginTop: space.s },
   stats: { flexDirection: 'row', gap: space.l, paddingTop: space.xl, paddingBottom: space.l },
   controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: space.s },
   control: { minHeight: size.touch - 12, justifyContent: 'center' },
-  menu: { position: 'absolute', right: space.gutter, width: 230, borderRadius: radius.field, backgroundColor: color.canvas, paddingVertical: space.xs, ...shadow.menu },
+  menu: { position: 'absolute', right: space.gutter, width: 230, borderRadius: radius.field, backgroundColor: color.sheet, paddingVertical: space.xs, ...shadow.menu },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: space.s, paddingHorizontal: space.gutter, minHeight: size.touch },
   chips: { paddingHorizontal: space.gutter, gap: space.s, paddingTop: space.s, paddingBottom: space.m },
   chip: { height: 32, paddingHorizontal: space.m, borderRadius: 16, backgroundColor: color.well, justifyContent: 'center' },
-});
+}));

@@ -13,6 +13,7 @@ import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { shareSlab } from '../../src/components/share/ShareCard';
 import { openSlabMenu } from '../../src/components/menu/Menu';
+import { openPaidSheet } from '../../src/components/collection/paidSheet';
 import { statusItems } from '../../src/components/collection/statusSheets';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
@@ -26,12 +27,14 @@ import { freshnessLine, trendSentence, trendVerdict } from '../../src/pricing/tr
 import { useCardRow } from '../../src/pricing/useCardRow';
 import { useCardRefresh } from '../../src/services/useRefresh';
 import { useVault } from '../../src/store/vault';
-import { color, space, type } from '../../src/theme/tokens';
+import { space, type } from '../../src/theme/tokens';
+import { useColors } from '../../src/theme/theme';
 
 type Range = '30' | '90';
 
 
 export default function SlabDetail() {
+  const color = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -81,7 +84,7 @@ export default function SlabDetail() {
         </View>
 
         <View style={styles.hero}>
-          <SlabView card={card} interactive onDragChange={setTilting} />
+          <SlabView card={card} interactive spotlight onDragChange={setTilting} />
         </View>
 
         <View style={styles.titleRow}>
@@ -97,17 +100,28 @@ export default function SlabDetail() {
             <Text style={[type.title, { color: color.ink, fontVariant: ['tabular-nums'] }]}>
               {price ? money(price.marketCents) : '—'}
             </Text>
-            {detail?.gainCents != null && card.paidCents != null ? (
-              <Text style={[type.text, { color: color.secondary, fontVariant: ['tabular-nums'] }]}>
-                <Text style={{ color: detail.gainCents >= 0 ? color.gain : color.loss }}>
-                  {detail.gainCents >= 0 ? '+' : '−'}
-                  {money(Math.abs(detail.gainCents))}
+            {/* Tap the paid line to change what you paid (or add it). */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint="Edit price paid"
+              hitSlop={space.m}
+              onPress={() => openPaidSheet(card)}
+              style={({ pressed }) => pressed && { opacity: 0.5 }}
+            >
+              {detail?.gainCents != null && card.paidCents != null ? (
+                <Text style={[type.text, { color: color.secondary, fontVariant: ['tabular-nums'] }]}>
+                  <Text style={{ color: detail.gainCents >= 0 ? color.gain : color.loss }}>
+                    {detail.gainCents >= 0 ? '+' : '−'}
+                    {money(Math.abs(detail.gainCents))}
+                  </Text>
+                  {' · '}paid {money(card.paidCents)}
                 </Text>
-                {' · '}paid {money(card.paidCents)}
-              </Text>
-            ) : card.paidCents != null ? (
-              <Text style={[type.text, { color: color.secondary }]}>paid {money(card.paidCents)}</Text>
-            ) : null}
+              ) : card.paidCents != null ? (
+                <Text style={[type.text, { color: color.secondary }]}>paid {money(card.paidCents)}</Text>
+              ) : (
+                <Text style={[type.text, { color: color.secondary }]}>Add price paid</Text>
+              )}
+            </Pressable>
           </View>
         </View>
 
@@ -118,7 +132,7 @@ export default function SlabDetail() {
                 values={detail.series}
                 paidCents={card.paidCents}
                 width={width - space.gutter * 2}
-                tint={trendTint(detail.series)}
+                tint={trendTint(detail.series, color)}
                 asOf={price?.asOf}
               />
             </View>
@@ -208,6 +222,7 @@ export default function SlabDetail() {
 }
 
 function MoreIcon() {
+  const color = useColors();
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24">
       <Circle cx={5} cy={12} r={1.8} fill={color.ink} />

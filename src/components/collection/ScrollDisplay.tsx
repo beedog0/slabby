@@ -10,7 +10,8 @@ import type React from 'react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { weekChange, type CardRow } from '../../pricing/portfolio';
-import { color, size, space, type } from '../../theme/tokens';
+import { size, space, type } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 import { prefetchArt } from '../ArtImage';
 import { cardLabel, langTag, money, pct, rowTitle } from '../../lib/format';
 import { SlabView } from '../SlabView';
@@ -39,6 +40,7 @@ type ItemProps = {
 };
 
 const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress, onLongPress, pinned }: ItemProps) {
+  const color = useColors();
   const range = [(n - 1) * step, n * step, (n + 1) * step];
   const opacity = x.interpolate({ inputRange: range, outputRange: [0.5, 1, 0.5], extrapolate: 'clamp' });
   // Whole-degree lean and whole-point drop only, so the slab lands on exact pixels at rest.
@@ -56,14 +58,14 @@ const Item = memo(function Item({ row, n, x, step, slabW, slabH, onPress, onLong
       <Animated.View style={{ transform: [{ translateY }, { rotate }], opacity, alignItems: 'center' }}>
         {/* Flat, not posed: the reflection meets a straight bottom edge, as in Cover Flow. */}
         <View>
-          <SlabView card={row.card} width={slabW} posed={false} />
-          {pinned ? <PinMark slabW={slabW} card={row.card} /> : null}
-          <CopiesMark slabW={slabW} card={row.card} copies={row.copies ?? 1} />
+          <SlabView card={row.card} width={slabW} posed={false} spotlight anchor="bottom" />
+          {pinned ? <PinMark slabW={slabW} card={row.card} anchor="bottom" /> : null}
+          <CopiesMark slabW={slabW} card={row.card} copies={row.copies ?? 1} anchor="bottom" />
         </View>
         <View pointerEvents="none" style={{ width: slabW, height: reflH, overflow: 'hidden', marginTop: 3 }}>
           {/* Flipped about its centre, the slab's bottom edge lands at the top of this strip. */}
           <View style={{ height: slabH, opacity: REFLECTION.opacity, transform: [{ scaleY: -1 }] }}>
-            <SlabView card={row.card} width={slabW} posed={false} />
+            <SlabView card={row.card} width={slabW} posed={false} anchor="bottom" />
           </View>
           <LinearGradient
             colors={[`${color.canvas}00`, color.canvas]}
@@ -93,6 +95,7 @@ export function ScrollDisplay({
   onLongPress?: (row: CardRow) => void;
   pinnedId?: string | null;
 }) {
+  const color = useColors();
   const maxW = Math.min(size.carouselSlabW, screenW - space.gutter * 2 - 80);
   const fitSlabH = fitHeight ? (fitHeight - ITEM_TOP - 3 - CAPTION_H) / (1 + REFLECTION.height) : Infinity;
   const slabW = Math.round(Math.max(MIN_SLAB_W, Math.min(maxW, (fitSlabH * size.heroW) / size.heroH)));
@@ -245,6 +248,7 @@ const shortDay = (iso: string) => new Date(iso).toLocaleDateString('en-US', { mo
  * Green/red only ever means up or down. The floor is a rule you set, so it stays ink.
  */
 function SwipeCaption({ row }: { row: CardRow }) {
+  const color = useColors();
   const { card, price } = row;
   const sold = card.status === 'sold';
   const selling = !sold && (card.plan === 'sell' || card.plan === 'trade');
@@ -277,6 +281,13 @@ function SwipeCaption({ row }: { row: CardRow }) {
             <Text style={tint(made)}>{signedMoney(made)}</Text> profit
           </>
         ) : null}
+      </>
+    );
+  } else if (made != null && !card.paidCents) {
+    // Pulled or gifted: no cost, so no percent (it would be infinite).
+    line = (
+      <>
+        <Text style={tint(made)}>{signedMoney(made)}</Text> · paid nothing
       </>
     );
   } else if (made != null) {

@@ -59,6 +59,10 @@ export type PricingRules = {
   buyTargetPct: number;
   buyMaxPct: number;
   roundToCents: number;
+  /** Last-day prices: how far rule floors drop while it's on (10 = 10% lower). */
+  lastDayCutPct?: number;
+  /** Last-day prices are on until this time (ISO), then turn themselves off. Null or past = off. */
+  lastDayUntil?: string | null;
   gradedSource: 'ebay_sold';
   rawSource: 'tcgplayer_market';
 };
@@ -70,6 +74,8 @@ export const DEFAULT_RULES: PricingRules = {
   buyTargetPct: -15,
   buyMaxPct: -5,
   roundToCents: 500,
+  lastDayCutPct: 10,
+  lastDayUntil: null,
   gradedSource: 'ebay_sold',
   rawSource: 'tcgplayer_market',
 };

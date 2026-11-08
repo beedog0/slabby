@@ -1,8 +1,13 @@
 // Design tokens from DESIGN.md. Components never hardcode colors or sizes.
 import type { TextStyle } from 'react-native';
 
-export const color = {
+/** Light palette, the default. Dark mirrors every key; see DESIGN.md. Components read the live one with useColors(). */
+export const light = {
   canvas: '#FFFFFF',
+  /** Bottom sheets, menus, dropdowns: the same white as the page in light. */
+  sheet: '#FFFFFF',
+  /** A control lifted off a well: the on segment, keypad keys. */
+  raised: '#FFFFFF',
   well: '#F2F2F4',
   ink: '#0A0A0A',
   secondary: '#6E6E73',
@@ -32,7 +37,42 @@ export const color = {
   scanGuide: 'rgba(255,255,255,0.45)',
   /** The label window's wash when a read locks. */
   scanLocked: 'rgba(255,176,32,0.18)',
-} as const;
+};
+
+export type Palette = typeof light;
+
+/**
+ * Dark palette. Ink and canvas swap, so primary buttons turn white with black text; sheets sit one
+ * step above the page because there is no shadow to lift them. Gain and loss are brightened just
+ * enough to read on near-black. Slab colors (case, label, PSA red) never change: they are the
+ * grader's identity, not UI.
+ */
+export const dark: Palette = {
+  canvas: '#0A0A0A',
+  sheet: '#161617',
+  raised: '#333336',
+  well: '#1F1F21',
+  ink: '#F4F4F5',
+  secondary: '#8C8C91',
+  hairline: '#2A2A2C',
+  gain: '#34C77B',
+  loss: '#FF5A4F',
+  conText: '#FFB020',
+  conFill: '#FFB020',
+  psaRed: light.psaRed,
+  onInk: '#0A0A0A',
+  slabCase: light.slabCase,
+  slabLabel: light.slabLabel,
+  shelfTop: '#8F6C49',
+  shelfFront: '#6A4A2B',
+  ghost: '#2E2E31',
+  scrim: 'rgba(0,0,0,0.6)',
+  scrimLight: 'rgba(0,0,0,0.45)',
+  scanScrim: light.scanScrim,
+  scanHint: light.scanHint,
+  scanGuide: light.scanGuide,
+  scanLocked: light.scanLocked,
+};
 
 export const space = {
   xs: 4,

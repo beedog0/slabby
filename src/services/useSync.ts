@@ -27,7 +27,8 @@ export function useSync() {
       const repaired = merged.map(repairCard);
       const fixed = repaired.filter((c, i) => c !== merged[i]);
       useVault.setState({ cards: repaired });
-      if (remote.rules) useRules.setState({ rules: remote.rules });
+      // Last-day prices live only on this phone, so a pull keeps them.
+      if (remote.rules) useRules.setState((s) => ({ rules: { ...s.rules, ...remote.rules } }));
       else await pushRules(useRules.getState().rules);
       const stale = repaired.filter((c) => remote.staleKeys.includes(c.id) && !fixed.includes(c));
       await pushCards([...toPush.filter((c) => !fixed.some((f) => f.id === c.id)), ...fixed, ...stale]);

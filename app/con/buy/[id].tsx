@@ -2,13 +2,21 @@
 // and the market for the grade you picked: Steal, Good buy, Fair or Over market, on a price line
 // with Target, Max and Market. One action per rating, like Offer: Bought for, Counter, Walk away.
 // "Bought for" adds the card to the vault with what you paid, then shows Bought with Undo.
+//
+// In con mode's Buying this opens straight from a search result, as a sheet over search: the card,
+// a grade switch (Raw, PSA 10, 9, 8) and its market sit on top, so the rating changes as you type
+// or switch grade. "Add to wishlist" and "See full card" are small links under the grade switch.
 
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { sheetTop } from '../../../src/lib/sheetTop';
+import { ArtImage } from '../../../src/components/ArtImage';
 import { Keypad } from '../../../src/components/Keypad';
+import { Segmented } from '../../../src/components/Segmented';
+import { setTitle } from '../../../src/components/search/CardAnalytics';
 import { PriceLine, type Tick } from '../../../src/components/PriceLine';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../../src/components/ui';
 import { money } from '../../../src/lib/format';
@@ -18,7 +26,9 @@ import { cardFromDetails } from '../../../src/services/psa';
 import {
   addParams,
   buyPrices,
+  cardNumber,
   catalogCard,
+  nameAndVariant,
   gradeLabel,
   openPrices,
   type CatalogCard,
@@ -29,13 +39,18 @@ import { useCon } from '../../../src/store/con';
 import { useWishlist, wishKey, type WishGrade } from '../../../src/store/wishlist';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
-import { color, size, space, type } from '../../../src/theme/tokens';
+import { size, space, type } from '../../../src/theme/tokens';
+import { themed, useColors } from '../../../src/theme/theme';
 
 const MAX_DIGITS = 6;
+/** The grades on the switch. Lower grades still open from a wishlist item or the full card page. */
+const BUY_GRADES: (SearchGrade | 'raw')[] = ['raw', 'psa10', 'psa9', 'psa8'];
 
 export default function TheyreAsking() {
+  const color = useColors();
+  const styles = useStyles();
   const { id, grade: gradeParam } = useLocalSearchParams<{ id: string; grade?: string }>();
-  const grade = (gradeParam || 'psa10') as SearchGrade | 'raw';
+  const [grade, setGrade] = useState<SearchGrade | 'raw'>((gradeParam || 'psa10') as SearchGrade | 'raw');
   const insets = useSafeAreaInsets();
   const rules = useRules((s) => s.rules);
   const add = useVault((s) => s.add);
@@ -153,16 +168,57 @@ export default function TheyreAsking() {
         <BackIcon />
       </IconButton>
       <Text numberOfLines={1} style={[type.body, { color: color.ink, flex: 1, textAlign: 'center' }]}>
-        {title}
+        {bought ? title : ''}
       </Text>
       <View style={{ width: size.touch }} />
+    </View>
+  );
+
+  // The card, its set and number, the grade you're rating, and the two side trips.
+  const params = { id: String(id), grade };
+  const head = (
+    <View style={styles.head}>
+      <View style={styles.cardRow}>
+        <View style={styles.art}>{card?.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(id)} style={{ flex: 1 }} /> : null}</View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[type.body, { color: color.ink }]}>{card ? nameAndVariant(card.name).name : ' '}</Text>
+          <Text style={[type.secondary, { color: color.secondary }]}>
+            {card
+              ? [nameAndVariant(card.name).variant, setTitle(card.setName), cardNumber(card.number) && `#${cardNumber(card.number)}`]
+                  .filter(Boolean)
+                  .join(' · ')
+              : ' '}
+          </Text>
+          <View style={styles.links}>
+            <Pressable accessibilityRole="link" hitSlop={8} onPress={() => router.push({ pathname: '/con/want/[id]', params })}>
+              <Text style={[type.secondary, { color: color.ink, fontWeight: '600' }]}>
+                {wish ? `On wishlist at ${money(wish.targetCents)}` : 'Add to wishlist'}
+              </Text>
+            </Pressable>
+            <Pressable accessibilityRole="link" hitSlop={8} onPress={() => router.push({ pathname: '/search/[id]', params: { ...params, con: '1' } })}>
+              <Text style={[type.secondary, { color: color.ink, fontWeight: '600' }]}>See full card</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+      <Segmented<SearchGrade | 'raw'>
+        value={BUY_GRADES.includes(grade) ? grade : 'psa10'}
+        onChange={(g) => {
+          Haptics.selectionAsync().catch(() => {});
+          setGrade(g);
+          setCounter(null);
+          setAwaitingAnswer(false);
+          clearConfirm();
+        }}
+        options={BUY_GRADES.map((g) => ({ value: g, label: gradeLabel(g) }))}
+      />
     </View>
   );
 
   if (bought) {
     const under = market != null ? market - bought.cents : null;
     return (
-      <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
+      <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: sheetTop(insets.top) }}>
         {nav}
         <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: 'center', alignItems: 'center', gap: space.s }}>
           <Text style={[type.text, { color: color.secondary }]}>Bought for</Text>
@@ -261,8 +317,9 @@ export default function TheyreAsking() {
   if (market) ticks.push({ value: market, label: 'Market', color: color.secondary });
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: sheetTop(insets.top) }}>
       {nav}
+      {head}
       <View style={{ flex: 1, paddingHorizontal: space.gutter, justifyContent: 'space-evenly' }}>
         <View style={{ alignItems: 'center' }}>
           <Text style={[type.text, { color: color.secondary }]}>
@@ -298,15 +355,16 @@ export default function TheyreAsking() {
           />
         ) : null}
 
-        <View>
-          <Hairline />
-          <Text style={[type.text, { color: color.ink, paddingVertical: space.l }]}>
-            {buy && market
-              ? `Open ${money(buy.target)} · pay up to ${money(buy.max)} · market ${money(market)}`
-              : 'Set your buying rules in Pricing rules'}
-          </Text>
-          <Hairline />
-        </View>
+        {/* Target, Max and Market are on the price line; this only shows when there's no line yet. */}
+        {buy && market ? null : (
+          <View>
+            <Hairline />
+            <Text style={[type.text, { color: color.secondary, paddingVertical: space.l }]}>
+              {prices === undefined ? 'Loading prices…' : `No ${gradeLabel(grade)} market price to rate against. Try another grade.`}
+            </Text>
+            <Hairline />
+          </View>
+        )}
 
         {primary ? (
           <View style={{ gap: space.s }}>
@@ -336,7 +394,7 @@ export default function TheyreAsking() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   nav: {
     height: size.touch + space.l,
     flexDirection: 'row',
@@ -344,4 +402,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.gutter - 12,
   },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center' },
-});
+  head: { paddingHorizontal: space.gutter, gap: space.m },
+  cardRow: { flexDirection: 'row', gap: space.m, alignItems: 'flex-start' },
+  art: { width: 48, height: 67, borderRadius: 3, overflow: 'hidden', backgroundColor: color.well },
+  links: { flexDirection: 'row', gap: space.l, paddingTop: space.xs },
+}));

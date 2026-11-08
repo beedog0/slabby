@@ -7,11 +7,13 @@ import { money } from '../lib/format';
 import type { CardRow } from '../pricing/portfolio';
 import { useVault } from '../store/vault';
 import { backToCon } from './conStatusMenu';
-import { color, size, space, type } from '../theme/tokens';
+import { size, space, type } from '../theme/tokens';
+import { useColors } from '../theme/theme';
 import { PriceLine, type Tick } from './PriceLine';
 import { PrimaryButton } from './ui';
 
 export function SoldState({ row, bottomInset }: { row: CardRow; bottomInset: number }) {
+  const color = useColors();
   const update = useVault((s) => s.update);
   const { card, price } = row;
   const sold = card.soldCents ?? 0;

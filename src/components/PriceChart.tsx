@@ -8,7 +8,8 @@ import { useMemo, useRef, useState } from 'react';
 import { PanResponder, Text, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { money } from '../lib/format';
-import { color, type } from '../theme/tokens';
+import { type } from '../theme/tokens';
+import { useColors } from '../theme/theme';
 
 type Props = {
   values: number[];
@@ -107,7 +108,9 @@ export function ease(vals: number[]): number[] {
   return out;
 }
 
-export function PriceChart({ values: raw, paidCents, width, height = 160, tint = color.ink, asOf, compact = false, onScrub, lineLabel = 'paid' }: Props) {
+export function PriceChart({ values: raw, paidCents, width, height = 160, tint: tintProp, asOf, compact = false, onScrub, lineLabel = 'paid' }: Props) {
+  const color = useColors();
+  const tint = tintProp ?? color.ink;
   // A gently eased line (moving average, today exact) so daily noise doesn't zigzag.
   const values = useMemo(() => ease(raw), [raw]);
   const [scrub, setScrub] = useState<number | null>(null); // index into raw

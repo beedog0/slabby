@@ -7,7 +7,8 @@ import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
 import { CopiesMark, PinMark } from './PinMark';
 import { SelectOutline } from './SelectOutline';
-import { color, space, type } from '../../theme/tokens';
+import { space, type } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 import { SlabView } from '../SlabView';
 import { slabLayout } from '../slab/geometry';
 
@@ -49,6 +50,7 @@ export function GridView({ rows, width, actions }: { rows: CardRow[]; width: num
 }
 
 export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
+  const color = useColors();
   const { card, price } = row;
   const sold = card.status === 'sold';
   const value = sold ? card.soldCents : price?.marketCents;

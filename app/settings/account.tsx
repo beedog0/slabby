@@ -7,9 +7,11 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, IconButton, PrimaryButton } from '../../src/components/ui';
 import { supabase } from '../../src/services/supabase';
-import { color, radius, size, space, type } from '../../src/theme/tokens';
+import { radius, size, space, type } from '../../src/theme/tokens';
+import { useColors } from '../../src/theme/theme';
 
 export default function Account() {
+  const color = useColors();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);

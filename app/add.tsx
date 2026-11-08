@@ -17,12 +17,15 @@ import { GAMES, GAME_LIST, LANGUAGE_NAME } from '../src/lib/games';
 import { cardFromDetails } from '../src/services/psa';
 import type { Game } from '../src/types';
 import { useVault } from '../src/store/vault';
-import { color, size, space, type } from '../src/theme/tokens';
+import { size, space, type } from '../src/theme/tokens';
+import { themed, useColors } from '../src/theme/theme';
 import type { Card } from '../src/types';
 
 type Grader = 'psa' | 'bgs' | 'cgc' | 'raw';
 
 export default function AddByHand() {
+  const color = useColors();
+  const styles = useStyles();
   const p = useLocalSearchParams<{
     cert?: string;
     name?: string;
@@ -304,6 +307,8 @@ export default function AddByHand() {
 }
 
 function Field({ label, children, last }: { label: string; children: ReactNode; last?: boolean }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <>
       <View style={styles.field}>
@@ -317,10 +322,10 @@ function Field({ label, children, last }: { label: string; children: ReactNode; 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   preview: { alignItems: 'center', paddingBottom: space.xl },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   field: { minHeight: 56, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.l },
   input: { flex: 1, textAlign: 'right', color: color.ink, paddingVertical: space.m },
-});
+}));

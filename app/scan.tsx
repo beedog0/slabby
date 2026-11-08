@@ -34,7 +34,7 @@ import { CostField, EMPTY_COST, paidCentsOf, toCost, type CostInput } from '../s
 import { ask as ruleAsk } from '../src/pricing/rules';
 import { useRules } from '../src/store/rules';
 import { useSellDraft, type SellDraft } from '../src/store/sellDraft';
-import { ScanPills } from '../src/components/scan/ScanPills';
+import { ScanPills, type PillState, type ScanPill } from '../src/components/scan/ScanPills';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
@@ -53,9 +53,12 @@ import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type A
 import { useVault } from '../src/store/vault';
 import { LabelReader } from '../modules/label-reader';
 import type { Card } from '../src/types';
-import { color, radius, size, space, type } from '../src/theme/tokens';
+import { light, radius, size, space, type } from '../src/theme/tokens';
+import { themed, useColors } from '../src/theme/theme';
 
 const SCAN_BG = '#2A2A2C'; // camera chrome only; never used on app UI
+/** Camera chrome looks the same in light and dark: white on the picture, white buttons. Sheets follow the theme. */
+const cam = light;
 const AUTO_START_MS = 700; // let exposure and focus settle first
 const AUTO_GAP_MS = 350; // between auto reads; each read itself takes ~0.5–1 s
 const NAV_H = 44;
@@ -73,6 +76,8 @@ const readId = (p: ParsedLabel) => {
 };
 
 export default function Scan() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
@@ -107,7 +112,14 @@ export default function Scan() {
   const [active, setActive] = useState(AppState.currentState === 'active');
   // A label was read once and we're waiting for a second matching read.
   const [spotted, setSpotted] = useState(false);
-  const [progress, setProgress] = useState<AutoProgress>(autoProgress(null));
+  const [progress, setProgressState] = useState<AutoProgress>(autoProgress(null));
+  /** A loose card's read so far (Number · Set pills), in place of the slab pills. */
+  const [cardPills, setCardPills] = useState<ScanPill[] | null>(null);
+  // Every slab-pill update or reset also clears the loose-card pills.
+  const setProgress = (p: AutoProgress) => {
+    setProgressState(p);
+    setCardPills(null);
+  };
   // The read succeeded: the frame closes solid with a check for a beat, then the sheet rises.
   const [locked, setLocked] = useState(false);
   const sheetIn = useRef(new Animated.Value(0)).current;
@@ -418,6 +430,14 @@ export default function Scan() {
         // A loose card: two matching reads of its number in a row add it.
         auto.current = step.state;
         const key = cardSteadyKey(loose);
+        const n = loose.numbers[0];
+        const steady = !!key && key === lastKey.current;
+        const pill = (has: boolean): PillState => (!has ? 'none' : steady ? 'done' : 'seen');
+        setProgressState(autoProgress(null));
+        setCardPills([
+          { key: 'number', label: 'Number', state: pill(!!n), value: n && steady ? printedNumber(n) : undefined },
+          { key: 'set', label: 'Set', state: pill(!!loose.codes[0]), value: loose.codes[0] && steady ? loose.codes[0] : undefined },
+        ]);
         if (!key) {
           lastKey.current = null;
           setSpotted(false);
@@ -576,7 +596,7 @@ export default function Scan() {
             {spotted || locked ? <View style={[styles.frameLocked, locked && styles.frameDone]} /> : null}
             {locked ? (
               <View style={styles.check}>
-                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={cam.ink} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                   <Path d="M5 12.5l4.5 4.5L19 7.5" />
                 </Svg>
               </View>
@@ -592,13 +612,13 @@ export default function Scan() {
 
       <View style={[styles.nav, { paddingTop: insets.top + space.s }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={styles.navBtn}>
-          <Svg width={22} height={22} viewBox="0 0 24 24" stroke={color.onInk} strokeWidth={2} strokeLinecap="round">
+          <Svg width={22} height={22} viewBox="0 0 24 24" stroke={cam.onInk} strokeWidth={2} strokeLinecap="round">
             <Path d="M5 5l14 14M19 5L5 19" />
           </Svg>
         </Pressable>
-        <Text style={[type.body, { color: color.onInk }]}>Scan</Text>
+        <Text style={[type.body, { color: cam.onInk }]}>Scan</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Flashlight" onPress={() => setTorch((t) => !t)} style={styles.navBtn}>
-          <Svg width={22} height={22} viewBox="0 0 24 24" fill={torch ? color.onInk : 'none'} stroke={color.onInk} strokeWidth={1.75} strokeLinejoin="round">
+          <Svg width={22} height={22} viewBox="0 0 24 24" fill={torch ? cam.onInk : 'none'} stroke={cam.onInk} strokeWidth={1.75} strokeLinejoin="round">
             <Path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
           </Svg>
         </Pressable>
@@ -607,12 +627,12 @@ export default function Scan() {
 
       <View style={[styles.below, { top: frameTop + frameH + space.xl }]}>
         <View style={styles.hint}>
-          <Text style={[type.text, { color: color.onInk, textAlign: 'center' }]}>{hint}</Text>
+          <Text style={[type.text, { color: cam.onInk, textAlign: 'center' }]}>{hint}</Text>
         </View>
         {labelMode && canUseCamera && !result ? (
           // What the read has so far: each pill lights up with its value once confirmed.
           <ScanPills
-            pills={[
+            pills={cardPills ?? [
               { key: 'name', label: 'Name', ...progress.name, value: progress.name.value && titleName(progress.name.value) },
               { key: 'grade', label: 'Grade', ...progress.grade, value: progress.grade.value && `PSA ${gradeFrom(progress.grade.value) ?? progress.grade.value}` },
               { key: 'cert', label: 'Cert', ...progress.cert },
@@ -626,10 +646,10 @@ export default function Scan() {
             onPress={() => router.push(`/card/${added.id}`)}
             style={({ pressed }) => [styles.added, pressed && { opacity: 0.7 }]}
           >
-            <Text style={[type.text, { color: color.onInk, flexShrink: 1 }]}>
+            <Text style={[type.text, { color: cam.onInk, flexShrink: 1 }]}>
               Added · {added.title}
             </Text>
-            <Text style={[type.text, { color: color.onInk, fontWeight: '600' }]}>View</Text>
+            <Text style={[type.text, { color: cam.onInk, fontWeight: '600' }]}>View</Text>
           </Pressable>
         ) : null}
         {!canUseCamera ? (
@@ -640,7 +660,7 @@ export default function Scan() {
                 onPress={denied ? () => Linking.openSettings() : requestPermission}
                 style={({ pressed }) => [styles.lightButton, pressed && { opacity: 0.8 }]}
               >
-                <Text style={[type.button, { color: color.ink }]}>{denied ? 'Turn on camera in Settings' : 'Allow camera'}</Text>
+                <Text style={[type.button, { color: cam.ink }]}>{denied ? 'Turn on camera in Settings' : 'Allow camera'}</Text>
               </Pressable>
             ) : null}
             <TextInput
@@ -666,7 +686,7 @@ export default function Scan() {
             disabled={reading}
             style={({ pressed }) => [styles.lightButton, (pressed || reading) && { opacity: 0.7 }]}
           >
-            <Text style={[type.button, { color: color.ink }]}>{reading ? 'Reading…' : 'Scan now'}</Text>
+            <Text style={[type.button, { color: cam.ink }]}>{reading ? 'Reading…' : 'Scan now'}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -942,6 +962,8 @@ function rawCard(c: CatalogCard, paidCents: number | null, plan: 'hold' | 'sell'
 
 /** Cards to pick from after "Not this card?" or a missed number: art, name, set · number, price. */
 function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: CatalogCard) => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <SheetScrollView style={{ maxHeight: size.rowVault * 4 }}>
       {cards.map((c, i) => (
@@ -982,6 +1004,8 @@ function RawSheet({
   /** The scan screen's pull-down: drag it anywhere, over the pick list too, to go back to the camera. */
   sheet: ReturnType<typeof useSheetDrag>;
 }) {
+  const color = useColors();
+  const styles = useStyles();
   const [cost, setCost] = useState<CostInput>(EMPTY_COST);
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
   const [asking, setAsking] = useState(false);
@@ -1287,11 +1311,11 @@ function conButtonTitle(s: ConStatus, soldCents: number, owned: boolean): string
   return s === 'hold' ? 'Add to holds' : s === 'sale' ? 'Add for sale' : 'Add as trade only';
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   lightButton: {
     height: size.button,
     borderRadius: radius.button,
-    backgroundColor: color.canvas,
+    backgroundColor: light.canvas,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1340,7 +1364,7 @@ const styles = StyleSheet.create({
     height: size.button,
     borderRadius: radius.field,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    color: color.onInk,
+    color: light.onInk,
     paddingHorizontal: space.l,
   },
   sheet: {
@@ -1348,7 +1372,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingHorizontal: space.gutter,
@@ -1360,4 +1384,4 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: space.l, paddingVertical: space.l },
   field: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   paidInput: { color: color.ink, textAlign: 'right', width: 120 },
-});
+}));

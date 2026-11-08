@@ -9,6 +9,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Animated, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { sheetTop } from '../../src/lib/sheetTop';
 import { ArtImage } from '../../src/components/ArtImage';
 import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/sheet/useSheetDrag';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
@@ -37,17 +38,22 @@ import {
 } from '../../src/services/searchFilters';
 import { useDisplay } from '../../src/store/display';
 import { useRules } from '../../src/store/rules';
-import { color, radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 import type { PricingRules } from '../../src/types';
 
 type GameFilter = 'all' | Game;
 const GRID_GAP = space.l;
 
 export default function Search() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   // Con mode opens search with ?con=1: each result also shows what to pay, from the buying rules.
-  const params = useLocalSearchParams<{ con?: string; q?: string }>();
+  // The trade calculator opens it with ?trade=1: a card opens with "Add to their side".
+  const params = useLocalSearchParams<{ con?: string; q?: string; trade?: string }>();
   const con = params.con === '1';
+  const trade = params.trade === '1';
   const rules = useRules((s) => s.rules);
   const { searchLayout: layout, setSearchLayout } = useDisplay();
   const { width } = useWindowDimensions();
@@ -239,7 +245,7 @@ export default function Search() {
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
           scrollEventThrottle={16}
           scrollIndicatorInsets={{ top: headerH }}
-          style={{ paddingTop: insets.top }}
+          style={{ paddingTop: sheetTop(insets.top, con) }}
           ListEmptyComponent={hint ? <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text> : undefined}
           numColumns={layout === 'grid' ? 2 : 1}
           keyExtractor={(c) => String(c.productId)}
@@ -250,9 +256,9 @@ export default function Search() {
           ItemSeparatorComponent={layout === 'grid' ? undefined : () => <Hairline inset={space.gutter + size.thumbW + space.m} />}
           renderItem={({ item }) =>
             layout === 'grid' ? (
-              <ResultTile card={item} width={cellW} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+              <ResultTile card={item} width={cellW} con={con} trade={trade} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
             ) : (
-              <ResultRow card={item} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+              <ResultRow card={item} con={con} trade={trade} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
             )
           }
         />
@@ -274,6 +280,7 @@ export default function Search() {
 
 /** Small dropdown under the sort control. */
 function SortMenu({ open, top, sort, onSort, onClose }: { open: boolean; top: number; sort: Sort; onSort: (s: Sort) => void; onClose: () => void }) {
+  const styles = useStyles();
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
@@ -317,6 +324,8 @@ function FilterSheet({
   onClose: () => void;
   bottom: number;
 }) {
+  const color = useColors();
+  const styles = useStyles();
   const [mounted, setMounted] = useState(open);
   const [sheetH, setSheetH] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
@@ -434,6 +443,8 @@ function FilterSheet({
 }
 
 function CheckRow({ label, detail, on, onPress }: { label: string; detail?: string; on: boolean; onPress: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="menuitem"
@@ -450,16 +461,25 @@ function CheckRow({ label, detail, on, onPress }: { label: string; detail?: stri
   );
 }
 
-type ResultProps = { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number };
+type ResultProps = { card: Found; con: boolean; trade?: boolean; rules: PricingRules; change: number | null; days: number };
 
-const openCard = (card: Found, con: boolean) => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`);
+// Con mode's Buying goes straight to "They're asking" for the card (the full card page is a link
+// there); the trade calculator opens the card page with "Add to their side".
+const openCard = (card: Found, con: boolean, trade = false) =>
+  trade
+    ? router.push(`/search/${card.productId}?trade=1`)
+    : con
+      ? router.push({ pathname: '/con/buy/[id]', params: { id: String(card.productId), grade: 'psa10' } })
+      : router.push(`/search/${card.productId}`);
 
 /** Grid tile: the card photo, then name, set · number and price, like home's grid. */
-function ResultTile({ card, width, con, rules, change, days }: ResultProps & { width: number }) {
+function ResultTile({ card, width, con, trade, rules, change, days }: ResultProps & { width: number }) {
+  const color = useColors();
+  const styles = useStyles();
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
   return (
-    <Pressable accessibilityRole="button" onPress={() => openCard(card, con)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
+    <Pressable accessibilityRole="button" onPress={() => openCard(card, con, trade)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
       <View style={[styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
         {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}
       </View>
@@ -484,14 +504,16 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
   );
 }
 
-function ResultRow({ card, con, rules, change, days }: { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number }) {
+function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
+  const color = useColors();
+  const styles = useStyles();
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
   const sub = [card.setName, no && `#${no}`, card.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`)}
+      onPress={() => openCard(card, con, trade)}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.5 }]}
     >
       <View style={styles.thumb}>{card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}</View>
@@ -524,7 +546,7 @@ function ResultRow({ card, con, rules, change, days }: { card: Found; con: boole
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   field: {
@@ -560,7 +582,7 @@ const styles = StyleSheet.create({
     right: space.gutter,
     width: 230,
     borderRadius: radius.field,
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     paddingVertical: space.xs,
     ...shadow.menu,
   },
@@ -572,7 +594,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     maxHeight: '80%',
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingTop: space.s,
@@ -604,4 +626,4 @@ const styles = StyleSheet.create({
   gridRow: { gap: GRID_GAP, paddingHorizontal: space.gutter, paddingBottom: space.xxl },
   tileArt: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
   thumb: { width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, backgroundColor: color.well, overflow: 'hidden' },
-});
+}));
