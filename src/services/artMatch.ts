@@ -150,6 +150,17 @@ export function sameSetSize(read: ParsedCard | null, c: CatalogCard): boolean {
   return read.numbers.some((n) => !!n.total && bare(n.total) === bare(total));
 }
 
+/** One card name and number, listed twice (two sets or two listings). */
+export function sameCard(x: CatalogCard, y: CatalogCard): boolean {
+  const name = (c: CatalogCard) => c.name.replace(/\s+-\s+[\w/-]*\d[\w/-]*/, '').replace(/\s*\(.*?\)\s*/g, ' ').trim().toUpperCase();
+  const num = (c: CatalogCard) => (c.number ?? '').split('/')[0].replace(/^0+(?=\d)/, '').toUpperCase();
+  return x.productId !== y.productId && name(x) === name(y) && num(x) === num(y) && !!num(x);
+}
+
+/** Two art distances far enough apart that the nearer one is the photo (a stamp is a small change). */
+export const TWIN_GAP = 4;
+const artApart = (a: number | undefined, b: number | undefined) => a != null && b != null && b - a >= TWIN_GAP;
+
 export type Identified = { matches: CardMatch[]; confident: boolean; byArt: boolean };
 
 /**
@@ -169,10 +180,23 @@ export function combine(byNumber: CardMatch[], art: { hits: ArtHit[]; edge: bool
     return { matches: [{ card: hits[0].card, score: Infinity }, ...byNumber], confident: true, byArt: true };
   }
   if (byNumber.length) {
+    // Both close enough to max out the bonus: the nearer art still goes first.
+    const far = (m: CardMatch) => dist.get(m.card.productId) ?? Infinity;
     const matches = byNumber
       .map((m) => ({ card: m.card, score: m.score === Infinity ? Infinity : m.score + artBonus(dist.get(m.card.productId)) }))
-      .sort((a, b) => b.score - a.score || (b.card.marketCents ?? 0) - (a.card.marketCents ?? 0));
-    return { matches, confident: matches.length === 1 || matches[0].score === Infinity || matches[0].score - matches[1].score >= 2, byArt: false };
+      .sort((a, b) => b.score - a.score || far(a) - far(b) || (b.card.marketCents ?? 0) - (a.card.marketCents ?? 0));
+    const [a, b] = matches;
+    // The same card in two sets (a stamped reprint, a promo of a set card): only the art tells
+    // them apart, so without a clear art gap the user picks rather than Slabby guessing.
+    if (b && a.score !== Infinity && sameCard(a.card, b.card)) {
+      const da = dist.get(a.card.productId);
+      const db = dist.get(b.card.productId);
+      // The text told them apart (a set code read): sure unless the art clearly says the other one.
+      // Otherwise the art must.
+      const sure = a.score - b.score >= 2 ? !artApart(db, da) : artApart(da, db);
+      return { matches, confident: sure, byArt: false };
+    }
+    return { matches, confident: matches.length === 1 || a.score === Infinity || a.score - b.score >= 2, byArt: false };
   }
   // The art alone, a read name pulling its cards forward.
   const near = hits.filter((h) => h.distance <= ART_MAYBE);

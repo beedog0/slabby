@@ -42,6 +42,7 @@ import { CostField, EMPTY_COST, paidCentsOf, toCost, type CostInput } from '../s
 import { ask as ruleAsk } from '../src/pricing/rules';
 import { useRules } from '../src/store/rules';
 import { useSellDraft, type SellDraft } from '../src/store/sellDraft';
+import { GradePrices } from '../src/components/scan/GradePrices';
 import { ScanPills } from '../src/components/scan/ScanPills';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
@@ -1546,6 +1547,7 @@ function RawSheet({
               <Text style={[type.secondary, { color: color.secondary }]}>{priceCents ? 'TCGplayer market' : 'no price for this print'}</Text>
             </View>
           </View>
+          <GradePrices productId={best.productId} />
           {copies ? (
             <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>
               You already have {copies} of this card raw. This would be your {ordinal(copies + 1)}.
