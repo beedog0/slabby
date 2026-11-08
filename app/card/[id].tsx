@@ -15,6 +15,8 @@ import { shareSlab } from '../../src/components/share/ShareCard';
 import { openSlabMenu } from '../../src/components/menu/Menu';
 import { openPaidSheet } from '../../src/components/collection/paidSheet';
 import { statusItems } from '../../src/components/collection/statusSheets';
+import { openEditSale } from '../../src/components/collection/soldTogether';
+import { useDeal } from '../../src/pricing/useDeal';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
@@ -43,6 +45,7 @@ export default function SlabDetail() {
   const [range, setRange] = useState<Range>('90');
   const [tilting, setTilting] = useState(false);
   const refresh = useCardRefresh(row?.card, { auto: true });
+  const deal = useDeal(id);
 
   if (!row) return null;
   const { card, price } = row;
@@ -50,6 +53,14 @@ export default function SlabDetail() {
   const detail = detailFor(row, days);
   const forSale = card.plan === 'sell';
   const raw = card.grader === 'raw';
+  // Sold: the headline number is what it sold for (like home's caption), and the gain is against that.
+  const sold = card.status === 'sold';
+  const headline = sold ? card.soldCents : price?.marketCents ?? null;
+  const gainCents = sold
+    ? card.soldCents != null && card.paidCents != null
+      ? card.soldCents - card.paidCents
+      : null
+    : detail?.gainCents ?? null;
   const trend = price ? trendSentence(trendVerdict(price, days, { raw }), days, raw) : null;
   const fresh = price ? freshnessLine(price, { raw, state: refresh.pulling ? 'refreshing' : refresh.state }) : null;
 
@@ -98,7 +109,7 @@ export default function SlabDetail() {
             {/* The price stays ink: the market's direction is told by the chart and the trend line
                 below it, so the only colored number here is your own gain or loss. */}
             <Text style={[type.title, { color: color.ink, fontVariant: ['tabular-nums'] }]}>
-              {price ? money(price.marketCents) : '—'}
+              {headline != null ? money(headline) : '—'}
             </Text>
             {/* Tap the paid line to change what you paid (or add it). */}
             <Pressable
@@ -108,11 +119,11 @@ export default function SlabDetail() {
               onPress={() => openPaidSheet(card)}
               style={({ pressed }) => pressed && { opacity: 0.5 }}
             >
-              {detail?.gainCents != null && card.paidCents != null ? (
+              {gainCents != null && card.paidCents != null ? (
                 <Text style={[type.text, { color: color.secondary, fontVariant: ['tabular-nums'] }]}>
-                  <Text style={{ color: detail.gainCents >= 0 ? color.gain : color.loss }}>
-                    {detail.gainCents >= 0 ? '+' : '−'}
-                    {money(Math.abs(detail.gainCents))}
+                  <Text style={{ color: gainCents >= 0 ? color.gain : color.loss }}>
+                    {gainCents >= 0 ? '+' : '−'}
+                    {money(Math.abs(gainCents))}
                   </Text>
                   {' · '}paid {money(card.paidCents)}
                 </Text>
@@ -124,6 +135,38 @@ export default function SlabDetail() {
             </Pressable>
           </View>
         </View>
+
+        {sold ? (
+          <View style={[styles.gutter, { paddingTop: space.xl }]}>
+            <Hairline />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint={deal ? 'Edit the deal split' : 'Change the sale price'}
+              onPress={() => openEditSale(card)}
+              style={({ pressed }) => [styles.compsRow, pressed && { opacity: 0.5 }]}
+            >
+              <View style={{ gap: 2, flex: 1 }}>
+                <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>
+                  {card.soldAt ? `Sold ${new Date(card.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Sold'}
+                </Text>
+                <Text style={[type.secondary, { color: color.secondary }]}>
+                  {deal
+                    ? deal.totalCents != null
+                      ? `Its share of a ${money(deal.totalCents)} deal · ${deal.ids.length} cards`
+                      : `Sold with ${deal.ids.length - 1} more`
+                    : card.soldWhere ?? (card.soldCents == null ? 'Price not set' : 'On its own')}
+                  {deal && card.soldWhere ? ` · ${card.soldWhere}` : ''}
+                </Text>
+              </View>
+              <View style={styles.priceLink}>
+                {/* The sale price is the headline above; this row is the sale's story and its edit. */}
+                <Text style={[type.body, { color: color.secondary, fontWeight: '400' }]}>{card.soldCents != null ? 'Edit' : 'Add price'}</Text>
+                <Chevron />
+              </View>
+            </Pressable>
+            <Hairline />
+          </View>
+        ) : null}
 
         {detail ? (
           <View style={styles.gutter}>
