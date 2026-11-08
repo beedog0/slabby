@@ -18,7 +18,8 @@ import { PriceChart } from '../../src/components/PriceChart';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
-import { money, pct, thinNote } from '../../src/lib/format';
+import { money, pct, promoTag, thinNote } from '../../src/lib/format';
+import { CardName } from '../../src/components/CardName';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
@@ -179,7 +180,8 @@ export default function SearchedCard() {
   const no = cardNumber(ready.number);
   // Sealed product: one TCGplayer market price with its nightly chart; no grades, no slab.
   const sealed = ready.sealedType ?? null;
-  const detail = [sealed ? sealedLabel(sealed) : no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
+  // The language is the badge beside the name.
+  const detail = (sealed ? [sealedLabel(sealed)] : [no && `#${no}`, promoTag(ready, { setShown: true })]).filter(Boolean).join(' · ');
   const openSet = () => openSetPage(ready, groupId, { trade: trading });
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
   const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
@@ -205,7 +207,7 @@ export default function SearchedCard() {
         <View style={styles.titleRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
             {/* Name on its own line, the variant ("Alternate Art Secret") on the next: nothing truncates. A sealed product shows its full name. */}
-            <Text style={[type.title, { color: color.ink }]}>{sealed ? ready.name : nameAndVariant(ready.name).name}</Text>
+            <CardName name={sealed ? ready.name : nameAndVariant(ready.name).name} language={ready.language} numberOfLines={4} large style={[type.title, { color: color.ink }]} />
             {!sealed && nameAndVariant(ready.name).variant ? (
               <Text style={[type.text, { color: color.secondary }]}>{nameAndVariant(ready.name).variant}</Text>
             ) : null}

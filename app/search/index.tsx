@@ -15,7 +15,8 @@ import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
-import { money, pct } from '../../src/lib/format';
+import { money, pct, promoTag } from '../../src/lib/format';
+import { CardName } from '../../src/components/CardName';
 import { buyPrices, cardNumber, displayName, type Game } from '../../src/services/search';
 import { sealedLabel, typeLabel, type TypeFilter } from '../../src/lib/sealed';
 import {
@@ -518,13 +519,9 @@ function ResultTile({ card, width, con, trade, rules, change, days }: ResultProp
         {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} /> : null}
       </View>
       <View style={{ gap: 2, paddingTop: space.m }}>
-        <Text numberOfLines={sealed ? 3 : 1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
-          {sealed ? card.name : displayName(card.name)}
-        </Text>
+        <CardName name={sealed ? card.name : displayName(card.name)} language={card.language} numberOfLines={sealed ? 3 : 1} style={[type.text, { color: color.ink, fontWeight: '500' }]} />
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-          {(sealed ? [sealedLabel(sealed), card.language === 'ja' ? 'JP' : null] : [no && `#${no}`, card.language === 'ja' ? 'JP' : null, card.setName])
-            .filter(Boolean)
-            .join(' · ')}
+          {(sealed ? [sealedLabel(sealed)] : [no && `#${no}`, promoTag(card, { setShown: true }), card.setName]).filter(Boolean).join(' · ')}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {sealed ? 'market' : 'raw'} <Text style={{ color: color.ink }}>{card.marketCents != null ? money(card.marketCents) : '—'}</Text>
@@ -546,9 +543,7 @@ function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
   const sealed = card.sealedType;
-  const sub = (sealed ? [sealedLabel(sealed), card.language === 'ja' ? 'JP' : null] : [card.setName, no && `#${no}`, card.language === 'ja' ? 'JP' : null])
-    .filter(Boolean)
-    .join(' · ');
+  const sub = (sealed ? [sealedLabel(sealed)] : [card.setName, no && `#${no}`, promoTag(card, { setShown: true })]).filter(Boolean).join(' · ');
   return (
     <Pressable
       accessibilityRole="button"
@@ -559,9 +554,7 @@ function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
         {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} /> : null}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={sealed ? 2 : 1} style={[type.body, { color: color.ink }]}>
-          {sealed ? card.name : displayName(card.name)}
-        </Text>
+        <CardName name={sealed ? card.name : displayName(card.name)} language={card.language} numberOfLines={sealed ? 2 : 1} style={[type.body, { color: color.ink }]} />
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {sub}
         </Text>
