@@ -1,14 +1,13 @@
 -- Misspellings ranked better. 0023 ordered close misspellings by word_similarity, which scores
 -- part-word overlaps: "charzard" put "Hard Charm" and "Code Card - Charizard ex Special
 -- Collection" above every Charizard. Which cards count as a misspelling is unchanged; only their
--- order is. Same arguments as 0023, so nothing else changes.
+-- order is. Same arguments as 0023, so nothing else changes. Also drops 0023's function-level
+-- SET of pg_trgm.word_similarity_threshold (Supabase refuses to set it once pg_trgm is loaded)
+-- in favour of an explicit word_similarity >= 0.45.
 
 create or replace function search_hits(q text, game_filter text default null)
 returns table (product_id bigint, tier int, score real)
-language sql stable
-set search_path = public, extensions
-set pg_trgm.word_similarity_threshold = 0.45  -- "charzard" scores 0.58 against "charizard"
-as $$
+language sql stable set search_path = public, extensions as $$
   with qn as (select search_fold(q) as s),
   terms as (
     select t from unnest(regexp_split_to_array((select s from qn), ' ')) t where t <> ''
@@ -43,7 +42,9 @@ as $$
     where not exists (select 1 from strict)
       and length(coalesce((select w from words), '')) >= 4
       and (game_filter is null or c.game = game_filter)
-      and (select w from words) <% c.name_norm
+      -- 0.45, not the <% operator's 0.6 ("charzard" scores 0.58 against "charizard"). Setting
+      -- the operator's threshold on the function is refused on Supabase once pg_trgm is loaded.
+      and word_similarity((select w from words), c.name_norm) >= 0.45
       and not exists (select 1 from terms where terms.t ~ '[0-9]' and position(terms.t in c.search_norm) = 0)
   )
   select * from strict
