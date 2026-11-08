@@ -19,7 +19,7 @@ import { closeMenu, openMenu, type MenuItem } from '../menu/Menu';
 import { PrimaryButton } from '../ui';
 import { paidItem } from './paidSheet';
 import { removeSlabs } from './remove';
-import { openEditDeal, openSoldTogether } from './soldTogether';
+import { openEditDeal, openEditSale, openSoldTogether } from './soldTogether';
 
 type Kind = 'sell' | 'hold' | 'sold' | 'remove';
 
@@ -29,7 +29,9 @@ export function statusItems(card: Card, opts: { onRemoved?: () => void } = {}): 
   const inDeal = sold && dealsByCard(useVault.getState().cards).has(card.id);
   const status: MenuItem[] = sold
     ? [
-        ...(inDeal ? [{ label: 'Edit deal split', onPress: () => openEditDeal(card) }] : []),
+        inDeal
+          ? { label: 'Edit deal split', onPress: () => openEditDeal(card) }
+          : { label: 'Change sale price', onPress: () => openEditSale(card) },
         { label: 'Back to holds', onPress: () => openStatusSheet(card, 'hold') },
       ]
     : [

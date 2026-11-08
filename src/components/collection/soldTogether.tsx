@@ -64,6 +64,18 @@ export function openEditDeal(card: Card) {
   });
 }
 
+/** A sold card's sale: the deal's split when it sold with others, else its own price. */
+export function openEditSale(card: Card) {
+  if (dealsByCard(useVault.getState().cards).has(card.id)) return openEditDeal(card);
+  openMenu({
+    card,
+    title: rowTitle(card),
+    subtitle: card.soldAt ? `Sold ${shortDay(card.soldAt)}${card.soldWhere ? ` · ${card.soldWhere}` : ''}` : 'Sold',
+    items: [],
+    body: <SoldTogetherBody ids={[card.id]} opts={{}} edit />,
+  });
+}
+
 const shortDay = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const signed = (cents: number) => `${cents >= 0 ? '+' : '−'}${money(Math.abs(cents))}`;
 const typed = (v: string, d: string) => (v.length >= MAX_DIGITS || (!v && d === '0') ? v : v + d);
@@ -92,7 +104,7 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
   // null = untouched (an edit shows the saved total); typing starts a fresh number.
   const [digits, setDigits] = useState<string | null>(null);
   const [fixed, setFixed] = useState<(number | null)[]>(start.fixed);
-  const [step, setStep] = useState<'total' | 'split' | 'share'>(edit && start.total != null ? 'split' : 'total');
+  const [step, setStep] = useState<'total' | 'split' | 'share'>(edit && start.total != null && ids.length > 1 ? 'split' : 'total');
   /** A sale under what they cost waits for a second tap, at this amount. */
   const [lossOk, setLossOk] = useState<number | null>(null);
   const [editing, setEditing] = useState(0);
@@ -183,7 +195,7 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
             onPress={() => save(false)}
           />
         ) : n === 1 ? (
-          <PrimaryButton title={lossTitle(total) ?? `Mark sold for ${money(total)}`} onPress={() => save(true)} />
+          <PrimaryButton title={edit ? `Save · ${money(total)}` : lossTitle(total) ?? `Mark sold for ${money(total)}`} onPress={() => save(true)} />
         ) : (
           <PrimaryButton title="See how it splits" onPress={() => setStep('split')} />
         )}
