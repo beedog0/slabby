@@ -335,3 +335,10 @@ describe('Not this card?', () => {
     expect(await similarForSlab({ name: 'PIKACHU', number: '25', language: 'ko' })).toEqual([]);
   });
 });
+
+describe('alternate art numbers', () => {
+  it('match TCGplayer lower-case letters ("063a/166")', () => {
+    const { numberVariants } = require('../cardScan');
+    expect(numberVariants({ num: '063A', total: '166' })).toContain('063a/166');
+  });
+});

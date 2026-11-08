@@ -39,6 +39,8 @@ Deno.serve(async (req) => {
   let cpu = 0;
   let hashed = 0;
   const failed: number[] = [];
+  // TCGplayer has no picture yet (403 AccessDenied, or an empty 200): not worth retrying for days.
+  const missing: number[] = [];
   const released: number[] = [];
   const out: Record<string, unknown>[] = [];
 
@@ -55,6 +57,10 @@ Deno.serve(async (req) => {
       try {
         const res = await fetch(smallImage(row.image_url), { headers: UA });
         if (res.ok) bytes = new Uint8Array(await res.arrayBuffer());
+        if ((res.ok && !bytes?.length) || res.status === 403 || res.status === 404) {
+          missing.push(row.product_id);
+          continue;
+        }
       } catch {
         bytes = null;
       }
@@ -85,9 +91,17 @@ Deno.serve(async (req) => {
     const { error: e } = await admin.from('catalog_art').upsert(out, { onConflict: 'product_id' });
     if (e) return json({ error: e.message }, 500);
   }
+  // No picture on TCGplayer: parked; claim_art_batch looks again after a few days (0019).
+  if (missing.length) {
+    const now = new Date().toISOString();
+    await admin.from('catalog_art').upsert(
+      missing.map((product_id) => ({ product_id, tries: 3, claimed_at: now })),
+      { onConflict: 'product_id' },
+    );
+  }
   // Not reached this run: back in the queue without counting as a try.
   if (released.length) {
     await admin.rpc('release_art_claims', { ids: released });
   }
-  return json({ claimed: rows.length, hashed, failed: failed.length, released: released.length, cpuMs: Math.round(cpu) });
+  return json({ claimed: rows.length, hashed, failed: failed.length, missing: missing.length, released: released.length, cpuMs: Math.round(cpu) });
 });
