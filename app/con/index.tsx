@@ -12,6 +12,8 @@ import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { SearchSort } from '../../src/components/collection/SearchSort';
+import { GamePills } from '../../src/components/collection/GamePills';
+import { effectiveGame, gamesIn, inGame, type GameFilter } from '../../src/lib/games';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { ConGrid } from '../../src/components/con/ConGrid';
 import { useDisplay } from '../../src/store/display';
@@ -48,6 +50,8 @@ export default function ConMode() {
   const selling = mode !== 'buy';
   const [tab, setTab] = useState<Tab>('sale');
   const [query, setQuery] = useState('');
+  // Starts on All each time: at a table, a hidden card is worse than a long list.
+  const [game, setGame] = useState<GameFilter>('all');
   const { width } = useWindowDimensions();
   const layout = useDisplay((s) => s.conLayout);
   const setLayout = useDisplay((s) => s.setConLayout);
@@ -123,7 +127,18 @@ export default function ConMode() {
     setRefreshing(0);
   };
 
-  const onTab = rows.filter((r) => {
+  // Pills for the games on the table or sold today, so they hold still between the three tabs.
+  const games = gamesIn(
+    rows
+      .filter(
+        (r) =>
+          (r.card.status === 'owned' && (r.card.plan === 'sell' || r.card.plan === 'trade')) ||
+          (r.card.status === 'sold' && !!r.card.soldAt && r.card.soldAt >= session.startedAt),
+      )
+      .map((r) => r.card),
+  );
+  const pickGame = effectiveGame(game, games);
+  const onTab = inGame(rows, pickGame).filter((r) => {
     const c = r.card;
     if (tab === 'sold') return c.status === 'sold' && !!c.soldAt && c.soldAt >= session.startedAt;
     if (tab === 'trade') return c.status === 'owned' && c.plan === 'trade';
@@ -227,6 +242,9 @@ export default function ConMode() {
               <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} sorts={CON_SORTS} />
             </View>
             <ViewSwitch value={layout} onChange={setLayout} modes={SEARCH_MODES} />
+          </View>
+          <View style={{ marginHorizontal: space.gutter }}>
+            <GamePills games={games} value={pickGame} onChange={setGame} />
           </View>
 
           <ScrollView

@@ -21,6 +21,8 @@ import { FilterTabs } from '../src/components/collection/FilterTabs';
 import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
+import { GamePills } from '../src/components/collection/GamePills';
+import { effectiveGame, GAMES, gamesIn, inGame, type GameFilter } from '../src/lib/games';
 import type { SlabActions } from '../src/components/collection/actions';
 import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/collection/statusSheets';
 import { openDropdown } from '../src/components/menu/Dropdown';
@@ -80,6 +82,13 @@ const VALUE_LABEL: Record<CollectionFilter, string> = {
   sell: 'For sale value',
   sold: 'Sold total',
 };
+// The same, for one game: "Pokémon value", "One Piece holds value".
+const GAME_VALUE_LABEL: Record<CollectionFilter, (game: string) => string> = {
+  all: (g) => `${g} value`,
+  hold: (g) => `${g} holds value`,
+  sell: (g) => `${g} for sale value`,
+  sold: (g) => `${g} sold total`,
+};
 
 export default function Home() {
   const color = useColors();
@@ -93,7 +102,7 @@ export default function Home() {
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
   const prices = usePrices((s) => s.byKey);
-  const { mode, filter, sort, order, pinnedId, perShelf, setMode, setFilter: saveFilter, setSort, setOrder, setPinned, setPerShelf } =
+  const { mode, filter, sort, order, pinnedId, perShelf, setMode, setFilter: saveFilter, setSort, setOrder, setPinned, setPerShelf, game, setGame: saveGame } =
     useDisplay();
   // Select mode: tap slabs to pick several, then share or remove them together.
   const [selecting, setSelecting] = useState(false);
@@ -103,13 +112,23 @@ export default function Home() {
     setSelected(new Set());
     saveFilter(f);
   };
+  // Same for the game pills.
+  const setGame = (g: GameFilter) => {
+    setSelected(new Set());
+    saveGame(g);
+  };
+  // The pills show only when the vault spans more than one game, counted over the whole vault so
+  // they never come and go between the All / Holds / For sale / Sold tabs.
+  const games = useMemo(() => gamesIn(cards), [cards]);
+  const pickGame = effectiveGame(game, games);
 
   useEffect(() => {
     refreshPrices(cards);
   }, [cards]);
 
   const all = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
-  const base = useMemo(() => collection(all, filter), [all, filter]);
+  // The game narrows everything below it, header numbers included: "Pokémon value" counts only Pokémon.
+  const base = useMemo(() => collection(inGame(all, pickGame), filter), [all, filter, pickGame]);
   const [query, setQuery] = useState('');
   // Holding the value chart: the big number and the line under it show that day instead.
   const [scrubbed, setScrubbed] = useState<{ cents: number; date?: string } | null>(null);
@@ -252,7 +271,10 @@ export default function Home() {
   const count = list.rows.length;
   // The header counts the whole filter; a search only narrows the slabs below it.
   const total = base.rows.length;
-  const empty = EMPTY[filter];
+  const empty =
+    pickGame === 'all'
+      ? EMPTY[filter]
+      : { title: `No ${GAMES[pickGame].name} cards here`, hint: 'Tap All to see every game.', chart: '' };
   // "−$10 (−2.1%) this month", the numbers in gain or loss color, words in secondary.
   const change = changeText(stats.monthDeltaCents, stats.totalCents);
   const month = change ? (
@@ -275,7 +297,7 @@ export default function Home() {
     </>
   ) : null;
   // Line above the number: what it is, and how many slabs it counts.
-  const label = `${VALUE_LABEL[filter]} · ${plural(total, 'slab')}`;
+  const label = `${pickGame === 'all' ? VALUE_LABEL[filter] : GAME_VALUE_LABEL[filter](GAMES[pickGame].name)} · ${plural(total, 'slab')}`;
   // Line under the number: how that value moved (or, for sale and sold, the number that matters there).
   const subline: ReactNode =
     filter === 'sell' ? (
@@ -422,6 +444,7 @@ export default function Home() {
               ) : (
                 <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
               )}
+              {arranging ? null : <GamePills games={games} value={pickGame} onChange={setGame} />}
             </View>
 
             {count === 0 && query ? (
