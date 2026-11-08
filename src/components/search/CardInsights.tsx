@@ -4,7 +4,7 @@
 
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { money, pct } from '../../lib/format';
+import { cardPrice, money, pct } from '../../lib/format';
 import type { CardPrice } from '../../services/comps';
 import { displayName, gradeLabel, isQuiet, SEARCH_GRADES, type SearchGrade, type SearchPrices } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
@@ -61,14 +61,14 @@ export function GradeLadder({ prices, pick, onPick }: { prices: SearchPrices; pi
             onPress={() => onPick(key)}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            accessibilityLabel={`${gradeLabel(key)} ${money(p.marketCents)}${key === 'raw' ? '' : `, ${p.sales30d} sales`}${quiet ? ', no recent sales' : ''}`}
+            accessibilityLabel={`${gradeLabel(key)} ${cardPrice(p.marketCents)}${key === 'raw' ? '' : `, ${p.sales30d} sales`}${quiet ? ', no recent sales' : ''}`}
             style={styles.ladderRow}
           >
             <Text numberOfLines={1} style={[type.text, styles.ladderLabel, { color: ink, fontWeight: on ? '600' : '400' }]}>{gradeLabel(key)}</Text>
             <View style={styles.track}>
               <View style={[styles.bar, { width: `${Math.max(2, (p.marketCents / top) * 100)}%`, backgroundColor: on ? color.ink : color.secondary, opacity: on ? 1 : quiet ? 0.15 : 0.3 }]} />
             </View>
-            <Text style={[type.text, styles.ladderPrice, { color: ink, fontWeight: on ? '600' : '500' }]}>{money(p.marketCents)}</Text>
+            <Text style={[type.text, styles.ladderPrice, { color: ink, fontWeight: on ? '600' : '500' }]}>{cardPrice(p.marketCents)}</Text>
             <Text style={[type.secondary, styles.ladderSales, { color: color.secondary }]}>{key === 'raw' ? '' : p.sales30d}</Text>
           </Pressable>
         );
@@ -118,7 +118,7 @@ export function SetRow({ setName, cards, onAll, con, trade }: { setName: string;
             key={c.productId}
             onPress={() => router.push(`/search/${c.productId}${trade ? '?trade=1' : con ? '?con=1' : ''}`)}
             accessibilityRole="button"
-            accessibilityLabel={`${displayName(c.name)}, ${c.marketCents != null ? money(c.marketCents) : 'no price'}`}
+            accessibilityLabel={`${displayName(c.name)}, ${c.marketCents != null ? cardPrice(c.marketCents) : 'no price'}`}
             style={styles.setCard}
           >
             <View style={[styles.setArt, shadow.thumb]}>
@@ -128,7 +128,7 @@ export function SetRow({ setName, cards, onAll, con, trade }: { setName: string;
               {displayName(c.name)}
             </Text>
             <Text style={[type.secondary, { color: color.ink, fontWeight: '600' }]}>
-              {c.marketCents != null ? money(c.marketCents) : '—'}
+              {c.marketCents != null ? cardPrice(c.marketCents) : '—'}
               {c.change7d != null && Math.abs(c.change7d) >= 0.005 ? (
                 <Text style={{ color: c.change7d > 0 ? color.gain : color.loss, fontWeight: '400' }}> {pct(c.change7d)}</Text>
               ) : null}

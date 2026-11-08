@@ -9,7 +9,7 @@ import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ebayCardListedUrl, ebayCardSoldUrl, type EbayCard } from '../../lib/ebay';
-import { money, pct } from '../../lib/format';
+import { cardPrice, money, pct } from '../../lib/format';
 import { gradingLine, gradingRead, history, liquidity, ratio, spread, spreadWord, trend } from '../../pricing/cardStats';
 import { catalogFor, choiceFor, type Choice } from '../../services/cardLink';
 import type { CardPrice } from '../../services/comps';
@@ -32,7 +32,7 @@ export function setTitle(name: string): string {
 }
 
 export const rangeText = (p: CardPrice) =>
-  p.lowCents === p.highCents ? money(p.marketCents) : `${money(p.lowCents)}–${money(p.highCents).replace('$', '')}`;
+  p.lowCents === p.highCents ? cardPrice(p.marketCents) : `${money(p.lowCents)}–${money(p.highCents).replace('$', '')}`;
 const times = (r: number | null) => (r == null ? null : `${r >= 10 ? Math.round(r) : r.toFixed(1)}×`);
 
 /** Open the set page for a catalog card. */

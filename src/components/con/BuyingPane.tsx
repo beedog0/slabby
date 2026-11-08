@@ -5,7 +5,7 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { gradeLabel, money, rowTitle } from '../../lib/format';
+import { cardPrice, gradeLabel, money, rowTitle } from '../../lib/format';
 import { boughtIn, buyMarket, conBuySummary, type CardRow } from '../../pricing/portfolio';
 import { radius, size, space, type } from '../../theme/tokens';
 import { themed, useColors } from '../../theme/theme';
@@ -185,7 +185,7 @@ function WishRow({ item }: { item: WishItem }) {
         <Text style={[type.body, { color: color.ink }]}>{item.name}</Text>
         <Text style={[type.secondary, { color: color.secondary }]}>
           {searchGrade(item.grade)}
-          {item.marketCents ? ` · market ${money(item.marketCents)}` : ''}
+          {item.marketCents ? ` · market ${cardPrice(item.marketCents)}` : ''}
           {rating ? ` · ${BUY_RATING_LABEL[rating.kind].toLowerCase()}` : ''}
         </Text>
       </View>

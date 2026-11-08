@@ -14,7 +14,7 @@ import { useDeal } from '../../pricing/useDeal';
 import { size, space, type } from '../../theme/tokens';
 import { useColors } from '../../theme/theme';
 import { prefetchArt } from '../ArtImage';
-import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
+import { cardPrice, gradeLabel, money, pct, rowTitle } from '../../lib/format';
 import { LangBadge } from '../CardName';
 import { SlabView } from '../SlabView';
 import { CopiesMark, PinMark } from './PinMark';
@@ -319,7 +319,7 @@ function SwipeCaption({ row }: { row: CardRow }) {
         <LangBadge language={card.language} />
       </View>
       <Text numberOfLines={1} style={[type.rowPrice, ink, { paddingTop: space.xs }]}>
-        {value != null ? money(value) : '—'}
+        {value != null ? cardPrice(value) : '—'}
         {week ? (
           <Text style={[type.secondary, muted]}>
             {'  '}
