@@ -19,7 +19,7 @@ import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
 import { CardAnalytics } from '../../src/components/search/CardAnalytics';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
-import { gradeLabel, money, rowTitle } from '../../src/lib/format';
+import { gradeLabel, money, rowTitle, THIN_SALES } from '../../src/lib/format';
 import { sealedLabel } from '../../src/lib/sealed';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../../src/lib/games';
 import { detailFor } from '../../src/pricing/portfolio';
@@ -153,7 +153,7 @@ export default function SlabDetail() {
                       {raw
                         ? 'TCGplayer market'
                         : price.sales30d > 0
-                          ? `${price.sales30d} eBay sales, 30 days`
+                          ? `${price.sales30d <= THIN_SALES ? 'Only ' : ''}${price.sales30d} eBay ${price.sales30d === 1 ? 'sale' : 'sales'}, 30 days`
                           : 'No eBay sales in 30 days'}
                     </Text>
                     <View style={styles.priceLink}>
