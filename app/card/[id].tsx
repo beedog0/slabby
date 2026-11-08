@@ -21,7 +21,7 @@ import { TrendSentence } from '../../src/components/TrendSentence';
 import { CardAnalytics } from '../../src/components/search/CardAnalytics';
 import { NoPriceSource } from '../../src/components/estimate/NoPriceSource';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
-import { gradeLabel, money, rowTitle, THIN_SALES } from '../../src/lib/format';
+import { gradeLabel, money, rowTitle, saleDay, THIN_SALES } from '../../src/lib/format';
 import { sealedLabel } from '../../src/lib/sealed';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../../src/lib/games';
 import { detailFor } from '../../src/pricing/portfolio';
@@ -156,6 +156,26 @@ export default function SlabDetail() {
           </View>
         </View>
 
+        {/* Sold: what it went for, when and where, and what you made on it. */}
+        {card.status === 'sold' && card.soldCents != null ? (
+          <View style={styles.soldRow}>
+            <Text style={[type.body, { color: color.ink }]}>Sold for {money(card.soldCents)}</Text>
+            <Text style={[type.text, { color: color.secondary, fontVariant: ['tabular-nums'] }]}>
+              {[card.soldAt ? saleDay(card.soldAt) : null, card.soldWhere].filter(Boolean).join(' · ')}
+              {card.paidCents != null ? (
+                <>
+                  {card.soldAt || card.soldWhere ? ' · ' : ''}
+                  <Text style={{ color: card.soldCents >= card.paidCents ? color.gain : color.loss }}>
+                    {card.soldCents >= card.paidCents ? '+' : '−'}
+                    {money(Math.abs(card.soldCents - card.paidCents))}
+                  </Text>{' '}
+                  {card.soldCents >= card.paidCents ? 'profit' : 'loss'}
+                </>
+              ) : null}
+            </Text>
+          </View>
+        ) : null}
+
         {noSource ? (
           <View style={styles.gutter}>
             <NoPriceSource card={card} price={price} />
@@ -257,6 +277,7 @@ const styles = StyleSheet.create({
   },
   hero: { height: 330, alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.m, paddingHorizontal: space.gutter },
+  soldRow: { paddingHorizontal: space.gutter, paddingTop: space.m, gap: 2 },
   rangeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.m, paddingVertical: space.l },
   priceLink: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   compsArea: { paddingVertical: space.xl },
