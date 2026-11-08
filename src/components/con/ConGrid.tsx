@@ -67,7 +67,7 @@ export function ConGrid({ rows, width, onPress, onLongPress, flash, selected, ma
               ) : null}
               {r.card.status === 'sold' && deals.get(r.card.id)?.totalCents != null ? (
                 <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                  of a {money(deals.get(r.card.id)!.totalCents!)} deal
+                  of {money(deals.get(r.card.id)!.totalCents!)} deal
                 </Text>
               ) : null}
             </View>

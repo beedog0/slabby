@@ -282,7 +282,7 @@ function SwipeCaption({ row }: { row: CardRow }) {
         {made != null ? (
           <>
             {' · '}
-            <Text style={tint(made)}>{signedMoney(made)}</Text> profit
+            <Text style={tint(made)}>{signedMoney(made)}</Text> {made >= 0 ? 'profit' : 'loss'}
           </>
         ) : null}
       </>

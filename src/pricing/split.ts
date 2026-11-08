@@ -33,7 +33,11 @@ export function splitDeal(totalCents: number, weights: (number | null)[], fixed:
   const free = weights.map((_, i) => i).filter((i) => !isFixed(i));
   const left = Math.max(0, totalCents - set);
   const dollars = left % 100 === 0;
-  const parts = free.length ? splitTotal(dollars ? left / 100 : left, free.map((i) => weights[i])) : [];
+  // A card with no market price counts as an average card, so it isn't sold for $0.
+  const known = weights.filter((w): w is number => w != null && w > 0);
+  const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : null;
+  const w = free.map((i) => (weights[i] != null && weights[i]! > 0 ? weights[i] : avg));
+  const parts = free.length ? splitTotal(dollars ? left / 100 : left, w) : [];
   const out = new Array<number>(n);
   for (let i = 0; i < n; i++) if (isFixed(i)) out[i] = fixed[i]!;
   free.forEach((i, k) => (out[i] = dollars ? parts[k] * 100 : parts[k]));

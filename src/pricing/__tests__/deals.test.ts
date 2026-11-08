@@ -54,3 +54,9 @@ describe('dealsByCard', () => {
     expect(dealsByCard(cards).get('a')?.totalCents).toBeNull();
   });
 });
+
+describe('splitDeal with unpriced cards', () => {
+  it('treats a card with no market as an average card', () => {
+    expect(splitDeal(30_000, [20_000, null])).toEqual([15_000, 15_000]);
+  });
+});

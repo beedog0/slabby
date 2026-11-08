@@ -75,28 +75,32 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
   const update = useVault((s) => s.update);
   const con = useCon((s) => s.session);
 
-  // Editing a saved deal starts from what's saved: its total and every card's share as typed.
+  // Editing a saved deal starts from what's saved: its total, with only the cards whose price was
+  // clearly set by hand (more than $1 off the market split) held; the rest stay free to rebalance.
   const start = useMemo(() => {
-    if (!edit) return { digits: '', fixed: ids.map(() => null as number | null) };
-    const total = rows.reduce((a, r) => a + (r.card.soldCents ?? 0), 0);
-    const weights = rows.map((r) => r.price?.marketCents ?? null);
-    const byMarket = splitDeal(total, weights);
-    const same = rows.every((r, i) => (r.card.soldCents ?? 0) === byMarket[i]);
-    return {
-      digits: total ? String(Math.round(total / 100)) : '',
-      fixed: rows.map((r) => (same ? null : r.card.soldCents ?? 0)),
-    };
+    if (!edit) return { total: null as number | null, fixed: ids.map(() => null as number | null) };
+    const priced = rows.filter((r) => r.card.soldCents != null);
+    const total = priced.length ? priced.reduce((a, r) => a + r.card.soldCents!, 0) : null;
+    const byMarket = total != null ? splitDeal(total, rows.map((r) => r.price?.marketCents ?? null)) : [];
+    const fixed = rows.map((r, i) =>
+      r.card.soldCents != null && Math.abs(r.card.soldCents - byMarket[i]) > 100 ? r.card.soldCents : null,
+    );
+    // Every card hand-set: keep them, but setting one later frees the rest (see setShare).
+    return { total, fixed };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [digits, setDigits] = useState(start.digits);
+  // null = untouched (an edit shows the saved total); typing starts a fresh number.
+  const [digits, setDigits] = useState<string | null>(null);
   const [fixed, setFixed] = useState<(number | null)[]>(start.fixed);
-  const [step, setStep] = useState<'total' | 'split' | 'share'>(edit && start.digits ? 'split' : 'total');
+  const [step, setStep] = useState<'total' | 'split' | 'share'>(edit && start.total != null ? 'split' : 'total');
+  /** A sale under what they cost waits for a second tap, at this amount. */
+  const [lossOk, setLossOk] = useState<number | null>(null);
   const [editing, setEditing] = useState(0);
   const [shareDigits, setShareDigits] = useState('');
 
   const n = rows.length;
   if (!n) return null;
-  const total = digits ? parseInt(digits, 10) * 100 : null;
+  const total = digits == null ? start.total : digits ? parseInt(digits, 10) * 100 : null;
   const weights = rows.map((r) => r.price?.marketCents ?? null);
   const shares = total != null ? splitDeal(total, weights, fixed) : rows.map(() => 0);
   const sum = shares.reduce((a, b) => a + b, 0);
@@ -106,7 +110,23 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
   const priced = rows.filter((r) => r.price);
   const market = priced.reduce((a, r) => a + r.price!.marketCents, 0);
 
-  const save = (withPrice: boolean) =>
+  // Others hold the total's rest; when every other card is already set, they're freed to rebalance.
+  const othersSet = (i: number) => fixed.every((f, k) => k === i || f != null);
+  const capFor = (i: number) => (othersSet(i) ? total ?? 0 : maxShare(total ?? 0, fixed, i));
+  const setShare = (i: number, cents: number) =>
+    setFixed((f) => {
+      const all = f.every((v, k) => k === i || v != null);
+      return f.map((v, k) => (k === i ? cents : all ? null : v));
+    });
+
+  const save = (withPrice: boolean) => {
+    // "Never sell at a loss": a sale under what they cost asks for a second tap.
+    const amount = withPrice ? (step === 'total' ? total ?? 0 : sum) : null;
+    if (!edit && amount != null && anyPaid && amount < paid && lossOk !== amount) {
+      setLossOk(amount);
+      if (native) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      return;
+    }
     closeMenu(() => {
       const at = new Date().toISOString();
       rows.forEach((r, i) => {
@@ -118,6 +138,9 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
       if (native) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       opts.after?.();
     });
+  };
+  const lossTitle = (amount: number) =>
+    lossOk === amount ? `Sold at a ${money(paid - amount)} loss · tap again` : null;
 
   // ── 1. The one number you remember ──
   if (step === 'total') {
@@ -145,11 +168,11 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
         <View style={styles.pad}>
           <Keypad
             onDigit={(d) => {
-              setDigits((v) => typed(v, d));
+              setDigits((v) => typed(v ?? '', d));
               setFixed(ids.map(() => null));
             }}
             onBackspace={() => {
-              setDigits((v) => v.slice(0, -1));
+              setDigits((v) => (v ?? '').slice(0, -1));
               setFixed(ids.map(() => null));
             }}
           />
@@ -160,7 +183,7 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
             onPress={() => save(false)}
           />
         ) : n === 1 ? (
-          <PrimaryButton title={`Mark sold for ${money(total)}`} onPress={() => save(true)} />
+          <PrimaryButton title={lossTitle(total) ?? `Mark sold for ${money(total)}`} onPress={() => save(true)} />
         ) : (
           <PrimaryButton title="See how it splits" onPress={() => setStep('split')} />
         )}
@@ -171,7 +194,7 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
   // ── 3. One card's share, typed ──
   if (step === 'share') {
     const r = rows[editing];
-    const cap = maxShare(total ?? 0, fixed, editing);
+    const cap = capFor(editing);
     const cents = shareDigits ? parseInt(shareDigits, 10) * 100 : null;
     const over = cents != null && cents > cap;
     const vsPaid = cents != null && r.card.paidCents != null ? cents - r.card.paidCents : null;
@@ -206,7 +229,7 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
         <PrimaryButton
           title={cents == null ? 'Back to the split' : over ? `Set to ${money(cap)}` : `Set share to ${money(cents)}`}
           onPress={() => {
-            if (cents != null) setFixed((f) => f.map((v, i) => (i === editing ? Math.min(cents, cap) : v)));
+            if (cents != null) setShare(editing, Math.min(cents, cap));
             setStep('split');
           }}
         />
@@ -222,7 +245,10 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
       <Pressable
         accessibilityRole="button"
         accessibilityHint="Change the deal total"
-        onPress={() => setStep('total')}
+        onPress={() => {
+          setDigits('');
+          setStep('total');
+        }}
         style={({ pressed }) => [styles.totalRow, pressed && { opacity: 0.6 }]}
       >
         <View>
@@ -290,7 +316,7 @@ function SoldTogetherBody({ ids, opts, edit }: { ids: string[]; opts: Opts; edit
         ) : null}
       </View>
 
-      <PrimaryButton title={edit ? `Save split · ${money(sum)}` : `Mark ${n} sold for ${money(sum)}`} onPress={() => save(true)} />
+      <PrimaryButton title={edit ? `Save split · ${money(sum)}` : lossTitle(sum) ?? `Mark ${n} sold for ${money(sum)}`} onPress={() => save(true)} />
     </View>
   );
 }

@@ -65,7 +65,7 @@ export function openMoveMany(cards: Card[], after?: () => void) {
   const n = cards.length;
   const open = (kind: 'sell' | 'hold' | 'sold') =>
     kind === 'sold'
-      ? openSoldTogether(cards, { after })
+      ? openSoldTogether(cards.filter((c) => c.status !== 'sold'), { after })
       : openMenu({ title: MANY_TITLE[kind](n), items: [], body: <MoveManyBody ids={cards.map((c) => c.id)} kind={kind as 'sell' | 'hold'} after={after} /> });
   openMenu({
     title: `Move ${n} ${n === 1 ? 'slab' : 'slabs'}`,
