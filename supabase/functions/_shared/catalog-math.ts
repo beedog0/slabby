@@ -134,6 +134,11 @@ export type Summary = {
   /** First and last real data point in the window. */
   since?: string;
   lastReal?: string;
+  /** Up to 180 days of daily market, carried forward over gaps, starting histFrom (card-prices v2). */
+  histFrom?: string;
+  hist?: number[];
+  /** The latest day with a sale (graded only): that day's average and how many sold. */
+  lastSale?: LastSale | null;
 };
 
 /** Days in the last `days` that have real data, oldest first. */
@@ -149,6 +154,45 @@ export function withPoints(s: Summary | null, days: string[]): Summary | null {
   if (!s) return s;
   return { ...s, points: days.length, since: days[0], lastReal: days[days.length - 1] };
 }
+
+export type LastSale = { day: string; cents: number; count: number };
+
+/**
+ * Daily rows → one value per calendar day from the first row to the last, carrying the last
+ * value over days with no row, so a chart can date every point from histFrom.
+ */
+export function denseHistory(rows: Daily[]): { histFrom: string; hist: number[] } | null {
+  if (!rows.length) return null;
+  const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day));
+  const by = new Map(sorted.map((r) => [r.day, r.market_cents]));
+  const from = sorted[0].day;
+  const to = sorted[sorted.length - 1].day;
+  const hist: number[] = [];
+  let last = sorted[0].market_cents;
+  for (let d = from; d <= to; d = nextDay(d)) {
+    last = by.get(d) ?? last;
+    hist.push(last);
+  }
+  return { histFrom: from, hist };
+}
+
+function nextDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** The most recent day with at least one sale, from PPT's daily {average, count}. */
+export function lastSale(sales: Record<string, { average: number; count: number }>): LastSale | null {
+  let best: string | null = null;
+  for (const [day, s] of Object.entries(sales)) if (s?.count > 0 && s.average > 0 && (!best || day > best)) best = day;
+  if (!best) return null;
+  const s = sales[best];
+  return { day: best.slice(0, 10), cents: Math.round(s.average * 100), count: s.count };
+}
+
+/** Bump when the card-prices answer gains fields, so cached answers are fetched again once. */
+export const ANSWER_VERSION = 2;
 
 export function summarize(rows: Daily[]): Summary | null {
   if (!rows.length) return null;

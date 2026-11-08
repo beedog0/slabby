@@ -92,3 +92,45 @@ export function gradingLine(r: GradingRead): string {
   if (r.share > 0.8) return 'Grading only pays if it comes back a PSA 10.';
   return `Grading pays if about 1 in ${r.oneIn} come back PSA 10.`;
 }
+
+/** Chart windows on the search card page. */
+export const RANGES = [30, 90, 180] as const;
+export type Range = (typeof RANGES)[number];
+export const rangeLabel = (r: Range) => (r === 180 ? '6M' : `${r}D`);
+
+const shiftDay = (day: string, n: number) => {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * The chart for one window ending `today`: daily values and the day of the last one, or null when
+ * the window holds fewer than 3 real prices (a value that differs from the day before counts as
+ * one; the first day counts too). Uses the 180-day history when the answer has it; older answers
+ * only have series90, which serves the 30 and 90 day windows.
+ */
+export function rangeSeries(p: CardPrice | null | undefined, range: Range, today: string): { values: number[]; asOf: string } | null {
+  if (!p) return null;
+  let values: number[];
+  let asOf: string;
+  if (p.hist?.length && p.histFrom) {
+    asOf = shiftDay(p.histFrom, p.hist.length - 1);
+    const start = shiftDay(today, -(range - 1));
+    const skip = Math.max(0, Math.round((Date.parse(`${start}T00:00:00Z`) - Date.parse(`${p.histFrom}T00:00:00Z`)) / 86_400_000));
+    values = p.hist.slice(skip);
+  } else {
+    if (range === 180 || !chartable(p)) return null;
+    values = p.series90.slice(-range);
+    asOf = p.asOf;
+  }
+  if (values.length < 2) return null;
+  let real = 1;
+  for (let i = 1; i < values.length; i++) if (values[i] !== values[i - 1]) real++;
+  return real >= 3 ? { values, asOf } : null;
+}
+
+/** Windows worth offering: those with a chart. */
+export function chartRanges(p: CardPrice | null | undefined, today: string): Range[] {
+  return RANGES.filter((r) => rangeSeries(p, r, today) != null);
+}
