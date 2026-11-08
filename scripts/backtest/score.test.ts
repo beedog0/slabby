@@ -13,7 +13,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { artRead, artSure, combine, printsOf, rankArt, sameSetSize, weakNumber, type ArtHit, type FoundCard } from '../../src/services/artMatch';
+import { ART_MAYBE, artRead, artSure, combine, printsOf, rankArt, sameSetSize, weakNumber, type ArtHit, type FoundCard } from '../../src/services/artMatch';
 import { fitsRead, numberVariants, readName, type ParsedCard } from '../../src/services/cardScan';
 import { readPhoto } from '../../src/services/photoScan';
 import type { CatalogCard } from '../../src/services/search';
@@ -88,6 +88,13 @@ function numberFits(read: ParsedCard, t: Truth): boolean {
   return fitsRead(card, read) || read.numbers.some((n) => numberVariants(n).some((v) => v.split('/')[0] === t.number!.split('/')[0]));
 }
 
+const near = (hits: ArtHit[]) => hits.filter((h) => h.distance <= ART_MAYBE);
+/** combine()'s shaky-number check: a short, closer-look or same-set-size read no near art card fits. */
+function doubted(read: ParsedCard, hits: ArtHit[]): boolean {
+  const shaky = weakNumber(read) || !!read.closeLook || (!!hits[0] && sameSetSize(read, hits[0].card));
+  return shaky && near(hits).length > 0 && !near(hits).some((h) => h.card.number && fitsRead(h.card, read));
+}
+
 run('backtest', async () => {
   const truth = JSON.parse(readFileSync(join(DIR!, 'truth.json'), 'utf8')) as Record<string, Truth>;
   const reads = readFileSync(READS!, 'utf8')
@@ -120,6 +127,9 @@ run('backtest', async () => {
       // combine(): a sure art match overrules a short bare number it doesn't fit.
       outcome = isTruth(top.card, t) ? 'art' : 'wrong';
       detail = `art over number ${first.card.numbers.map((n) => n.num).join(',')}: ${top.card.name} ${top.card.number}`;
+    } else if (first.kind === 'card' && doubted(first.card, hits)) {
+      outcome = numberFits(first.card, t) || near(hits).some((h) => isTruth(h.card, t)) ? 'pick' : 'miss';
+      detail = `asked: number ${first.card.numbers.map((n) => n.num).join(',')} without art`;
     } else if (first.kind === 'card') {
       outcome = numberFits(first.card, t) ? 'number' : 'wrong';
       detail = `number ${first.card.numbers.map((n) => n.num).join(',')}`;
@@ -133,7 +143,10 @@ run('backtest', async () => {
         ms += r.tileMs;
         lat.tiles.push(r.tileMs);
         const again = readPhoto([...r.lines, ...r.tileLines]);
-        if (again.kind === 'card') {
+        if (again.kind === 'card' && doubted({ ...again.card, closeLook: true }, hits)) {
+          outcome = numberFits(again.card, t) || near(hits).some((h) => isTruth(h.card, t)) ? 'pick' : 'miss';
+          detail = `asked: tiles ${again.card.numbers.map((n) => n.num).join(',')} without art`;
+        } else if (again.kind === 'card') {
           outcome = numberFits(again.card, t) ? 'tiles' : 'wrong';
           detail = `tiles ${again.card.numbers.map((n) => n.num).join(',')}`;
         } else if (id.matches.length) {
