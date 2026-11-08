@@ -1,0 +1,118 @@
+// Match imported rows (importCsv.ts) to our card catalog, then turn them into vault cards.
+//
+// A TCGplayer product id is an exact match. Otherwise search by name and number and keep a result
+// only when the number agrees (when the row has one), the language agrees, and the set is the
+// row's set when several printings share the number. Anything unsure stays unmatched: it still
+// imports with the details from the file, and the server matches it like a card added by hand.
+
+import type { Card, Game } from '../types';
+import { cardFromDetails } from './psa';
+import { uuid } from './sync';
+import type { ImportRow } from './importCsv';
+import { cardNumber, catalogCard, displayName, searchCards, type CatalogCard } from './search';
+
+export type Matched = { row: ImportRow; card: CatalogCard | null };
+
+const words = (s: string | null | undefined) =>
+  new Set(
+    (s ?? '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9 ]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w && !['the', 'and', 'of', 'pokemon', 'tcg', 'set', 'japanese', 'english'].includes(w)),
+  );
+
+/** Share of the shorter name's words found in the other, 0 to 1. */
+export function overlap(a: string | null | undefined, b: string | null | undefined): number {
+  const x = words(a);
+  const y = words(b);
+  if (!x.size || !y.size) return 0;
+  const [small, big] = x.size <= y.size ? [x, y] : [y, x];
+  let n = 0;
+  for (const w of small) if (big.has(w)) n++;
+  return n / small.size;
+}
+
+const sameNumber = (a: string | null, b: string | null) => {
+  const x = cardNumber(a).replace(/^0+(?=\d)/, '').toLowerCase();
+  const y = cardNumber(b).replace(/^0+(?=\d)/, '').toLowerCase();
+  return !!x && x === y;
+};
+
+// The catalog is English and Japanese only: a Korean or Chinese card never takes either's price.
+const langOk = (row: ImportRow, c: CatalogCard) =>
+  row.language === 'ja' ? c.language === 'ja' : row.language === 'en' && c.language !== 'ja';
+
+/** The best catalog card for a row among search results, or null when none is a safe match. */
+export function pick(row: ImportRow, found: CatalogCard[], byName = true): CatalogCard | null {
+  let cands = found.filter((c) => langOk(row, c) && (!row.game || c.game === row.game));
+  if (byName) cands = cands.filter((c) => overlap(row.name, displayName(c.name)) >= 0.6);
+  if (row.number) cands = cands.filter((c) => sameNumber(row.number, c.number));
+  if (!cands.length) return null;
+  const scored = cands
+    .map((c) => ({ c, s: overlap(row.setName, c.setName) + (row.setName && c.setCode && words(row.setName).has(c.setCode.toLowerCase()) ? 1 : 0) }))
+    .sort((a, b) => b.s - a.s);
+  // Found by set and number alone: the set has to agree.
+  if (!byName) return scored[0].s >= 0.5 && (scored.length === 1 || scored[0].s > scored[1].s) ? scored[0].c : null;
+  // One left, or the set name clearly picks one: take it.
+  if (scored.length === 1) return row.number || !row.setName || scored[0].s >= 0.5 ? scored[0].c : null;
+  if (scored[0].s >= 0.5 && scored[0].s > scored[1].s) return scored[0].c;
+  return null;
+}
+
+export async function matchRow(row: ImportRow): Promise<CatalogCard | null> {
+  if (row.language !== 'en' && row.language !== 'ja') return null;
+  if (row.productId) {
+    const c = await catalogCard(row.productId).catch(() => null);
+    if (c) return c;
+  }
+  const q = [row.name.replace(/\([^()]*\)/g, ''), row.number ?? ''].join(' ').trim();
+  const hit = pick(row, await searchCards(q, row.game).catch(() => [] as CatalogCard[]));
+  if (hit || !row.number || !row.setName) return hit;
+  // Name spelled differently in the other app: the set and number still find it.
+  return pick(row, await searchCards(`${row.setName} ${row.number}`, row.game).catch(() => [] as CatalogCard[]), false);
+}
+
+/** Match every row, a few at a time, reporting progress for the sheet's "Matching 40 of 120". */
+export async function matchAll(rows: ImportRow[], onProgress?: (done: number) => void, width = 4): Promise<Matched[]> {
+  const out: Matched[] = new Array(rows.length);
+  let next = 0;
+  let done = 0;
+  const worker = async () => {
+    while (next < rows.length) {
+      const i = next++;
+      out[i] = { row: rows[i], card: await matchRow(rows[i]) };
+      onProgress?.(++done);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(width, rows.length) }, worker));
+  return out;
+}
+
+/** Vault cards for one matched row: one per copy. Matched rows take the catalog's name, set and photo. */
+export function cardsFor(m: Matched, plan: Card['plan']): Card[] {
+  const { row, card } = m;
+  const game: Game = card?.game ?? row.game ?? 'pokemon';
+  const base = cardFromDetails({
+    game,
+    cert: row.cert,
+    grader: row.grader,
+    grade: row.grade ?? 10,
+    name: card ? displayName(card.name) : row.name,
+    setName: card?.setName ?? row.setName ?? '',
+    number: card ? cardNumber(card.number) : row.number ?? '',
+    language: row.language,
+    paidCents: row.paidCents,
+    plan,
+    setCode: card?.setCode ?? null,
+    imageFrontUrl: card?.imageUrl ?? null,
+  });
+  const one: Card = {
+    ...base,
+    grade: row.grader === 'raw' ? null : base.grade,
+    ...(row.condition ? { condition: row.condition } : {}),
+  };
+  return Array.from({ length: row.quantity }, (_, i) => (i === 0 ? one : { ...one, id: uuid() }));
+}
