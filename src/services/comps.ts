@@ -6,6 +6,9 @@ import catalogJson from '../mocks/catalog.json';
 import pricesJson from '../mocks/prices.json';
 import { catalogSummary } from '../../supabase/functions/_shared/catalog-math';
 import { cardKey } from '../pricing/cardKey';
+import { fallbackPrice } from '../pricing/estimate';
+import { useEstimates } from '../store/estimates';
+import type { Estimate } from '../../supabase/functions/_shared/estimate-math';
 import { nameFromMatch } from './psa';
 import { usePrices } from '../store/prices';
 import { useVault } from '../store/vault';
@@ -29,14 +32,23 @@ export type CardPrice = {
   lastSaleDay?: string | null;
   /** Sales over 90 days: sales_30d on the last day, 30 and 60 days before it. */
   sales90d?: number;
+  /**
+   * Set only on a card with no price source: 'estimate' = the AI search of sold listings
+   * ("Find a price"), 'own' = the price you typed. Never a comp; screens label it.
+   */
+  source?: 'estimate' | 'own';
+  /** The estimate and its sales, when there is one (also under your own price). */
+  estimate?: Estimate;
 };
 
 const mock = pricesJson as Record<string, CardPrice>;
 
 export function priceFor(card: Card): CardPrice | null {
   const key = cardKey(card);
-  if (!supabase) return card.sealed ? mockSealed(card) : (mock[key] ?? null);
-  return usePrices.getState().byKey[key] ?? null;
+  const real = !supabase ? (card.sealed ? mockSealed(card) : mock[key]) : usePrices.getState().byKey[key];
+  if (real) return real;
+  const { ownByKey, byKey } = useEstimates.getState();
+  return fallbackPrice(ownByKey[key], byKey[key]);
 }
 
 type DailyRow = { card_key: string; day: string; market_cents: number; low_cents: number; high_cents: number; sales_30d: number };

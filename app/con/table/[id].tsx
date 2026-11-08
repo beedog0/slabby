@@ -16,6 +16,7 @@ import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, St
 import { cardLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
 import { LAST_DAY_CUT_PCT, floor as ruleFloor, minFloorOverride } from '../../../src/pricing/rules';
 import { inputsFor } from '../../../src/pricing/portfolio';
+import { sourceWord } from '../../../src/pricing/estimate';
 import { freshnessLine, freshnessWorthShowing, trendSentence, trendVerdict } from '../../../src/pricing/trend';
 import { useCardRow } from '../../../src/pricing/useCardRow';
 import { useCardRefresh } from '../../../src/services/useRefresh';
@@ -195,11 +196,11 @@ export default function BeforeTheTable() {
             <Text style={[type.text, { color: color.secondary, flex: 1 }]}>
               {selling ? (
                 <>
-                  Ask = {raw ? 'TCGplayer' : 'market'} {em(rulePct(rules.askPct))} · {floorWhy}
+                  Ask = {sourceWord(price, raw)} {em(rulePct(rules.askPct))} · {floorWhy}
                 </>
               ) : (
                 <>
-                  Target = {raw ? 'TCGplayer' : 'market'} {em(rulePct(rules.buyTargetPct))} · max = {raw ? 'TCGplayer' : 'market'}{' '}
+                  Target = {sourceWord(price, raw)} {em(rulePct(rules.buyTargetPct))} · max = {sourceWord(price, raw)}{' '}
                   {em(rulePct(rules.buyMaxPct))}
                 </>
               )}

@@ -19,6 +19,7 @@ import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
 import { CardAnalytics } from '../../src/components/search/CardAnalytics';
+import { NoPriceSource } from '../../src/components/estimate/NoPriceSource';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../../src/lib/format';
 import { sealedLabel } from '../../src/lib/sealed';
@@ -51,6 +52,8 @@ export default function SlabDetail() {
   const detail = detailFor(row, days);
   const forSale = card.plan === 'sell';
   const raw = card.grader === 'raw';
+  // No eBay or TCGplayer comps: an AI estimate, your own price, or nothing yet ("Find a price").
+  const noSource = !price || !!price.source;
   const trend = price ? trendSentence(trendVerdict(price, days, { raw }), days, raw) : null;
   const fresh = price ? freshnessLine(price, { raw, state: refresh.pulling ? 'refreshing' : refresh.state }) : null;
 
@@ -66,6 +69,31 @@ export default function SlabDetail() {
     : [game, card.grader === 'raw' ? null : LANGUAGE_NAME[card.language] ?? card.language, gradeLabel(card.grader, card.grade, card.condition)]
     .filter(Boolean)
     .join(' · ');
+
+  // Asking price, with the lowest you'll take under it. Opens Before the table.
+  const askRow =
+    card.status === 'owned' && row.ask != null && row.floor != null ? (
+      <>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Asking price ${money(row.ask)}, lowest you'll take ${money(row.floor)}`}
+          onPress={() => router.push(`/con/table/${card.id}`)}
+          style={({ pressed }) => [styles.compsRow, pressed && { opacity: 0.5 }]}
+        >
+          <View style={{ gap: 2, flex: 1 }}>
+            <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>Asking price</Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>
+              Lowest you'll take <Text style={{ color: color.loss }}>{money(row.floor)}</Text>
+            </Text>
+          </View>
+          <View style={styles.priceLink}>
+            <Text style={[type.body, { color: color.ink }]}>{money(row.ask)}</Text>
+            <Chevron />
+          </View>
+        </Pressable>
+        <Hairline />
+      </>
+    ) : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
@@ -128,7 +156,12 @@ export default function SlabDetail() {
           </View>
         </View>
 
-        {detail ? (
+        {noSource ? (
+          <View style={styles.gutter}>
+            <NoPriceSource card={card} price={price} />
+            {askRow}
+          </View>
+        ) : detail ? (
           <View style={styles.gutter}>
             <View style={{ paddingTop: space.xxl, paddingBottom: space.xl }}>
               <PriceChart
@@ -186,28 +219,7 @@ export default function SlabDetail() {
                 <Hairline />
               </>
             ) : null}
-            {card.status === 'owned' && row.ask != null && row.floor != null ? (
-              <>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Asking price ${money(row.ask)}, lowest you'll take ${money(row.floor)}`}
-                  onPress={() => router.push(`/con/table/${card.id}`)}
-                  style={({ pressed }) => [styles.compsRow, pressed && { opacity: 0.5 }]}
-                >
-                  <View style={{ gap: 2, flex: 1 }}>
-                    <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>Asking price</Text>
-                    <Text style={[type.secondary, { color: color.secondary }]}>
-                      Lowest you'll take <Text style={{ color: color.loss }}>{money(row.floor)}</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.priceLink}>
-                    <Text style={[type.body, { color: color.ink }]}>{money(row.ask)}</Text>
-                    <Chevron />
-                  </View>
-                </Pressable>
-                <Hairline />
-              </>
-            ) : null}
+            {askRow}
           </View>
         ) : (
           <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.xxl }]}>

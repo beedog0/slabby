@@ -104,6 +104,8 @@ export function freshnessLine(p: CardPrice, opts: { raw?: boolean; state?: Refre
 
 /** Whether a quiet screen (Before the table) should show the freshness line: behind or failed. */
 export function freshnessWorthShowing(p: CardPrice, state: RefreshState, now = Date.now()): boolean {
+  // An estimate or your own price isn't refreshed, so it's never "behind".
+  if (p.source) return false;
   return state === 'failed' || isBehind(p, now);
 }
 
@@ -113,6 +115,7 @@ export function freshnessWorthShowing(p: CardPrice, state: RefreshState, now = D
  */
 export function conFreshnessLine(prices: CardPrice[], opts: { failed?: boolean; now?: number } = {}): string | null {
   const { failed = false, now = Date.now() } = opts;
+  prices = prices.filter((p) => !p.source);
   if (!prices.length) return failed ? "Couldn't update prices · pull to refresh" : null;
   const oldest = prices.reduce((a, b) => (ageMs(b, now) > ageMs(a, now) ? b : a));
   if (!failed && !isBehind(oldest, now)) return null;
