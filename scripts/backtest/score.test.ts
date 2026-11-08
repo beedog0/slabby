@@ -13,7 +13,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { artRead, combine, printsOf, rankArt, type ArtHit, type FoundCard } from '../../src/services/artMatch';
+import { artRead, artSure, combine, printsOf, rankArt, weakNumber, type ArtHit, type FoundCard } from '../../src/services/artMatch';
 import { fitsRead, numberVariants, readName, type ParsedCard } from '../../src/services/cardScan';
 import { readPhoto } from '../../src/services/photoScan';
 import type { CatalogCard } from '../../src/services/search';
@@ -32,16 +32,46 @@ type Outcome = 'number' | 'art' | 'tiles' | 'pick' | 'wrong' | 'miss';
 const pct = (a: number[], p: number) => (a.length ? [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))] : NaN);
 const share = (n: number, d: number) => (d ? `${Math.round((100 * n) / d)}%` : '—');
 
+/** POST JSON with Node's https (jest-expo replaces the global fetch with one that has no status or json). */
+function postJson(url: string, headers: Record<string, string>, body: unknown): Promise<unknown> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const https = require('node:https') as typeof import('node:https');
+  const data = JSON.stringify(body);
+  return new Promise((resolve) => {
+    const req = https.request(url, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } }, (res) => {
+      let text = '';
+      res.on('data', (c) => (text += c));
+      res.on('end', () => {
+        if ((res.statusCode ?? 500) >= 300) {
+          console.warn(`match_card_art ${res.statusCode}: ${text.slice(0, 200)}`);
+          return resolve([]);
+        }
+        try {
+          resolve(JSON.parse(text));
+        } catch {
+          resolve([]);
+        }
+      });
+    });
+    req.on('error', (e) => {
+      console.warn(`match_card_art: ${e.message}`);
+      resolve([]);
+    });
+    req.end(data);
+  });
+}
+
 async function matchArt(card: FoundCard): Promise<{ hits: ArtHit[]; ms: number }> {
   const prints = printsOf(card);
   const t = Date.now();
-  const res = await fetch(`${URL}/rest/v1/rpc/match_card_art`, {
-    method: 'POST',
-    headers: { apikey: KEY!, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ face: prints[0].face, art: prints[0].art, face2: prints[1].face, art2: prints[1].art, lim: 24 }),
-  });
-  const rows = res.ok ? await res.json() : [];
-  return { hits: rankArt(rows, prints), ms: Date.now() - t };
+  const rows = (await postJson(`${URL}/rest/v1/rpc/match_card_art`, { apikey: KEY!, Authorization: `Bearer ${KEY}` }, {
+    face: prints[0].face,
+    art: prints[0].art,
+    face2: prints[1].face,
+    art2: prints[1].art,
+    lim: 24,
+  })) as Parameters<typeof rankArt>[0];
+  return { hits: rankArt(Array.isArray(rows) ? rows : [], prints), ms: Date.now() - t };
 }
 
 /** The same card: its product, or the same name and number (a reprint or another listing of it). */
@@ -85,7 +115,12 @@ run('backtest', async () => {
     let ms = r.ocrMs + Math.max(r.cardMs + (art?.ms ?? 0) - r.ocrMs, 0);
     let detail = '';
     const first = readPhoto(r.lines);
-    if (first.kind === 'card') {
+    const top = hits[0];
+    if (first.kind === 'card' && weakNumber(first.card) && top && artSure(hits, found.edge) && !(top.card.number && fitsRead(top.card, first.card))) {
+      // combine(): a sure art match overrules a short bare number it doesn't fit.
+      outcome = isTruth(top.card, t) ? 'art' : 'wrong';
+      detail = `art over number ${first.card.numbers.map((n) => n.num).join(',')}: ${top.card.name} ${top.card.number}`;
+    } else if (first.kind === 'card') {
       outcome = numberFits(first.card, t) ? 'number' : 'wrong';
       detail = `number ${first.card.numbers.map((n) => n.num).join(',')}`;
     } else {

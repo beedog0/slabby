@@ -171,3 +171,17 @@ describe('combine', () => {
     expect(artSure([], true)).toBe(false);
   });
 });
+
+describe('combine with a short bare number', () => {
+  const read: ParsedCard = { numbers: [{ num: '6', total: null }], codes: [], language: null, words: new Set(), name: null };
+  it('lets a sure art match overrule it', () => {
+    const id = combine([{ card: cardOf(9, 'Pikachu', '6'), score: 3 }], { hits: [hit(1, 'Sylveon', 10), hit(2, 'Eevee', 50)], edge: true }, read);
+    expect(id.matches[0].card.productId).toBe(1);
+    expect(id.confident).toBe(true);
+  });
+  it('keeps the number when the art is unsure or agrees', () => {
+    expect(combine([{ card: cardOf(9, 'Pikachu', '6'), score: 3 }], { hits: [hit(1, 'Sylveon', 40)], edge: true }, read).matches[0].card.productId).toBe(9);
+    const full: ParsedCard = { ...read, numbers: [{ num: '6', total: '102' }] };
+    expect(combine([{ card: cardOf(9, 'Pikachu', '6'), score: 3 }], { hits: [hit(1, 'Sylveon', 10)], edge: true }, full).matches[0].card.productId).toBe(9);
+  });
+});

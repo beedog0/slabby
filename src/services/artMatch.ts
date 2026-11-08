@@ -137,6 +137,11 @@ export function nameFits(c: CatalogCard, read: ParsedCard | null): boolean {
 /** Score the art lends a candidate: 0 when it's far, up to 6 when it's the photo. */
 export const artBonus = (distance: number | undefined) => (distance == null ? 0 : Math.max(0, Math.min(6, (ART_MAYBE - distance) / 2.5)));
 
+/** Every number read is short and bare: one or two digits, no set size, no promo code. */
+export function weakNumber(read: ParsedCard | null): boolean {
+  return !!read?.numbers.length && read.numbers.every((n) => !n.total && !n.code && /^\d{1,2}$/.test(n.num));
+}
+
 export type Identified = { matches: CardMatch[]; confident: boolean; byArt: boolean };
 
 /**
@@ -149,6 +154,11 @@ export type Identified = { matches: CardMatch[]; confident: boolean; byArt: bool
 export function combine(byNumber: CardMatch[], art: { hits: ArtHit[]; edge: boolean } | null, read: ParsedCard | null): Identified {
   const hits = art?.hits ?? [];
   const dist = new Map(hits.map((h) => [h.card.productId, h.distance]));
+  // A short bare number ("6", "43": no set size, no code) is easily a misread or another line's
+  // digits. When the art is sure of a card that number didn't find, the art wins.
+  if (byNumber.length && weakNumber(read) && art && artSure(hits, art.edge) && !byNumber.some((m) => m.score === Infinity || m.card.productId === hits[0].card.productId)) {
+    return { matches: [{ card: hits[0].card, score: Infinity }, ...byNumber], confident: true, byArt: true };
+  }
   if (byNumber.length) {
     const matches = byNumber
       .map((m) => ({ card: m.card, score: m.score === Infinity ? Infinity : m.score + artBonus(dist.get(m.card.productId)) }))

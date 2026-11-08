@@ -3,7 +3,7 @@
 // One Piece and Riftbound, their catalog images, and real phone photos of the same cards from
 // eBay listings (sellers' own photos: glare, sleeves, angles, desks).
 //
-//   node scripts/backtest/build-set.mjs <set dir> [--sets 6] [--per-set 3] [--ebay 2] [--seed 1]
+//   node scripts/backtest/build-set.mjs <set dir> [--sets 6] [--per-set 3] [--ebay 2] [--seed 1] [--urls photos.json]
 //
 // Writes <set dir>/truth.json ({ productId: card }), catalog/<id>.jpg and ebay/<id>-e<n>.jpg.
 // Then `slabby-scan synth <set dir>` makes synthetic phone photos from catalog/ (see README).
@@ -108,7 +108,26 @@ async function ebayPhotos(card) {
   return out;
 }
 
-if (EBAY > 0) {
+// Real photos found by hand or in a browser (eBay blocks scripts): { "<productId>": ["https://…jpg"] }.
+// The cards must already be in truth.json (from an earlier run of this script).
+const URLS = (() => {
+  const i = args.indexOf('--urls');
+  return i >= 0 ? args[i + 1] : null;
+})();
+if (URLS) {
+  const list = JSON.parse(readFileSync(URLS, 'utf8'));
+  for (const [id, urls] of Object.entries(list)) {
+    if (!truth[id]) {
+      process.stderr.write(`urls: ${id} isn't in truth.json, skipped\n`);
+      continue;
+    }
+    let n = 0;
+    for (const u of urls) if (await download(u, join(dir, 'ebay', `${id}-u${n}.jpg`))) n++;
+    process.stderr.write(`urls ${truth[id].name}: ${n}\n`);
+  }
+}
+
+if (EBAY > 0 && !URLS) {
   for (const card of Object.values(truth)) {
     try {
       const urls = await ebayPhotos(card);
