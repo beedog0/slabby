@@ -205,6 +205,7 @@ export default function Home() {
     openDropdown(moreRef, [
       [
         { label: 'Con mode', onPress: () => router.push('/con') },
+        { label: 'Price check', onPress: () => router.push({ pathname: '/scan', params: { check: '1' } }) },
         {
           label: 'Sell sheet',
           onPress: () =>

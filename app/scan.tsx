@@ -23,6 +23,11 @@
 // When the text reader can't place it, card-vision reads the photo (src/services/vision.ts) and
 // its transcription goes through the same parsers and catalog match, so names and prices still
 // come from the matched card. A slab read without a grade can't be added from either sheet.
+//
+// Price check (check=1, from Buying mode's scan button or the home menu): the same reads, but the
+// sheet comps someone else's card instead of adding it (src/components/scan/PriceCheck.tsx): grade
+// ladder, how many sales the price rests on, and "They're asking" rated against your buying rules.
+// "Bought for" saves it as a buy; "Add to vault instead" falls back to the normal sheet.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -42,6 +47,8 @@ import { ask as ruleAsk } from '../src/pricing/rules';
 import { useRules } from '../src/store/rules';
 import { useSellDraft, type SellDraft } from '../src/store/sellDraft';
 import { ScanPills, type PillState, type ScanPill } from '../src/components/scan/ScanPills';
+import { PriceCheck, type CheckGrade } from '../src/components/scan/PriceCheck';
+import type { CardPrice } from '../src/services/comps';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
@@ -95,7 +102,12 @@ export default function Scan() {
   const [manual, setManual] = useState('');
   const [cost, setCost] = useState<CostInput>(EMPTY_COST);
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
-  const fromCon = useLocalSearchParams<{ con?: string }>().con === '1';
+  const params = useLocalSearchParams<{ con?: string; check?: string }>();
+  const fromCon = params.con === '1';
+  const priceCheck = params.check === '1';
+  // "Add to vault instead" on a price check: this card gets the normal sheet.
+  const [checkOff, setCheckOff] = useState(false);
+  const checking = priceCheck && !checkOff;
   const [conStatus, setConStatusChoice] = useState<ConStatus>('sale');
   const [soldFor, setSoldFor] = useState('');
   const [lossConfirm, setLossConfirm] = useState(false);
@@ -142,6 +154,8 @@ export default function Scan() {
   // The last card read. Once it's in the vault, auto-read ignores it, so the slab just added (and
   // still in frame after the sheet closes) isn't read again. A tap still reads it.
   const lastRead = useRef<string | null>(null);
+  /** Price check: the loose card just checked, so it isn't read again while it's still in frame. */
+  const lastLoose = useRef<string | null>(null);
   // Where the frame sits on screen, for keeping only the text inside it.
   const frameRect = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const win = useWindowDimensions();
@@ -245,7 +259,7 @@ export default function Scan() {
   // The same cert twice is almost always a re-scan, so Add asks once before saving it again.
   const [confirmAgain, setConfirmAgain] = useState(false);
   /** The last slab added on this visit, and how many so far. */
-  const [added, setAdded] = useState<{ id: string; title: string; count: number } | null>(null);
+  const [added, setAdded] = useState<{ id: string; title: string; count: number; verb?: string } | null>(null);
   useEffect(() => setConfirmAgain(false), [previewKey]);
 
   // Con mode: what you paid from the cost field, else what the vault already has for this cert.
@@ -283,6 +297,31 @@ export default function Scan() {
     openSell({ card, productId, marketCents: price?.marketCents ?? null, askCents, cost: toCost(cost), afterSave }, startSell);
   };
 
+  /** Price check: bought at this price. Saved as a hold with what you paid, then the camera is back up. */
+  const boughtSlab = (cents: number, marketCents: number | null) => {
+    if (result?.status !== 'found') return;
+    Keyboard.dismiss();
+    const card = { ...cardFromCert(result.payload, { paidCents: cents, plan: 'hold' }), boughtConId: session?.id, boughtMarketCents: marketCents };
+    if (art) card.imageFrontUrl = art;
+    add(card);
+    afterSave(card);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setAdded((a) => ({ id: card.id, title: `${rowTitle(card)} · ${money(cents)}`, count: (a?.count ?? 0) + 1, verb: 'Bought' }));
+    setManual('');
+    rescan();
+  };
+  const boughtRaw = (card: Card, cents: number) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setAdded((a) => ({ id: card.id, title: `${card.name} · ${money(cents)}`, count: (a?.count ?? 0) + 1, verb: 'Bought' }));
+    rescan();
+  };
+  // The PSA grade to rate a slab at: whole PSA grades only (BGS/CGC halves have no PSA price).
+  const checkGrade: CheckGrade | null =
+    preview && preview.grader === 'psa' && preview.grade != null && Number.isInteger(preview.grade) && preview.grade >= 1 && preview.grade <= 10
+      ? (`psa${preview.grade}` as CheckGrade)
+      : null;
+  const checkProduct = preview ? ((matched?.key === previewKey ? matched.productId : null) ?? mockProductId(preview)) : null;
+
   const rescan = () => {
     lastCert.current = null;
     auto.current = null;
@@ -298,6 +337,7 @@ export default function Scan() {
     setSoldFor('');
     setLossConfirm(false);
     setRaw(null);
+    setCheckOff(false);
     dropStill();
   };
   const dropStill = () => {
@@ -461,6 +501,7 @@ export default function Scan() {
         // A loose card: two matching reads of its number in a row add it.
         auto.current = step.state;
         const key = cardSteadyKey(loose);
+        if (priceCheck && key && key === lastLoose.current) return;
         const n = loose.numbers[0];
         const steady = !!key && key === lastKey.current;
         const pill = (has: boolean): PillState => (!has ? 'none' : steady ? 'done' : 'seen');
@@ -473,6 +514,7 @@ export default function Scan() {
           lastKey.current = null;
           setSpotted(false);
         } else if (key === lastKey.current) {
+          lastLoose.current = key;
           acceptCard(loose);
         } else {
           if (!lastKey.current) Haptics.selectionAsync().catch(() => {});
@@ -511,6 +553,8 @@ export default function Scan() {
   // The card auto-read just read, now owned (cert match), or with no cert to check by.
   const justAdded = (p: ParsedLabel) => {
     if (readId(p) !== lastRead.current) return false;
+    // A price check never adds the card, so the one just checked (still in frame) isn't read again.
+    if (priceCheck) return true;
     const cert = p.payload.PSACert.CertNumber;
     return !cert || useVault.getState().cards.some((c) => c.certNumber === cert && c.status === 'owned');
   };
@@ -651,9 +695,11 @@ export default function Scan() {
           : addedNote
             ? `${addedNote}. Scan the next slab`
             : added
-              ? `${added.count} added. Scan the next card`
-            : photoMode
-              ? 'Take a photo of the slab or card'
+              ? `${added.count} ${added.verb === 'Bought' ? 'bought' : 'added'}. Scan the next card`
+              : checking
+                ? 'Fit their slab or card in the frame'
+              : photoMode
+                ? 'Take a photo of the slab or card'
             : labelMode
               ? 'Fit the slab or card in the frame'
               : 'Line up the QR or barcode on the back of the slab';
@@ -747,12 +793,12 @@ export default function Scan() {
         {added ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Added ${added.title}. Open it`}
+            accessibilityLabel={`${added.verb ?? 'Added'} ${added.title}. Open it`}
             onPress={() => router.push(`/card/${added.id}`)}
             style={({ pressed }) => [styles.added, pressed && { opacity: 0.7 }]}
           >
             <Text style={[type.text, { color: cam.onInk, flexShrink: 1 }]}>
-              Added · {added.title}
+              {added.verb ?? 'Added'} · {added.title}
             </Text>
             <Text style={[type.text, { color: cam.onInk, fontWeight: '600' }]}>View</Text>
           </Pressable>
@@ -849,7 +895,17 @@ export default function Scan() {
         <Pressable accessibilityLabel="Close keyboard" style={StyleSheet.absoluteFill} onPress={() => Keyboard.dismiss()} />
       ) : null}
 
-      {raw ? <RawSheet raw={raw} setRaw={setRaw} rescan={rescan} bottom={insets.bottom} keyboardH={keyboardH} sheet={sheet} /> : null}
+      {raw ? (
+        <RawSheet
+          raw={raw}
+          setRaw={setRaw}
+          rescan={rescan}
+          bottom={insets.bottom}
+          keyboardH={keyboardH}
+          sheet={sheet}
+          check={checking ? { conId: session?.id, onBought: boughtRaw, onAdd: () => setCheckOff(true) } : null}
+        />
+      ) : null}
 
       {result ? (
         <Animated.View
@@ -942,7 +998,18 @@ export default function Scan() {
                 </>
               )}
               <Hairline />
-              {fromCon ? (
+              {checking ? (
+                <View style={{ paddingTop: space.m }}>
+                  <PriceCheck
+                    productId={checkProduct}
+                    grade={gradeMissing ? null : checkGrade}
+                    fallback={price}
+                    onBought={boughtSlab}
+                    onNext={rescan}
+                    onAdd={() => setCheckOff(true)}
+                  />
+                </View>
+              ) : fromCon ? (
                 <>
                   <CostField value={cost} onChange={setCost} />
                   <Hairline />
@@ -1148,6 +1215,7 @@ function RawSheet({
   bottom,
   keyboardH,
   sheet,
+  check,
 }: {
   raw: RawRead;
   setRaw: (f: (r: RawRead | null) => RawRead | null) => void;
@@ -1156,6 +1224,8 @@ function RawSheet({
   keyboardH: number;
   /** The scan screen's pull-down: drag it anywhere, over the pick list too, to go back to the camera. */
   sheet: ReturnType<typeof useSheetDrag>;
+  /** Price check: comp the card and rate their price instead of adding it. */
+  check: { conId: string | undefined; onBought: (card: Card, cents: number) => void; onAdd: () => void } | null;
 }) {
   const color = useColors();
   const styles = useStyles();
@@ -1203,6 +1273,18 @@ function RawSheet({
     afterSave(card);
     router.replace(`/card/${card.id}`);
   };
+  const buyRaw = (cents: number, marketCents: number | null) => {
+    if (!best || !check) return;
+    Keyboard.dismiss();
+    const card = { ...rawCard(best, cents, 'hold', printSuffix), boughtConId: check.conId, boughtMarketCents: marketCents };
+    add(card);
+    afterSave(card);
+    check.onBought(card, cents);
+  };
+  // The sheet's own price for the print picked, so the ladder's Raw matches the big number.
+  const rawPrice: CardPrice | null = priceCents
+    ? { marketCents: priceCents, lowCents: priceCents, highCents: priceCents, sales30d: 0, asOf: '', series90: [priceCents] }
+    : null;
   const toSell = (askCents: number) => {
     if (!best) return;
     const card = rawCard(best, paidCentsOf(cost), 'sell', printSuffix);
@@ -1388,7 +1470,11 @@ function RawSheet({
             </>
           ) : null}
           <Hairline />
-          {asking ? (
+          {check ? (
+            <View style={{ paddingTop: space.m }}>
+              <PriceCheck productId={best.productId} grade="raw" fallback={rawPrice} onBought={buyRaw} onNext={rescan} onAdd={check.onAdd} />
+            </View>
+          ) : asking ? (
             <View style={{ paddingTop: space.l }}>
               <AskStep
                 marketCents={priceCents}

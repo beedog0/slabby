@@ -136,8 +136,8 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
         <PrimaryButton style={{ flex: 1 }} title="Look up a card" onPress={lookUp} />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Scan a slab"
-          onPress={() => router.push('/scan')}
+          accessibilityLabel="Price check: scan their slab"
+          onPress={() => router.push({ pathname: '/scan', params: { check: '1' } })}
           style={({ pressed }) => [styles.icon, pressed && { opacity: 0.6 }]}
         >
           <ScanIcon />
