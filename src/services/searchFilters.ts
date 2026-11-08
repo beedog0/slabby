@@ -7,8 +7,9 @@ import { displayName, matches, terms, type CatalogCard, type Game } from './sear
 import { supabase } from './supabase';
 import { SEALED_TYPES, typeLabel, type TypeFilter } from '../lib/sealed';
 import { sealedOf } from './search';
+import { ART_TYPES, artLabel, artTypeOf, isArtType, type ArtType } from '../lib/artType';
 
-export type { TypeFilter };
+export type { TypeFilter, ArtType };
 
 export type Sort = 'best' | 'price_high' | 'price_low' | 'name' | 'rise_7d' | 'drop_7d' | 'rise_30d' | 'drop_30d';
 
@@ -35,19 +36,25 @@ export type Query = {
   rarities: string[];
   /** Cards, sealed product, or kinds of sealed (booster box, ETB…). */
   types: TypeFilter[];
+  /** Art type (src/lib/artType.ts): standard, holo, full art, alt art, IR, SIR, secret, promo. */
+  arts?: ArtType[];
   sort: Sort;
 };
 
-export const EMPTY_QUERY: Query = { q: '', game: null, languages: [], sets: [], rarities: [], types: [], sort: 'best' };
+export const EMPTY_QUERY: Query = { q: '', game: null, languages: [], sets: [], rarities: [], types: [], arts: [], sort: 'best' };
+
+/** Every filter off (game and sort stay). */
+export const NO_FILTERS: Partial<Query> = { languages: [], sets: [], rarities: [], types: [], arts: [] };
 
 export const LANGUAGE_NAME: Record<Lang, string> = { en: 'English', ja: 'Japanese' };
 
 /** One applied filter, for the summary chips under the controls. */
-export type Chip = { kind: 'language' | 'set' | 'rarity' | 'type'; key: string; label: string };
+export type Chip = { kind: 'language' | 'set' | 'rarity' | 'type' | 'art'; key: string; label: string };
 
 export function chips(f: Query): Chip[] {
   return [
     ...(f.types ?? []).map((t) => ({ kind: 'type' as const, key: t, label: typeLabel(t) })),
+    ...(f.arts ?? []).map((a) => ({ kind: 'art' as const, key: a, label: artLabel(a) })),
     ...f.languages.map((l) => ({ kind: 'language' as const, key: l, label: LANGUAGE_NAME[l] })),
     ...f.rarities.map((r) => ({ kind: 'rarity' as const, key: r, label: r })),
     ...f.sets.map((x) => ({ kind: 'set' as const, key: String(x.id), label: x.name })),
@@ -58,6 +65,7 @@ export function chips(f: Query): Chip[] {
 export function withoutChip(f: Query, c: Chip): Query {
   if (c.kind === 'language') return { ...f, languages: f.languages.filter((l) => l !== c.key) };
   if (c.kind === 'rarity') return { ...f, rarities: f.rarities.filter((r) => r !== c.key) };
+  if (c.kind === 'art') return { ...f, arts: (f.arts ?? []).filter((a) => a !== c.key) };
   if (c.kind === 'type') return { ...f, types: (f.types ?? []).filter((t) => t !== c.key) };
   return { ...f, sets: f.sets.filter((x) => String(x.id) !== c.key) };
 }
@@ -75,11 +83,13 @@ export type Facets = {
   rarities: { key: string; n: number }[];
   /** 'card' and each sealed kind among the matches. Empty from servers before 0015. */
   types: { key: TypeFilter; n: number }[];
+  /** Art types among the matching singles. Empty from servers before 0020. */
+  arts: { key: ArtType; n: number }[];
 };
 
 /** How many filters are on (the Filter button shows it). Game has its own tabs. */
 export function filterCount(f: Query): number {
-  return f.languages.length + f.sets.length + f.rarities.length + (f.types?.length ?? 0);
+  return f.languages.length + f.sets.length + f.rarities.length + (f.types?.length ?? 0) + (f.arts?.length ?? 0);
 }
 
 /** A query is worth running once it has two characters, or a set to browse. */
@@ -141,13 +151,14 @@ export async function findCards(f: Query): Promise<Found[]> {
     sort: f.sort,
     // Only sent when used, so a server without 0015 still answers every other search.
     ...(f.types?.length ? { type_filter: f.types } : {}),
+    ...(f.arts?.length ? { art_filter: f.arts } : {}),
   });
   if (error) throw error;
   return ((data ?? []) as Row[]).map(fromRow);
 }
 
 export async function findFacets(f: Query): Promise<Facets> {
-  if (!terms(f.q).length) return { languages: [], sets: [], rarities: [], types: [] };
+  if (!terms(f.q).length) return { languages: [], sets: [], rarities: [], types: [], arts: [] };
   if (!supabase) return mockFacets(f);
   const { data, error } = await supabase.rpc('search_cards_facets', {
     q: f.q.trim(),
@@ -159,11 +170,13 @@ export async function findFacets(f: Query): Promise<Facets> {
 }
 
 export function facetsFrom(rows: { kind: string; key: string; label: string; n: number }[]): Facets {
-  const out: Facets = { languages: [], sets: [], rarities: [], types: [] };
+  const out: Facets = { languages: [], sets: [], rarities: [], types: [], arts: [] };
   for (const r of rows) {
     const n = Number(r.n);
     if (r.kind === 'type') {
       if (r.key === 'card' || (SEALED_TYPES as string[]).includes(r.key)) out.types.push({ key: r.key as TypeFilter, n });
+    } else if (r.kind === 'art') {
+      if (isArtType(r.key)) out.arts.push({ key: r.key, n });
     } else if (r.kind === 'language') out.languages.push({ key: r.key, n });
     else if (r.kind === 'set') out.sets.push({ id: Number(r.key), name: r.label, n });
     else if (r.kind === 'rarity') out.rarities.push({ key: r.key, n });
@@ -172,6 +185,8 @@ export function facetsFrom(rows: { kind: string; key: string; label: string; n: 
   // Cards first, then sealed kinds in their fixed order (box, ETB, bundle, pack…).
   const order = (k: string) => (k === 'card' ? -1 : (SEALED_TYPES as string[]).indexOf(k));
   out.types.sort((a, b) => order(a.key) - order(b.key));
+  // Art types keep their fixed order (plain to rarest), not by count, so they don't reshuffle.
+  out.arts.sort((a, b) => ART_TYPES.indexOf(a.key) - ART_TYPES.indexOf(b.key));
   return out;
 }
 
@@ -205,6 +220,7 @@ export function typeMatches(sealedType: string | null | undefined, types: TypeFi
 function mockMatches(c: Mock, f: Query, ignore: 'language' | 'set' | 'rarity' | null = null): boolean {
   if (f.game && c.game !== f.game) return false;
   if (!typeMatches(c.sealedType, f.types)) return false;
+  if (f.arts?.length && (c.sealedType || !f.arts.includes(artTypeOf(c)))) return false;
   if (ignore !== 'language' && f.languages.length && !f.languages.includes(c.language as Lang)) return false;
   if (ignore !== 'set' && f.sets.length && !f.sets.some((x) => x.name === c.setName)) return false;
   if (ignore !== 'rarity' && f.rarities.length && !f.rarities.includes(c.rarity ?? '')) return false;
@@ -245,11 +261,12 @@ function mockFacets(f: Query): Facets {
     }
     for (const [k, v] of m) rows.push({ kind, key: k, label: v.label, n: v.n });
   };
-  const base: Query = { ...f, sets: [], rarities: [], types: [] };
+  const base: Query = { ...f, sets: [], rarities: [], types: [], arts: [] };
   count('language', mockCatalog.filter((c) => mockMatches(c, base, 'language')), (c) => c.language, (c) => c.language);
   const inLang = mockCatalog.filter((c) => mockMatches(c, base));
   count('set', inLang, (c) => String(setId(c.setName)), (c) => c.setName);
   count('rarity', inLang, (c) => c.rarity, (c) => c.rarity ?? '');
+  count('art', inLang.filter((c) => !c.sealedType), (c) => artTypeOf(c), (c) => artTypeOf(c));
   count('type', inLang, (c) => c.sealedType ?? 'card', (c) => c.sealedType ?? 'card');
   return facetsFrom(rows);
 }
