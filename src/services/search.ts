@@ -78,22 +78,6 @@ export const fromRow = (r: Row): CatalogCard => ({
   printings: (r.printings ?? []).map((x) => ({ name: x.name, marketCents: x.market_cents, lowCents: x.low_cents })),
 });
 
-/**
- * Text as search compares it: lowercase, accents off, apostrophes removed, other punctuation a
- * space. "Kai'Sa", "Kai’Sa" (the iPhone's curly apostrophe) and "kaisa" all fold to "kaisa",
- * "Pokémon" to "pokemon", "Ho-Oh" to "ho oh". Same rule as search_fold in
- * 0023_forgiving_search.sql; change both together.
- */
-export function fold(s: string | null | undefined): string {
-  return (s ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/['’‘`´ʼ]/g, '')
-    .replace(/[!-/:-@[-`{-~“”–—…·•\s]+/g, ' ')
-    .trim();
-}
-
 /** Words a search is split into; "#205" and "205/165" both search the number. */
 export function terms(q: string): string[] {
   return fold(q).split(' ').filter(Boolean);
@@ -108,6 +92,22 @@ export function matches(c: Pick<CatalogCard, 'name' | 'setName' | 'setCode' | 'n
   const hay = `${name} ${name.replace(/ /g, '')} ${fold(c.setName)} ${fold(c.setCode)} ${fold(c.number)}`;
   const t = terms(q);
   return t.length > 0 && t.every((w) => hay.includes(w));
+}
+
+/**
+ * Text as search compares it: lowercase, accents off, apostrophes removed, other punctuation a
+ * space. "Kai'Sa", "Kai’Sa" (the iPhone's curly apostrophe) and "kaisa" all fold to "kaisa",
+ * "Pokémon" to "pokemon", "Ho-Oh" to "ho oh". Same rule as search_fold in
+ * 0023_forgiving_search.sql; change both together.
+ */
+export function fold(s: string | null | undefined): string {
+  return (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/['’‘`´ʼ]/g, '')
+    .replace(/[!-/:-@[-`{-~“”–—…·•\s]+/g, ' ')
+    .trim();
 }
 
 /**
