@@ -21,7 +21,6 @@ import { FilterTabs } from '../src/components/collection/FilterTabs';
 import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
-import { GamePills } from '../src/components/collection/GamePills';
 import { effectiveGame, GAMES, gamesIn, inGame, type GameFilter } from '../src/lib/games';
 import type { SlabActions } from '../src/components/collection/actions';
 import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/collection/statusSheets';
@@ -442,9 +441,14 @@ export default function Home() {
                   <Text style={[type.secondary, { color: color.secondary }]}>Hold a slab, then drag it to its spot.</Text>
                 </View>
               ) : (
-                <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
+                <SearchSort
+                  query={query}
+                  onQuery={setQuery}
+                  sort={sort}
+                  onSort={setSort}
+                  game={{ games, value: pickGame, onChange: setGame }}
+                />
               )}
-              {arranging ? null : <GamePills games={games} value={pickGame} onChange={setGame} />}
             </View>
 
             {count === 0 && query ? (
