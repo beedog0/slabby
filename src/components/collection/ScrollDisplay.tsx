@@ -10,6 +10,7 @@ import type React from 'react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { weekChange, type CardRow } from '../../pricing/portfolio';
+import { useDeal } from '../../pricing/useDeal';
 import { size, space, type } from '../../theme/tokens';
 import { useColors } from '../../theme/theme';
 import { prefetchArt } from '../ArtImage';
@@ -258,6 +259,7 @@ function SwipeCaption({ row }: { row: CardRow }) {
   const week = weekChange(row);
   const tint = (cents: number) => ({ color: cents >= 0 ? color.gain : color.loss });
   const made = value != null && card.paidCents != null ? value - card.paidCents : null;
+  const deal = useDeal(card.id);
 
   let line: React.ReactNode;
   if (selling && row.ask != null) {
@@ -275,6 +277,8 @@ function SwipeCaption({ row }: { row: CardRow }) {
     line = (
       <>
         {card.soldAt ? `Sold ${shortDay(card.soldAt)}` : 'Sold'}
+        {/* Sold with others: the deal is the number you remember; this card's share is above. */}
+        {deal ? (deal.totalCents != null ? ` in a ${money(deal.totalCents)} deal` : ` with ${deal.ids.length - 1} more`) : ''}
         {made != null ? (
           <>
             {' · '}

@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { useState, type ReactNode } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { cardLabel, money, pct, rowTitle } from '../../lib/format';
-import { splitTotal } from '../../pricing/split';
+import { dealsByCard } from '../../pricing/deals';
 import { useCardRow, useCardRows } from '../../pricing/useCardRow';
 import { useCon } from '../../store/con';
 import { useVault } from '../../store/vault';
@@ -19,14 +19,19 @@ import { closeMenu, openMenu, type MenuItem } from '../menu/Menu';
 import { PrimaryButton } from '../ui';
 import { paidItem } from './paidSheet';
 import { removeSlabs } from './remove';
+import { openEditDeal, openSoldTogether } from './soldTogether';
 
 type Kind = 'sell' | 'hold' | 'sold' | 'remove';
 
 /** Edit price paid, the status rows, and remove, for a slab's … menu, as two groups. */
 export function statusItems(card: Card, opts: { onRemoved?: () => void } = {}): MenuItem[][] {
   const sold = card.status === 'sold';
+  const inDeal = sold && dealsByCard(useVault.getState().cards).has(card.id);
   const status: MenuItem[] = sold
-    ? [{ label: 'Back to holds', onPress: () => openStatusSheet(card, 'hold') }]
+    ? [
+        ...(inDeal ? [{ label: 'Edit deal split', onPress: () => openEditDeal(card) }] : []),
+        { label: 'Back to holds', onPress: () => openStatusSheet(card, 'hold') },
+      ]
     : [
         ...(card.plan !== 'sell' ? [{ label: 'Put up for sale', onPress: () => openStatusSheet(card, 'sell') }] : []),
         ...(card.plan !== 'hold' ? [{ label: 'Move to holds', onPress: () => openStatusSheet(card, 'hold') }] : []),
@@ -59,7 +64,9 @@ export function openMoveMany(cards: Card[], after?: () => void) {
   if (!cards.length) return;
   const n = cards.length;
   const open = (kind: 'sell' | 'hold' | 'sold') =>
-    openMenu({ title: MANY_TITLE[kind](n), items: [], body: <MoveManyBody ids={cards.map((c) => c.id)} kind={kind} after={after} /> });
+    kind === 'sold'
+      ? openSoldTogether(cards, { after })
+      : openMenu({ title: MANY_TITLE[kind](n), items: [], body: <MoveManyBody ids={cards.map((c) => c.id)} kind={kind as 'sell' | 'hold'} after={after} /> });
   openMenu({
     title: `Move ${n} ${n === 1 ? 'slab' : 'slabs'}`,
     items: [
@@ -294,20 +301,17 @@ function LiveMany({ ids, children }: { ids: string[]; children?: ReactNode }) {
   );
 }
 
-function MoveManyBody({ ids, kind, after }: { ids: string[]; kind: 'sell' | 'hold' | 'sold'; after?: () => void }) {
-  const color = useColors();
+function MoveManyBody({ ids, kind, after }: { ids: string[]; kind: 'sell' | 'hold'; after?: () => void }) {
   const styles = useStyles();
   const rows = useCardRows(ids);
   const update = useVault((s) => s.update);
-  const con = useCon((s) => s.session);
-  const [digits, setDigits] = useState('');
   const n = rows.length;
   const finish = () => {
     after?.();
     done();
   };
 
-  if (kind !== 'sold') {
+  {
     const sell = kind === 'sell';
     const ask = rows.reduce((a, r) => a + (r.ask ?? 0), 0);
     const floor = rows.reduce((a, r) => a + (r.floor ?? 0), 0);
@@ -346,41 +350,7 @@ function MoveManyBody({ ids, kind, after }: { ids: string[]; kind: 'sell' | 'hol
     );
   }
 
-  // Sold together: one total, split across the slabs by market price so each keeps a fair share.
-  const total = digits ? parseInt(digits, 10) * 100 : null;
-  const paid = rows.reduce((a, r) => a + (r.card.paidCents ?? 0), 0);
-  const vsPaid = total != null && paid ? total - paid : null;
-  const save = () =>
-    closeMenu(() => {
-      const shares = total != null ? splitTotal(total, rows.map((r) => r.price?.marketCents ?? null)) : null;
-      const at = new Date().toISOString();
-      rows.forEach((r, i) =>
-        update(r.card.id, { status: 'sold', soldCents: shares ? shares[i] : null, soldAt: at, soldWhere: con?.name ?? null }),
-      );
-      finish();
-    });
-  return (
-    <View>
-      <LiveMany ids={ids} />
-      <View style={styles.amount}>
-        <Text style={[type.text, styles.muted]}>Sold together for</Text>
-        <Text style={[type.displayS, { color: total != null ? color.ink : color.secondary }]}>{total != null ? money(total) : '$0'}</Text>
-        <Text style={[type.secondary, { color: vsPaid == null ? color.secondary : vsPaid >= 0 ? color.gain : color.loss }]}>
-          {vsPaid != null ? `${vsPaid >= 0 ? '+' : ''}${money(vsPaid)} vs paid` : total == null ? 'Type the total, or leave it blank' : ' '}
-        </Text>
-      </View>
-      <View style={styles.pad}>
-        <Keypad
-          onDigit={(d) => setDigits((v) => (v.length >= 7 || (!v && d === '0') ? v : v + d))}
-          onBackspace={() => setDigits((v) => v.slice(0, -1))}
-        />
-      </View>
-      <Text style={[type.secondary, styles.note, { paddingTop: 0, paddingBottom: space.m }]}>
-        The total is split across them by market price.
-      </Text>
-      <PrimaryButton title={total != null ? `Mark ${n} sold for ${money(total)}` : `Mark ${n} sold, price not set`} onPress={save} />
-    </View>
-  );
+  return null;
 }
 
 const useStyles = themed((color) => StyleSheet.create({

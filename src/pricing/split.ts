@@ -18,3 +18,30 @@ export function splitTotal(totalCents: number, weights: (number | null)[]): numb
   for (let k = 0; left > 0; k = (k + 1) % n, left--) parts[order[k][1]] += 1;
   return parts;
 }
+
+/**
+ * A deal's split after you've typed some cards' shares yourself. `fixed[i]` is a share you set
+ * (or null to let it follow the market). The cards you didn't set share what's left of the total
+ * by market. Whole-dollar totals split into whole dollars, so nobody's share reads $133.33.
+ * When every card is set, the shares are what you typed (they may no longer add up to `total`;
+ * the sheet says so).
+ */
+export function splitDeal(totalCents: number, weights: (number | null)[], fixed: (number | null)[] = []): number[] {
+  const n = weights.length;
+  const isFixed = (i: number) => fixed[i] != null;
+  const set = weights.reduce<number>((a, _, i) => a + (isFixed(i) ? fixed[i]! : 0), 0);
+  const free = weights.map((_, i) => i).filter((i) => !isFixed(i));
+  const left = Math.max(0, totalCents - set);
+  const dollars = left % 100 === 0;
+  const parts = free.length ? splitTotal(dollars ? left / 100 : left, free.map((i) => weights[i])) : [];
+  const out = new Array<number>(n);
+  for (let i = 0; i < n; i++) if (isFixed(i)) out[i] = fixed[i]!;
+  free.forEach((i, k) => (out[i] = dollars ? parts[k] * 100 : parts[k]));
+  return out;
+}
+
+/** The most one card's share can be: the total less what you've set for the other cards. */
+export function maxShare(totalCents: number, fixed: (number | null)[], index: number): number {
+  const others = fixed.reduce<number>((a, f, i) => a + (i !== index && f != null ? f : 0), 0);
+  return Math.max(0, totalCents - others);
+}
