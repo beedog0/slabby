@@ -20,6 +20,8 @@ import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
+import { FindPriceRow } from '../../src/components/estimate/FindPriceRow';
+import { cardForSearch } from '../../src/services/estimate';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
 import type { Found } from '../../src/services/searchFilters';
@@ -285,6 +287,7 @@ export default function SearchedCard() {
                   {price && !quiet ? thinLine(price) : emptyLine(pick, prices, otherGame, quiet ? price : null)}
                 </Text>
                 {prices === null ? <TryAgain onPress={() => setAttempt((n) => n + 1)} /> : null}
+                {canEstimate(pick, prices, price, ready.game) ? <FindPriceRow card={cardForSearch(ready, pick)} /> : null}
               </>
             )}
           </View>
@@ -369,6 +372,17 @@ function thinLine(p: CardPrice & { points?: number; since?: string }): string {
   const n = realPoints(p);
   const since = p.since ? ` since ${fmtDay(p.since)}` : '';
   return `${n <= 1 ? 'One price' : `Only ${n} prices`}${since}. The chart starts once there are a few more.`;
+}
+
+/**
+ * A grade with no real price can search sold listings for an estimate. Not when the price
+ * service is only paused or unreachable for a Pokémon grade (the real price comes back), and not
+ * for a quiet grade, which still has its last price.
+ */
+function canEstimate(pick: Choice, prices: SearchPrices | null | undefined, price: CardPrice | null | undefined, game: string): boolean {
+  if (!prices || price) return false;
+  if (pick !== 'raw' && game === 'pokemon' && prices.source === 'catalog') return false;
+  return true;
 }
 
 function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string | null, quiet: CardPrice | null | undefined): string {

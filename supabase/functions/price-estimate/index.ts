@@ -1,6 +1,8 @@
 // price-estimate: find a price for a card that has no price source (Korean and Chinese promos,
 // old JP promos TCGplayer has no market for). Runs only when the user taps "Find a price".
-// Body: { cardKey, name, setName, setCode, number, language, grader, grade, year, variety }.
+// Body: { cardKey, game, name, setName, setCode, number, language, grader, grade, year, variety }.
+// Also used for any card and grade with no real price (a PSA 10 nobody sold in six months, graded
+// One Piece and Riftbound), with eBay sold listings searched first.
 //
 // A model runs a few web searches for recent sold listings (eBay, PriceCharting, SNKRDUNK, Korean
 // and Chinese marketplaces) and reports each sale it found. The server keeps only sales whose link
@@ -55,8 +57,11 @@ const Answer = z.object({ sales: z.array(Sale) });
 
 const LANGUAGE: Record<string, string> = { en: 'English', ja: 'Japanese', ko: 'Korean', zh: 'Chinese', id: 'Indonesian' };
 
+const GAME: Record<string, string> = { pokemon: 'Pokémon', onepiece: 'One Piece Card Game', riftbound: 'Riftbound (League of Legends TCG)' };
+
 type CardBody = {
   cardKey: string;
+  game: string;
   name: string;
   setName: string | null;
   setCode: string | null;
@@ -77,6 +82,7 @@ function readBody(b: unknown): CardBody | null {
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   return {
     cardKey: o.cardKey,
+    game: typeof o.game === 'string' && GAME[o.game] ? o.game : 'pokemon',
     name: o.name.trim(),
     setName: str(o.setName),
     setCode: str(o.setCode),
@@ -102,11 +108,11 @@ function prompt(c: CardBody): string {
     `Language: ${lang}`,
     `Condition: ${grade}`,
   ].filter(Boolean);
-  return `Find what this Pokémon card has actually sold for recently.
+  return `Find what this ${GAME[c.game]} card has actually sold for recently.
 
 ${lines.join('\n')}
 
-Search the web for completed or sold listings of exactly this card in this language and this grade: eBay sold listings, PriceCharting, SNKRDUNK, 130point, Card Ladder, and marketplaces in the card's own country (for Korean cards: Bunjang, Naver, Danggeun; for Chinese cards: Xianyu, Taobao). Search in the card's language as well as English, using the card's name in that language.
+Search the web for completed or sold listings of exactly this card in this language and this grade. Start with eBay sold listings (and 130point, which mirrors them), then PriceCharting, SNKRDUNK, Card Ladder, and marketplaces in the card's own country (for Korean cards: Bunjang, Naver, Danggeun; for Chinese cards: Xianyu, Taobao). Search in the card's language as well as English, using the card's name in that language.
 
 Report each individual sale you found, with the link to the page that shows it.
 - Only this exact card: same language (a ${lang} card is never priced from a Japanese or English copy), same card number, same grader and grade.
