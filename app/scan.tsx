@@ -20,7 +20,8 @@
 //
 // Photo mode (Live / Photo under the button): tap the shutter, or pick a photo from the camera
 // roll, and the whole still is read once (src/services/photoScan.ts), no frame and no second read.
-// When the text reader can't place it, card-vision reads the photo (src/services/vision.ts) and
+// When the text reader can't place it and "AI backup read" is on (off by default, under the
+// switch), card-vision reads the photo (src/services/vision.ts) and
 // its transcription goes through the same parsers and catalog match, so names and prices still
 // come from the matched card. A slab read without a grade can't be added from either sheet.
 //
@@ -67,6 +68,7 @@ import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type A
 import { useVault } from '../src/store/vault';
 import { readPhoto } from '../src/services/photoScan';
 import { readPhotoWithVision } from '../src/services/vision';
+import { useScanPrefs } from '../src/store/scanPrefs';
 import { LabelReader } from '../modules/label-reader';
 import type { Card } from '../src/types';
 import { light, radius, size, space, type } from '../src/theme/tokens';
@@ -167,6 +169,9 @@ export default function Scan() {
   // Photo mode: the still being read, shown in place of the camera until the sheet is put away.
   const [still, setStill] = useState<string | null>(null);
   const [looking, setLooking] = useState(false);
+  // AI backup read: off unless switched on, so the on-device read can be judged by itself.
+  const aiBackup = useScanPrefs((s) => s.aiBackup);
+  const setAiBackup = useScanPrefs((s) => s.setAiBackup);
   const stillOwned = useRef(false);
 
   const handle = async (data: string) => {
@@ -575,7 +580,7 @@ export default function Scan() {
         .catch(() => ({ kind: 'miss' as const, seen: '' }));
       // The text reader couldn't place it (far away, glare, a number it can't see): the vision
       // fallback looks at the whole card. Same parsers and catalog match after that.
-      if (r.kind === 'miss') {
+      if (r.kind === 'miss' && useScanPrefs.getState().aiBackup) {
         setLooking(true);
         const seenByVision = await readPhotoWithVision(uri);
         if (seenByVision && seenByVision.kind !== 'miss') r = seenByVision;
@@ -670,7 +675,7 @@ export default function Scan() {
   // slab fits between the nav and the button. The picture outside it is dimmed.
   const slabRatio = size.heroH / size.heroW;
   // Below the frame: the hint, the button (or shutter) and the Live / Photo switch.
-  const frameRoom = win.height - (insets.top + space.s + NAV_H + space.xl) - (insets.bottom + space.l + size.button + space.xxxl * 2 + space.xl + size.touch + space.m);
+  const frameRoom = win.height - (insets.top + space.s + NAV_H + space.xl) - (insets.bottom + space.l + size.button + space.xxxl * 2 + space.xl + size.touch + space.m) - (photoMode ? size.shutter - size.button + size.touch : 0);
   const frameW = labelMode ? Math.round(Math.min(win.width * 0.66, frameRoom / slabRatio)) : 240;
   const frameH = labelMode ? Math.round(frameW * slabRatio) : frameW;
   const labelH = Math.round(frameH * LABEL_SHARE);
@@ -887,6 +892,20 @@ export default function Scan() {
               </Pressable>
             ))}
           </View>
+          {photoMode && supabase ? (
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: aiBackup }}
+              accessibilityLabel="AI backup read"
+              disabled={reading || locked}
+              onPress={() => setAiBackup(!aiBackup)}
+              style={styles.modeBtn}
+            >
+              <Text style={[type.secondary, { color: color.onInk, opacity: 0.7, textAlign: 'center' }]}>
+                AI backup read · <Text style={{ fontWeight: '600', opacity: 1 }}>{aiBackup ? 'On' : 'Off'}</Text>
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
