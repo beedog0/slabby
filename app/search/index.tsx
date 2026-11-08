@@ -15,6 +15,7 @@ import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSw
 import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
+import { CardName } from '../../src/components/CardName';
 import { buyPrices, cardNumber, displayName, type Game } from '../../src/services/search';
 import {
   catalogProgress,
@@ -464,11 +465,9 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
         {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}
       </View>
       <View style={{ gap: 2, paddingTop: space.m }}>
-        <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
-          {displayName(card.name)}
-        </Text>
+        <CardName name={displayName(card.name)} language={card.language} style={[type.text, { color: color.ink, fontWeight: '500' }]} />
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-          {[no && `#${no}`, card.language === 'ja' ? 'JP' : null, card.setName].filter(Boolean).join(' · ')}
+          {[no && `#${no}`, card.setName].filter(Boolean).join(' · ')}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           raw <Text style={{ color: color.ink }}>{card.marketCents != null ? money(card.marketCents) : '—'}</Text>
@@ -487,7 +486,7 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
 function ResultRow({ card, con, rules, change, days }: { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number }) {
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
-  const sub = [card.setName, no && `#${no}`, card.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
+  const sub = [card.setName, no && `#${no}`].filter(Boolean).join(' · ');
   return (
     <Pressable
       accessibilityRole="button"
@@ -496,9 +495,7 @@ function ResultRow({ card, con, rules, change, days }: { card: Found; con: boole
     >
       <View style={styles.thumb}>{card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}</View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
-          {displayName(card.name)}
-        </Text>
+        <CardName name={displayName(card.name)} language={card.language} style={[type.body, { color: color.ink }]} />
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {sub}
         </Text>

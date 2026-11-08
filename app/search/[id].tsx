@@ -19,6 +19,7 @@ import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
+import { CardName } from '../../src/components/CardName';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
@@ -166,7 +167,7 @@ export default function SearchedCard() {
   const hist = history(price);
   const change = hist && !quiet ? hist.change : null;
   const no = cardNumber(ready.number);
-  const detail = [no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
+  const detail = no ? `#${no}` : '';
   const openSet = () => openSetPage(ready, groupId);
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
   const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
@@ -191,9 +192,7 @@ export default function SearchedCard() {
 
         <View style={styles.titleRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={2} style={[type.title, { color: color.ink }]}>
-              {displayName(ready.name)}
-            </Text>
+            <CardName name={displayName(ready.name)} language={ready.language} numberOfLines={2} large style={[type.title, { color: color.ink }]} />
             <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
               {/* The set name opens the whole set. */}
               <Text onPress={openSet} accessibilityRole="link" style={{ color: color.ink }}>

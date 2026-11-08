@@ -12,7 +12,8 @@ import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-nat
 import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { color, size, space, type } from '../../theme/tokens';
 import { prefetchArt } from '../ArtImage';
-import { cardLabel, langTag, money, pct, rowTitle } from '../../lib/format';
+import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
+import { LangBadge } from '../CardName';
 import { SlabView } from '../SlabView';
 import { CopiesMark, PinMark } from './PinMark';
 
@@ -294,15 +295,14 @@ function SwipeCaption({ row }: { row: CardRow }) {
 
   return (
     <View style={{ alignItems: 'center' }}>
-      <Text numberOfLines={1} style={[type.body, ink]}>
-        {rowTitle(card)}
-        {/* Graded slabs show their grade on the label; raw cards say so here. */}
-        {card.grader === 'raw' ? (
-          <Text style={muted}>{` · ${cardLabel(card)}`}</Text>
-        ) : langTag(card.language) ? (
-          <Text style={muted}>{` · ${langTag(card.language)}`}</Text>
-        ) : null}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, maxWidth: '100%' }}>
+        <Text numberOfLines={1} style={[type.body, ink, { flexShrink: 1 }]}>
+          {rowTitle(card)}
+          {/* Graded slabs show their grade on the label; raw cards say so here. */}
+          {card.grader === 'raw' ? <Text style={muted}>{` · ${gradeLabel(card.grader, card.grade, card.condition)}`}</Text> : null}
+        </Text>
+        <LangBadge language={card.language} />
+      </View>
       <Text numberOfLines={1} style={[type.rowPrice, ink, { paddingTop: space.xs }]}>
         {value != null ? money(value) : '—'}
         {week ? (
