@@ -17,11 +17,12 @@ import type { Card } from '../../types';
 import { Keypad } from '../Keypad';
 import { closeMenu, openMenu, type MenuItem } from '../menu/Menu';
 import { PrimaryButton } from '../ui';
+import { paidItem } from './paidSheet';
 import { removeSlabs } from './remove';
 
 type Kind = 'sell' | 'hold' | 'sold' | 'remove';
 
-/** The status and remove rows for a slab's … menu, as two groups. */
+/** Edit price paid, the status rows, and remove, for a slab's … menu, as two groups. */
 export function statusItems(card: Card, opts: { onRemoved?: () => void } = {}): MenuItem[][] {
   const sold = card.status === 'sold';
   const status: MenuItem[] = sold
@@ -31,7 +32,7 @@ export function statusItems(card: Card, opts: { onRemoved?: () => void } = {}): 
         ...(card.plan !== 'hold' ? [{ label: 'Move to holds', onPress: () => openStatusSheet(card, 'hold') }] : []),
         { label: 'Mark sold', onPress: () => openStatusSheet(card, 'sold') },
       ];
-  return [status, [{ label: 'Remove from vault', onPress: () => openStatusSheet(card, 'remove', opts.onRemoved) }]];
+  return [[paidItem(card), ...status], [{ label: 'Remove from vault', onPress: () => openStatusSheet(card, 'remove', opts.onRemoved) }]];
 }
 
 export function openStatusSheet(card: Card, kind: Kind, after?: () => void) {

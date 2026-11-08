@@ -13,6 +13,7 @@ import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { shareSlab } from '../../src/components/share/ShareCard';
 import { openSlabMenu } from '../../src/components/menu/Menu';
+import { openPaidSheet } from '../../src/components/collection/paidSheet';
 import { statusItems } from '../../src/components/collection/statusSheets';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
@@ -99,17 +100,28 @@ export default function SlabDetail() {
             <Text style={[type.title, { color: color.ink, fontVariant: ['tabular-nums'] }]}>
               {price ? money(price.marketCents) : '—'}
             </Text>
-            {detail?.gainCents != null && card.paidCents != null ? (
-              <Text style={[type.text, { color: color.secondary, fontVariant: ['tabular-nums'] }]}>
-                <Text style={{ color: detail.gainCents >= 0 ? color.gain : color.loss }}>
-                  {detail.gainCents >= 0 ? '+' : '−'}
-                  {money(Math.abs(detail.gainCents))}
+            {/* Tap the paid line to change what you paid (or add it). */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint="Edit price paid"
+              hitSlop={space.m}
+              onPress={() => openPaidSheet(card)}
+              style={({ pressed }) => pressed && { opacity: 0.5 }}
+            >
+              {detail?.gainCents != null && card.paidCents != null ? (
+                <Text style={[type.text, { color: color.secondary, fontVariant: ['tabular-nums'] }]}>
+                  <Text style={{ color: detail.gainCents >= 0 ? color.gain : color.loss }}>
+                    {detail.gainCents >= 0 ? '+' : '−'}
+                    {money(Math.abs(detail.gainCents))}
+                  </Text>
+                  {' · '}paid {money(card.paidCents)}
                 </Text>
-                {' · '}paid {money(card.paidCents)}
-              </Text>
-            ) : card.paidCents != null ? (
-              <Text style={[type.text, { color: color.secondary }]}>paid {money(card.paidCents)}</Text>
-            ) : null}
+              ) : card.paidCents != null ? (
+                <Text style={[type.text, { color: color.secondary }]}>paid {money(card.paidCents)}</Text>
+              ) : (
+                <Text style={[type.text, { color: color.secondary }]}>Add price paid</Text>
+              )}
+            </Pressable>
           </View>
         </View>
 
