@@ -31,3 +31,47 @@ export function readPhoto(lines: (LabelLine | string)[]): PhotoRead {
       .join(' · '),
   };
 }
+
+/** What card-vision wrote down from a photo (supabase/functions/card-vision). */
+export type VisionRead = {
+  kind: 'slab' | 'card' | 'none';
+  labelLines?: string[];
+  name?: string | null;
+  englishName?: string | null;
+  number?: string | null;
+  setCode?: string | null;
+  language?: 'en' | 'ja' | 'ko' | 'zh' | 'other' | null;
+};
+
+/**
+ * Turn the vision model's transcription into the same reads a live scan makes. A slab's label
+ * lines go through the label parser; a loose card's number goes through the card-number parser,
+ * and its name is only a search hint (the sheet names the card from the catalog match). A card
+ * with a name but no readable number still opens, so the sheet can offer cards by that name.
+ */
+export function fromVision(v: VisionRead | null): PhotoRead {
+  if (!v || v.kind === 'none') return { kind: 'miss', seen: '' };
+  if (v.kind === 'slab') {
+    const lines = (v.labelLines ?? []).filter((l) => l.trim());
+    const label = parseLabel(lines);
+    return label?.payload.PSACert.Subject ? { kind: 'slab', label } : { kind: 'miss', seen: lines.slice(0, 4).join(' · ') };
+  }
+  const name = (v.englishName || v.name || '').trim() || null;
+  const code = (v.setCode ?? '').trim().toUpperCase();
+  const numberLine = [code, (v.number ?? '').trim()].filter(Boolean).join(' ');
+  const parsed = numberLine ? parseCardText([numberLine]) : null;
+  if (!parsed?.numbers.length && !name) return { kind: 'miss', seen: '' };
+  const words = new Set(parsed?.words ?? []);
+  for (const w of (name ?? '').toUpperCase().split(/[^A-Z0-9'é.-]+/i)) if (w.length >= 2) words.add(w);
+  const language = v.language && v.language !== 'other' ? v.language : (parsed?.language ?? null);
+  return {
+    kind: 'card',
+    card: {
+      numbers: parsed?.numbers ?? [],
+      codes: [...new Set([...(parsed?.codes ?? []), ...(code ? [code] : [])])],
+      language,
+      words,
+      name,
+    },
+  };
+}

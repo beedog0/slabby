@@ -17,6 +17,12 @@
 // catalog) with where that ask sits against market and a rating against what you paid. "What you
 // paid" also takes "Pulled it" (rated against the set's pack price, else $0) or "Not sure".
 // After an add the camera stays up for the next card, with a line at the top to open the one just added; X closes.
+//
+// Photo mode (Live / Photo under the button): tap the shutter, or pick a photo from the camera
+// roll, and the whole still is read once (src/services/photoScan.ts), no frame and no second read.
+// When the text reader can't place it, card-vision reads the photo (src/services/vision.ts) and
+// its transcription goes through the same parsers and catalog match, so names and prices still
+// come from the matched card. A slab read without a grade can't be added from either sheet.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -53,6 +59,7 @@ import { usePrices } from '../src/store/prices';
 import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
 import { readPhoto } from '../src/services/photoScan';
+import { readPhotoWithVision } from '../src/services/vision';
 import { LabelReader } from '../modules/label-reader';
 import type { Card } from '../src/types';
 import { color, radius, size, space, type } from '../src/theme/tokens';
@@ -133,6 +140,7 @@ export default function Scan() {
   const photoMode = labelMode && mode === 'photo';
   // Photo mode: the still being read, shown in place of the camera until the sheet is put away.
   const [still, setStill] = useState<string | null>(null);
+  const [looking, setLooking] = useState(false);
   const stillOwned = useRef(false);
 
   const handle = async (data: string) => {
@@ -496,14 +504,22 @@ export default function Scan() {
     setReading(true);
     setLabelMiss(false);
     try {
-      const r = readPhoto(await LabelReader.recognize(uri));
+      let r = await LabelReader.recognize(uri)
+        .then(readPhoto)
+        .catch(() => ({ kind: 'miss' as const, seen: '' }));
+      // The text reader couldn't place it (far away, glare, a number it can't see): the vision
+      // fallback looks at the whole card. Same parsers and catalog match after that.
+      if (r.kind === 'miss') {
+        setLooking(true);
+        const seenByVision = await readPhotoWithVision(uri);
+        if (seenByVision && seenByVision.kind !== 'miss') r = seenByVision;
+      }
       if (r.kind === 'slab') return accept(r.label);
       if (r.kind === 'card') return acceptCard(r.card);
       setSeen(r.seen);
-    } catch {
-      setSeen('');
     } finally {
       setReading(false);
+      setLooking(false);
     }
     setLabelMiss(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
@@ -598,6 +614,8 @@ export default function Scan() {
     ? 'Got it'
     : busy
     ? 'Checking with PSA'
+    : looking
+      ? 'Looking closer'
     : reading
       ? 'Reading'
       : labelMiss
