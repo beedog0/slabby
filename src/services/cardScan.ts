@@ -55,6 +55,11 @@ const JP_PROMO = /(?<![A-Z0-9])(\d{1,3})\/((?:SV|SM|XY|BW|DP|S|M|30TH)-?P)(?![A-
 // One Piece (OP05-119, ST01-012, EB01-001, PRB01-001, P-001), Riftbound (OGN-301), Pokémon
 // Japanese-style S-P without a number ahead.
 const DASH = /(?<![A-Z0-9])((?:OP|ST|EB|PRB)\d{2}-\d{3}|P-\d{3}|[A-Z]{3}-\d{3})(?![0-9])/g;
+// Riftbound runes from Radiance on print R01–R06 (R01a, R01b, R01c for alt arts and promos), with
+// no set size. Only read on a card that says Rune or carries a Riftbound set code, since "R01" alone
+// could be anything.
+const RUNE = /(?<![A-Z0-9])(R0[1-9][ABC]?)(?![A-Z0-9])/g;
+const RIFTBOUND = /\bRUNE\b|(?<![A-Z0-9])(OGN|RAD|SFD|OPP|VEN|OGS)(?![A-Z0-9])/;
 // English black star promos with the code fused to the number: SWSH123, SM100, XY67, BW04,
 // HGSS01, DP45. (Wizards and Nintendo promos print a bare number; too ambiguous to read alone.)
 const PROMO = /(?<![A-Z0-9])((?:SWSH|HGSS|SM|XY|BW|DP)\d{2,3})(?![0-9])/g;
@@ -142,6 +147,7 @@ export function parseCardText(input: (LabelLine | string)[]): ParsedCard | null 
     if (!NOT_CODES.has(c) && !codes.includes(c)) codes.push(c);
   };
 
+  const rift = texts.some((t) => RIFTBOUND.test(t.toUpperCase()));
   for (const raw of texts) {
     for (const w of raw.toUpperCase().split(/[^A-Z0-9'é.-]+/i)) if (w.length >= 2) words.add(w.toUpperCase());
     const t = fixDigits(raw);
@@ -165,6 +171,11 @@ export function parseCardText(input: (LabelLine | string)[]): ParsedCard | null 
       push({ num: m[1], total: null });
       found = true;
     }
+    if (rift)
+      for (const m of up.matchAll(RUNE)) {
+        push({ num: m[1], total: null });
+        found = true;
+      }
     for (const m of up.matchAll(PROMO)) {
       push({ num: m[1], total: null });
       found = true;

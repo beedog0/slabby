@@ -255,6 +255,14 @@ describe('card number formats', () => {
     expect(first(['OGN-301'])).toEqual({ num: 'OGN-301', total: null });
   });
 
+  it('Riftbound runes: R01 on a rune, never R01 alone', () => {
+    expect(first(['Calm Rune', 'RAD • R01'])).toEqual({ num: 'R01', total: null });
+    expect(first(['Fury Rune', 'R03A'])).toEqual({ num: 'R03A', total: null });
+    expect(numberVariants({ num: 'R03A', total: null })).toContain('R03a');
+    expect(first(['Fury Rune', 'OGN • 007a/298'])).toEqual({ num: '007A', total: '298' });
+    expect(parseCardText(['Route R01', 'Pikachu'])).toBeNull();
+  });
+
   it('never takes attack damage or HP for a number', () => {
     expect(parseCardText(['Snivy', 'HP 60', 'Vine Whip 20', 'Razor Shell 10+', 'weakness x2'])).toBeNull();
   });

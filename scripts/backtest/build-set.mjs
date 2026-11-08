@@ -63,7 +63,9 @@ for (const cat of CATEGORIES) {
   const groups = await results(`/${cat.id}/groups`);
   for (const g of pick(groups, SETS)) {
     const products = (await results(`/${cat.id}/${g.groupId}/products`)).filter((p) => ext(p, 'Number'));
-    for (const p of pick(products, PER_SET)) {
+    // Riftbound runes (basic resource cards, R01–R06 or 007/298, little text) always get two places.
+    const runes = cat.game === 'riftbound' ? pick(products.filter((p) => /\brune\b/i.test(p.name)), 2) : [];
+    for (const p of [...runes, ...pick(products.filter((x) => !runes.includes(x)), PER_SET)]) {
       const card = {
         productId: p.productId,
         game: cat.game,

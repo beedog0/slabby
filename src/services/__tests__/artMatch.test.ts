@@ -198,3 +198,19 @@ describe('combine with a digit misread in the right set', () => {
     expect(combine([{ card: other, score: 3 }], { hits: [{ card: elsewhere, distance: 9 }], edge: true }, read).matches[0].card.productId).toBe(9);
   });
 });
+
+describe('combine with the same card in two sets', () => {
+  // Magikarp 203/193: Paldea Evolved, and the 30th Celebration reprint with the anniversary stamp.
+  const plain = { ...cardOf(497606, 'Magikarp - 203/193', '203/193', 'PAL'), setName: 'SV02: Paldea Evolved', marketCents: 29160 };
+  const stamped = { ...cardOf(716210, 'Magikarp', '203/193', 'M30'), setName: 'ME: 30th Celebration Classic Collection', marketCents: 6932 };
+  const byNumber = [{ card: plain, score: 3 }, { card: stamped, score: 3 }];
+  it('takes the one the art is clearly nearer', () => {
+    const id = combine(byNumber, { hits: [{ card: stamped, distance: 14 }, { card: plain, distance: 22 }], edge: true }, noRead);
+    expect(id.matches[0].card.productId).toBe(716210);
+    expect(id.confident).toBe(true);
+  });
+  it('asks when the art can’t separate them', () => {
+    expect(combine(byNumber, { hits: [{ card: stamped, distance: 14 }, { card: plain, distance: 16 }], edge: true }, noRead).confident).toBe(false);
+    expect(combine(byNumber, null, noRead).confident).toBe(false);
+  });
+});
