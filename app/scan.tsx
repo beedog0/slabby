@@ -637,22 +637,24 @@ export default function Scan() {
         if (id.confident) return acceptCard(read, Promise.resolve(seen), id);
         if (id.matches.length) byArt = { read, id, art: seen };
       }
-      // No label or number yet: read the photo again in enlarged pieces (the small print at arm's length).
-      if (r.kind === 'miss') {
+      // A slab read without its grade can't be added, so it's worth a closer look too.
+      const short = (x: typeof r) => x.kind === 'miss' || (x.kind === 'slab' && !gradeFrom(x.label.payload.PSACert.CardGrade));
+      // No label, number or grade yet: read the photo again in enlarged pieces (the small print at arm's length).
+      if (short(r)) {
         setLooking('closer');
         const pieces = await readInTiles(uri).catch(() => []);
-        const again = readPhoto([...first, ...pieces]);
-        if (again.kind !== 'miss') r = again;
+        const again = [readPhoto(pieces), readPhoto([...first, ...pieces])].find((x) => !short(x)) ?? readPhoto([...first, ...pieces]);
+        if (r.kind === 'miss' ? again.kind !== 'miss' : !short(again)) r = again;
       }
       // The art's best guesses, to pick from, beat asking the AI or a miss.
       if (r.kind === 'miss' && byArt) return acceptCard(byArt.read, Promise.resolve(byArt.art), byArt.id);
-      // Still nothing, and the AI backup read is on: it looks at the whole card. Same parsers
+      // Still short, and the AI backup read is on: it looks at the whole card. Same parsers
       // and catalog match after that.
-      if (r.kind === 'miss' && useScanPrefs.getState().aiBackup) {
+      if (short(r) && useScanPrefs.getState().aiBackup) {
         setLooking('ai');
         const seenByVision = await readPhotoWithVision(uri);
-        if (seenByVision === 'unavailable') aiDown = true;
-        else if (seenByVision.kind !== 'miss') r = seenByVision;
+        if (seenByVision === 'unavailable') aiDown = r.kind === 'miss';
+        else if (!short(seenByVision) || r.kind === 'miss') r = seenByVision.kind === 'miss' ? r : seenByVision;
       }
       if (r.kind === 'slab') return accept(r.label);
       if (r.kind === 'card') return acceptCard(r.card, art);
@@ -1039,7 +1041,8 @@ export default function Scan() {
                 {/* The real slab, label and all (the 36×50 row thumb's grey strip read as a cut-off top). */}
                 <SlabView card={shown ?? preview} width={size.sheetSlabW} posed={false} />
                 <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={[type.title, { color: color.ink }]}>
+                  {/* Long names wrap to a second line; never cut off ("Tm.Aqua's Kyogre EX"). */}
+                  <Text numberOfLines={2} style={[type.title, { color: color.ink }]}>
                     {rowTitle(preview)}
                   </Text>
                   <Text style={[type.text, { color: color.secondary }]}>
@@ -1542,10 +1545,10 @@ function RawSheet({
           <View style={styles.cardRow}>
             <SlabView card={preview} width={size.sheetSlabW} posed={false} />
             <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={[type.title, { color: color.ink }]}>
+              <Text numberOfLines={2} style={[type.title, { color: color.ink }]}>
                 {preview.name}
               </Text>
-              <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
+              <Text numberOfLines={2} style={[type.text, { color: color.secondary }]}>
                 {best.setName}
               </Text>
               <Text style={[type.text, { color: color.secondary }]}>

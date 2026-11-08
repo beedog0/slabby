@@ -23,6 +23,27 @@ export type LabelLine = { text: string; x: number; y: number };
 const GRADE_WORDS = /(?:^|\s)(GEM MT|GEM MINT|MINT|NM-MT\+?|NM\+?|EX-MT\+?|EX\+?|VG-EX\+?|VG\+?|GOOD\+?|FAIR|PR|AUTHENTIC|AUTH)(?=\s|$|\d)/;
 // Grade words OCR may join onto the end of the name line. Not EX/NM/VG alone: "MEW EX" is a name.
 const JOINED_GRADE = /\s(GEM MT|GEM MINT|NM-MT\+?|EX-MT\+?|VG-EX\+?|MINT)$/;
+// PSA's scale: each grade number has one set of words.
+const PSA_WORDS: Record<string, string> = {
+  '10': 'GEM MT',
+  '9': 'MINT',
+  '8.5': 'NM-MT+',
+  '8': 'NM-MT',
+  '7.5': 'NM+',
+  '7': 'NM',
+  '6.5': 'EX-MT+',
+  '6': 'EX-MT',
+  '5.5': 'EX+',
+  '5': 'EX',
+  '4.5': 'VG-EX+',
+  '4': 'VG-EX',
+  '3.5': 'VG+',
+  '3': 'VG',
+  '2.5': 'GOOD+',
+  '2': 'GOOD',
+  '1.5': 'FAIR',
+  '1': 'PR',
+};
 const GRADE_NUM = /^\s*(10|[1-9](?:\.5)?)(?!\d)/;
 // The brand opens the set line: Pokémon (OCR reads O as 0, old labels print "P.M."), One Piece, Riftbound.
 const BRAND_START = String.raw`(?:P(?:OK[EÉ]M[O0]N|\.?M\.?)|[O0]NE\s?P[I1]ECE|R[I1]FTB[O0]UND)`;
@@ -73,7 +94,8 @@ export type ParsedLabel = {
 export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   const lines = input
     .map((l) => (typeof l === 'string' ? { text: l, x: 0, y: 0 } : l))
-    .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').trim() }))
+    // OCR spells PSA's hyphens as dashes or with spaces: "EX – MT" is "EX-MT".
+    .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').replace(/\s*[–—]\s*/g, '-').replace(/\b(EX|NM|VG) - ?(MT|EX)\b/g, '$1-$2').trim() }))
     .filter((l) => l.text.length > 0);
   if (!lines.length) return null;
 
@@ -162,6 +184,25 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
       .find(Boolean);
     if (tail) grade = tail;
   }
+  // No grade words found: OCR joined them where the parser won't trust them ("MEW-HOLO EX" is
+  // also how a Mew EX reads) and the number onto the left column ("TRIUMPHANT 5"). On a PSA label
+  // the grade number sits right above the cert, so take it from the line or two above the cert,
+  // and the words from PSA's scale (5 is always EX). Never from anywhere else: still no guessing.
+  let wordFromScale = false;
+  if (!grade && gradeWord !== 'AUTHENTIC' && gradeWord !== 'AUTH') {
+    const ci = lines.findIndex((l) => CERT.test(l.text) || /^(10|[1-9](?:\.5)?) \d{8,10}$/.test(l.text));
+    // The number joined onto the cert ("6 159213946"), else the end of a line just above it.
+    const near = [lines[ci]?.text.match(/^(10|[1-9](?:\.5)?) \d{8,10}$/)?.[1]];
+    for (let i = ci - 1; ci > 0 && i >= Math.max(brandIndex + 1, ci - 2); i--) near.push(lines[i].text.match(/(?:^|\s)(10|[1-9](?:\.5)?)$/)?.[1]);
+    const n = near.find((v): v is string => !!v && !!PSA_WORDS[v]);
+    if (n) {
+      grade = n;
+      if (!gradeWord) {
+        gradeWord = PSA_WORDS[n];
+        wordFromScale = true;
+      }
+    }
+  }
   if (gradeWord === 'AUTHENTIC' || gradeWord === 'AUTH') grade = undefined;
 
   // Pass 2: the name is the first free-text line after the year/brand line that isn't a grade,
@@ -173,6 +214,9 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
       .replace(JOINED_GRADE, '')
       .replace(/\s(10|[1-9](?:\.5)?)$/, '')
       .trim();
+    // The scale's short word joined onto the name line: "MEW-HOLO EX" on an EX 5 → "MEW-HOLO".
+    if (t && wordFromScale && gradeWord && /^(EX|NM|VG|GOOD|FAIR|PR)\+?$/.test(gradeWord) && t.endsWith(' ' + gradeWord))
+      return t.slice(0, -(gradeWord.length + 1)).trim() || null;
     const skip = !t || YEAR_ONLY.test(t) || t === gradeWord || (gradeWord && t.startsWith(gradeWord + ' ')) || CERT.test(t) || /^(10|[1-9](?:\.5)?)$/.test(t);
     return skip ? null : t;
   };
