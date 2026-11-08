@@ -124,11 +124,11 @@ export function stackCopies(rows: CardRow[]): CardRow[] {
   const out: CardRow[] = [];
   for (const r of rows) {
     const c = r.card;
-    if (c.grader !== 'raw') {
+    const key = stackKey(c);
+    if (key == null) {
       out.push(r);
       continue;
     }
-    const key = [cardKey(c), c.name, c.condition ?? '', c.status, c.plan].join('|');
     const at = firstOf.get(key);
     if (at == null) {
       firstOf.set(key, out.length);
@@ -138,4 +138,17 @@ export function stackCopies(rows: CardRow[]): CardRow[] {
     }
   }
   return out;
+}
+
+/** What makes two raw singles (or sealed copies) one stack on home. Graded slabs never stack: null. */
+export function stackKey(c: CardRow['card']): string | null {
+  if (c.grader !== 'raw') return null;
+  return [cardKey(c), c.name, c.condition ?? '', c.status, c.plan].join('|');
+}
+
+/** Every card in `cards` that stacks with `card` on home, `card` first. Just `card` for a slab. */
+export function copiesOf<T extends CardRow['card']>(cards: T[], card: T): T[] {
+  const key = stackKey(card);
+  if (key == null) return [card];
+  return [card, ...cards.filter((c) => c.id !== card.id && stackKey(c) === key)];
 }
