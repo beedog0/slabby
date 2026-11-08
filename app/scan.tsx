@@ -457,7 +457,7 @@ export default function Scan() {
       if (asked) {
         // A tap takes this frame, topped up with the grade or cert earlier frames read.
         const best = step.ready ?? withVotes(auto.current, parsed);
-        if (best?.payload.PSACert.Subject && (slabbed || !loose)) return accept(best);
+        if (best?.payload.PSACert.Subject && (slabbed || (!loose && best.payload.PSACert.CardGrade))) return accept(best);
         if (loose) return acceptCard(loose, artOf(cardPixels));
         // No label, no number: the art may still know the card.
         if (!slabbed && cardPixels) {

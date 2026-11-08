@@ -112,12 +112,12 @@ const NOT_NAME = /^(BASIC|STAGE ?[12]?|MEGA|TRAINER|ITEM|SUPPORTER|STADIUM|POK[E
 
 /**
  * The card's name: the highest line that reads like one (letters, an optional "ex"/"V"/"GX"
- * suffix, not a stage word or HP). Used only to suggest similar cards when the number finds none.
+ * suffix, not a stage word or HP; a Diamond & Pearl era level, "Magnezone LV.44", is dropped). Used only to suggest similar cards when the number finds none.
  */
 export function readName(input: (LabelLine | string)[]): string | null {
   const lines = input
     .map((l, i) => (typeof l === 'string' ? { text: l, y: i } : l))
-    .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').replace(/\s*(HP|нр|Hp)\s*\d+.*$/, '').trim() }))
+    .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').replace(/\s*(HP|нр|Hp)\s*\d+.*$/, '').replace(/\s+LV\.?\s*(\d{1,3}|X)\b.*$/i, '').trim() }))
     .sort((a, b) => a.y - b.y);
   for (const l of lines) {
     const t = l.text.replace(/^(BASIC|STAGE ?[12])\s+/i, '');
