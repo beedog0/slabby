@@ -627,6 +627,7 @@ export default function Scan() {
       // is where a card's set code and number sit when the whole card is in the photo.
       const first = await reader.recognize(uri, { minTextHeight: PHOTO_MIN_TEXT }).catch(() => []);
       let r = readPhoto(first);
+      let seenLines = first;
       if (r.kind === 'card') return acceptCard(r.card, art);
       // No number read: the art may settle it now, with no closer look and no AI.
       let byArt: { read: ParsedCard; id: Identified; art: ArtFound } | null = null;
@@ -643,7 +644,8 @@ export default function Scan() {
       if (short(r)) {
         setLooking('closer');
         const pieces = await readInTiles(uri).catch(() => []);
-        const again = [readPhoto(pieces), readPhoto([...first, ...pieces])].find((x) => !short(x)) ?? readPhoto([...first, ...pieces]);
+        seenLines = [...first, ...pieces];
+        const again = [readPhoto(pieces), readPhoto(seenLines)].find((x) => !short(x)) ?? readPhoto(seenLines);
         if (r.kind === 'miss' ? again.kind !== 'miss' : !short(again)) r = again;
       }
       // The art's best guesses, to pick from, beat asking the AI or a miss.
@@ -658,6 +660,10 @@ export default function Scan() {
       }
       if (r.kind === 'slab') return accept(r.label);
       if (r.kind === 'card') return acceptCard(r.card, art);
+      // No number anywhere (an old promo prints none), but a name: the cards with that name to
+      // pick from, named the way TCGplayer and eBay list them ("Ancient Mew", "Birthday Pikachu").
+      const named = artRead(seenLines, readName);
+      if (named.name) return acceptCard(named);
       setSeen(aiDown ? '' : r.seen);
     } finally {
       setReading(false);

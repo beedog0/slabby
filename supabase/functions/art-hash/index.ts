@@ -1,5 +1,5 @@
 // art-hash: fingerprint catalog card art so a photo can find its card without reading text
-// (0015_card_art.sql, _shared/art-hash.ts). Each call claims a batch of cards not yet hashed,
+// (0016_card_art.sql, _shared/art-hash.ts). Each call claims a batch of cards not yet hashed,
 // downloads their TCGplayer image (the small 200 px one), trims its white margin and stores the
 // two perceptual hashes and colour grid. pg_cron calls it every 20 seconds while cards are
 // waiting. Spends no PokemonPriceTracker credits; TCGplayer's CDN is the image source the app

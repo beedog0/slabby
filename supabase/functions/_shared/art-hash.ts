@@ -8,7 +8,7 @@
 //   - two 64-bit perceptual hashes (DCT of a 32×32 grayscale, low frequencies against their
 //     median): one over the whole card face, one over the art window. They shrug off brightness,
 //     white balance, blur and a little glare, and are compared by Hamming distance in Postgres
-//     (match_card_art, 0015_card_art.sql).
+//     (match_card_art, 0016_card_art.sql).
 //   - a coarse colour grid (4×5 cells, each channel relative to the card's average) to break
 //     ties between near hashes, such as a holo and its reverse in a different set.
 //

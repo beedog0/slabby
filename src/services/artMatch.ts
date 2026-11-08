@@ -1,6 +1,6 @@
 // Identify a card from its art, the way Alt does: no text needed. The phone finds and straightens
 // the card in a photo (LabelReader.findCard), takes its fingerprint (supabase/functions/_shared/
-// art-hash.ts) and asks match_card_art (0015_card_art.sql) for the nearest catalog cards. The
+// art-hash.ts) and asks match_card_art (0016_card_art.sql) for the nearest catalog cards. The
 // text read still counts: a number or name read from the card confirms or overrules the art, so
 // the name and price always come from a catalog card, and a promo reprinting the same art in two
 // sets still asks which one.
