@@ -1,4 +1,4 @@
-import { addParams, buyPrices, cardNumber, displayName, nameAndVariant, matches, openPrices, searchCards, terms } from '../search';
+import { addParams, buyPrices, cardNumber, displayName, fold, nameAndVariant, nameTier, matches, openPrices, searchCards, terms } from '../search';
 
 describe('search helpers', () => {
   it('splits numbers out of a search', () => {
@@ -10,6 +10,29 @@ describe('search helpers', () => {
     expect(matches(c, 'umbreon evs')).toBe(true);
     expect(matches(c, 'umbreon 189')).toBe(false);
     expect(matches(c, '   ')).toBe(false);
+  });
+  it('forgives apostrophes, accents and punctuation', () => {
+    expect(fold("Kai'Sa")).toBe('kaisa');
+    expect(fold('Kai’Sa')).toBe('kaisa');
+    expect(fold('Flabébé')).toBe('flabebe');
+    expect(fold('Ho-Oh')).toBe('ho oh');
+    expect(fold('Monkey.D.Luffy')).toBe('monkey d luffy');
+    expect(terms('OP05-119')).toEqual(['op05', '119']);
+    const kaisa = { name: "Kai'Sa - Daughter of the Void", setName: 'Origins', setCode: 'OGN', number: 'OGN-029' };
+    for (const q of ['Kai sa', 'kaisa', 'Kai’Sa', "kai'sa", 'KAISA ogn']) expect(matches(kaisa, q)).toBe(true);
+    expect(matches({ name: 'Ho-Oh', setName: 'Neo Revelation', setCode: null, number: '7/64' }, 'hooh')).toBe(true);
+    expect(matches({ name: 'Pikachu', setName: 'Pokémon GO', setCode: 'PGO', number: '1' }, 'pokemon go')).toBe(true);
+    expect(matches(kaisa, 'kai su')).toBe(false);
+  });
+  it('ranks the exact name first, then names that start with it', () => {
+    expect(nameTier("Kai'Sa - Daughter of the Void", 'kai sa')).toBe(0);
+    expect(nameTier('Kai’Sa, Daughter of the Void', 'kaisa')).toBe(0);
+    expect(nameTier('Charizard - 4/102', 'charizard')).toBe(0);
+    expect(nameTier('Mega Greninja ex - 116/086', 'greninja')).toBe(2);
+    expect(nameTier('Umbreon VMAX (Alternate Art Secret)', 'umbreon vmax')).toBe(0);
+    expect(nameTier('Charizard ex - 199/165', 'charizard')).toBe(1);
+    expect(nameTier("Team Rocket's Mewtwo ex", 'mewtwo')).toBe(2);
+    expect(nameTier('Mew ex - 205/165', 'mew 205')).toBe(3);
   });
   it('drops the printed number from TCGplayer titles only', () => {
     expect(displayName('Mew ex - 205/165')).toBe('Mew ex');

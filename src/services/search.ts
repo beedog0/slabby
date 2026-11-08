@@ -78,20 +78,52 @@ export const fromRow = (r: Row): CatalogCard => ({
   printings: (r.printings ?? []).map((x) => ({ name: x.name, marketCents: x.market_cents, lowCents: x.low_cents })),
 });
 
-/** Words a search is split into; "#205" and "205/165" both search the number. */
-export function terms(q: string): string[] {
-  return q
+/**
+ * Text as search compares it: lowercase, accents off, apostrophes removed, other punctuation a
+ * space. "Kai'Sa", "Kai’Sa" (the iPhone's curly apostrophe) and "kaisa" all fold to "kaisa",
+ * "Pokémon" to "pokemon", "Ho-Oh" to "ho oh". Same rule as search_fold in
+ * 0023_forgiving_search.sql; change both together.
+ */
+export function fold(s: string | null | undefined): string {
+  return (s ?? '')
     .toLowerCase()
-    .replace(/[#/,]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/['’‘`´ʼ]/g, '')
+    .replace(/[!-/:-@[-`{-~“”–—…·•\s]+/g, ' ')
+    .trim();
 }
 
-/** Mock search: every word must appear in name, set, set code or number (same rule as SQL). */
+/** Words a search is split into; "#205" and "205/165" both search the number. */
+export function terms(q: string): string[] {
+  return fold(q).split(' ').filter(Boolean);
+}
+
+/**
+ * Mock and vault search: every word must appear in name, set, set code or number (same rule as
+ * SQL). The name also counts with its spaces taken out, so "kai sa" and "hooh" both match.
+ */
 export function matches(c: Pick<CatalogCard, 'name' | 'setName' | 'setCode' | 'number'>, q: string): boolean {
-  const hay = `${c.name} ${c.setName} ${c.setCode ?? ''} ${c.number ?? ''}`.toLowerCase();
+  const name = fold(c.name);
+  const hay = `${name} ${name.replace(/ /g, '')} ${fold(c.setName)} ${fold(c.setCode)} ${fold(c.number)}`;
   const t = terms(q);
   return t.length > 0 && t.every((w) => hay.includes(w));
+}
+
+/**
+ * How well a card's name fits a search (lower is better), as in SQL search_hits: 0 the name typed
+ * exactly (without TCGplayer's " - 205/165" or " (Alternate Art)"), 1 the name starts with it,
+ * 2 the name holds it, 3 the words are found elsewhere too. Riftbound's ", Daughter of the Void"
+ * is dropped like TCGplayer's " - 205/165".
+ */
+export function nameTier(name: string, q: string): number {
+  const s = fold(q);
+  const n = fold(name);
+  const key = fold(name.split(' - ')[0].split(' (')[0].split(', ')[0]).replace(/ /g, '');
+  if (key === s.replace(/ /g, '')) return 0;
+  if (n.startsWith(s) || key.startsWith(s.replace(/ /g, ''))) return 1;
+  if (n.includes(s)) return 2;
+  return 3;
 }
 
 const cache = new Map<number, CatalogCard>();
@@ -101,7 +133,11 @@ export async function searchCards(q: string, game: Game | null): Promise<Catalog
   if (!terms(q).length) return [];
   let out: CatalogCard[];
   if (!supabase) {
-    out = mockCatalog.filter((c) => (!game || c.game === game) && matches(c, q));
+    out = mockCatalog
+      .filter((c) => (!game || c.game === game) && matches(c, q))
+      .map((c, i) => ({ c, i, t: nameTier(c.name, q) }))
+      .sort((a, b) => a.t - b.t || a.i - b.i)
+      .map((x) => x.c);
   } else {
     const { data, error } = await supabase.rpc('search_catalog', { q, game_filter: game, lim: 60 });
     if (error) throw error;
