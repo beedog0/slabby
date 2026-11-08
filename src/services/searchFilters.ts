@@ -146,7 +146,7 @@ export async function findCards(f: Query): Promise<Found[]> {
   const { data, error } = await supabase.rpc('search_cards', {
     q: f.q.trim(),
     game_filter: f.game,
-    lim: 60,
+    lim: 250, // a name like Greninja has over 60 printings; 60 cut the last ones off
     lang_filter: f.languages.length ? f.languages : null,
     group_filter: f.sets.length ? f.sets.map((x) => x.id) : null,
     rarity_filter: f.rarities.length ? f.rarities : null,
