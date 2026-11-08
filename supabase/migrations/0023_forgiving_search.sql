@@ -162,8 +162,12 @@ language sql stable set search_path = public as $$
 $$;
 grant execute on function search_cards_facets(text, text, text[]) to authenticated;
 
--- The older single-box search (trade picker, quick add) uses the same matching.
-create or replace function search_catalog(q text, game_filter text default null, lim int default 40)
+-- The older single-box search (trade picker, quick add) uses the same matching. The live one is
+-- 0010's 7-argument version (its filters moved to search_cards in 0012 and no build still sends
+-- them); leaving it next to a 3-argument one would make the app's call ambiguous.
+drop function if exists search_catalog(text, text, int, text, int, text[], text);
+drop function if exists search_catalog(text, text, int);
+create function search_catalog(q text, game_filter text default null, lim int default 40)
 returns setof catalog
 language sql stable set search_path = public as $$
   select * from search_cards(q, game_filter, least(lim, 60));
