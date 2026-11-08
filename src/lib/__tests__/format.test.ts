@@ -1,4 +1,4 @@
-import { saleDay, saleLine, salesWord } from '../format';
+import { saleDay, saleLine, salesWord, thinNote } from '../format';
 
 const NOW = Date.parse('2026-11-06T12:00:00Z');
 
@@ -26,4 +26,12 @@ describe('cardLabel for sealed', () => {
     expect(cardLabel({ language: 'en', grader: 'raw', grade: null, sealed: 'etb' })).toBe('Elite Trainer Box');
     expect(cardLabel({ language: 'en', grader: 'raw', grade: null })).toBe('Raw');
   });
+});
+
+test('thinNote flags graded prices from 1 to 5 sales', () => {
+  expect(thinNote(0)).toBeNull();
+  expect(thinNote(1)).toBe('Only 1 sale in 30 days');
+  expect(thinNote(5)).toBe('Only 5 sales in 30 days');
+  expect(thinNote(6)).toBeNull();
+  expect(thinNote(null)).toBeNull();
 });
