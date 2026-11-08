@@ -18,7 +18,6 @@ import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { SearchSort } from '../../src/components/collection/SearchSort';
-import { GamePills } from '../../src/components/collection/GamePills';
 import { effectiveGame, gamesIn, inGame, type GameFilter } from '../../src/lib/games';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { ConGrid } from '../../src/components/con/ConGrid';
@@ -321,12 +320,16 @@ export default function ConMode() {
 
           <View style={styles.controls}>
             <View style={{ flex: 1 }}>
-              <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} sorts={CON_SORTS} />
+              <SearchSort
+                query={query}
+                onQuery={setQuery}
+                sort={sort}
+                onSort={setSort}
+                sorts={CON_SORTS}
+                game={{ games, value: pickGame, onChange: setGame }}
+              />
             </View>
             <ViewSwitch value={layout} onChange={setLayout} modes={SEARCH_MODES} />
-          </View>
-          <View style={{ marginHorizontal: space.gutter }}>
-            <GamePills games={games} value={pickGame} onChange={setGame} />
           </View>
 
           <ScrollView
