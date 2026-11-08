@@ -3,10 +3,14 @@
 // answer goes in the estimates store; priceFor() then shows it, labelled, until real comps exist.
 
 import { cardKey } from '../pricing/cardKey';
+import { fallbackPrice } from '../pricing/estimate';
 import { estimateIsFresh, type Estimate } from '../../supabase/functions/_shared/estimate-math';
 import { useEstimates, type EstimateEntry } from '../store/estimates';
 import { usePrices } from '../store/prices';
 import type { Card } from '../types';
+import type { CardPrice } from './comps';
+import { cardFromDetails } from './psa';
+import { addParams, type CatalogCard, type SearchGrade } from './search';
 import { supabase } from './supabase';
 
 export type FindResult = 'found' | 'none' | 'capped' | 'offline' | 'error';
@@ -44,6 +48,7 @@ async function run(card: Card, key: string): Promise<FindResult> {
     const { data, error } = await supabase.functions.invoke<Answer>('price-estimate', {
       body: {
         cardKey: key,
+        game: card.game ?? 'pokemon',
         name: card.name,
         setName: card.setName,
         setCode: card.setCode,
@@ -80,4 +85,35 @@ export function setOwnPrice(card: Card, cents: number | null) {
 
 export function ownPrice(card: Card): number | null {
   return useEstimates.getState().ownByKey[cardKey(card)] ?? null;
+}
+
+/**
+ * The vault-shaped card a searched card stands for at one grade, so "Find a price" works from
+ * search and con mode before the card is in the vault. Its card_key is the one the card gets
+ * once added, so an estimate found here carries over.
+ */
+export function cardForSearch(c: CatalogCard, grade: SearchGrade | 'raw'): Card {
+  const p = addParams(c, grade);
+  return cardFromDetails({
+    cert: null,
+    grader: grade === 'raw' ? 'raw' : 'psa',
+    grade: grade === 'raw' ? 0 : Number(p.grade),
+    name: p.name,
+    setName: p.set,
+    setCode: p.setCode || null,
+    number: p.number,
+    language: p.language,
+    paidCents: null,
+    plan: 'hold',
+    imageFrontUrl: p.image || null,
+    game: c.game,
+  });
+}
+
+/** The estimate or your own price for a card with no real price, kept current as searches land. */
+export function useFallbackPrice(card: Card | null): CardPrice | null {
+  const key = card ? cardKey(card) : '';
+  const own = useEstimates((s) => (key ? s.ownByKey[key] : undefined));
+  const entry = useEstimates((s) => (key ? s.byKey[key] : undefined));
+  return card ? fallbackPrice(own, entry) : null;
 }

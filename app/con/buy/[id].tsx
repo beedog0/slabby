@@ -9,11 +9,12 @@
 
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sheetTop } from '../../../src/lib/sheetTop';
 import { ArtImage } from '../../../src/components/ArtImage';
+import { FindPriceRow } from '../../../src/components/estimate/FindPriceRow';
 import { Keypad } from '../../../src/components/Keypad';
 import { Segmented } from '../../../src/components/Segmented';
 import { setTitle } from '../../../src/components/search/CardAnalytics';
@@ -21,7 +22,9 @@ import { PriceLine, type Tick } from '../../../src/components/PriceLine';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../../src/components/ui';
 import { money } from '../../../src/lib/format';
 import { BUY_RATING_LABEL, SUSPICIOUS_FRACTION, buyRating, looksLikeTypo } from '../../../src/pricing/rules';
+import { estimateLine } from '../../../src/pricing/estimate';
 import { matchNewCard, refreshPrices } from '../../../src/services/comps';
+import { cardForSearch, useFallbackPrice } from '../../../src/services/estimate';
 import { cardFromDetails } from '../../../src/services/psa';
 import {
   addParams,
@@ -88,7 +91,12 @@ export default function TheyreAsking() {
     if (wish && price) seeMarket(wish.key, price.marketCents, price.asOf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [price?.marketCents, wish?.key]);
-  const market = price?.marketCents ?? null;
+  // No real price for this grade: a "Find a price" estimate (or your own price) stands in, labelled.
+  const asCard = useMemo(() => (card ? cardForSearch(card, grade) : null), [card, grade]);
+  const fallback = useFallbackPrice(asCard);
+  const estimated = prices !== undefined && !price && !!fallback;
+  const market = price?.marketCents ?? (estimated ? fallback!.marketCents : null);
+  const marketWord = estimated ? (fallback!.source === 'own' ? 'your price' : 'estimate') : 'market';
   const buy = buyPrices(market, rules);
   const ask = (parseInt(digits || '0', 10) || 0) * 100;
   const has = digits.length > 0;
@@ -314,7 +322,7 @@ export default function TheyreAsking() {
       ticks.push({ value: buy.max, label: 'Max', color: color.loss, labelColor: color.loss, height: 14 });
     }
   }
-  if (market) ticks.push({ value: market, label: 'Market', color: color.secondary });
+  if (market) ticks.push({ value: market, label: estimated ? 'Estimate' : 'Market', color: color.secondary });
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: sheetTop(insets.top) }}>
@@ -335,12 +343,14 @@ export default function TheyreAsking() {
               ? `You said ${money(counter)}`
               : rating && !awaitingAnswer && !typo
                 ? rating.suspicious
-                  ? `${Math.round(rating.pctOfMarket * 100)}% of market. Check the slab`
-                  : `${Math.round(rating.pctOfMarket * 100)}% of market`
+                  ? `${Math.round(rating.pctOfMarket * 100)}% of ${marketWord}. Check the slab`
+                  : `${Math.round(rating.pctOfMarket * 100)}% of ${marketWord}`
                 : prices === undefined
                   ? 'Loading prices…'
                   : !market
                     ? `No ${gradeLabel(grade)} market price yet`
+                    : estimated && fallback?.estimate && fallback.source === 'estimate'
+                      ? estimateLine(fallback.estimate.sales.length)
                     : price?.sales30d
                       ? `${price.sales30d} ${price.sales30d === 1 ? 'sale' : 'sales'} in 30 days`
                       : ''}
@@ -359,9 +369,13 @@ export default function TheyreAsking() {
         {buy && market ? null : (
           <View>
             <Hairline />
-            <Text style={[type.text, { color: color.secondary, paddingVertical: space.l }]}>
-              {prices === undefined ? 'Loading prices…' : `No ${gradeLabel(grade)} market price to rate against. Try another grade.`}
-            </Text>
+            {!market && prices !== undefined && asCard ? (
+              <FindPriceRow card={asCard} />
+            ) : (
+              <Text style={[type.text, { color: color.secondary, paddingVertical: space.l }]}>
+                {prices === undefined ? 'Loading prices…' : `No ${gradeLabel(grade)} market price to rate against. Try another grade.`}
+              </Text>
+            )}
             <Hairline />
           </View>
         )}

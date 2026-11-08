@@ -3,7 +3,7 @@
 -- for sold listings, kept 7 days. It is never a comp: nothing here feeds price_daily, and the app
 -- labels it "Estimate" with the links it came from. Spend is capped per day in ppt_credits under
 -- the "estimate" bucket (ESTIMATE_DAILY_CAP, default 100), separate from the PPT and vision buckets.
--- Numbered after 0015_card_art (PR #45); it doesn't depend on it.
+-- Numbered after 0016_card_art (PR #45); it doesn't depend on it.
 
 create table price_estimates (
   card_key text primary key,
