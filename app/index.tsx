@@ -237,6 +237,7 @@ export default function Home() {
         { label: 'Select', onPress: () => startSelecting() },
         { label: 'Arrange shelf', onPress: startArranging },
         { label: 'Add by hand', onPress: () => router.push('/add') },
+        { label: 'Import collection', onPress: () => router.push('/import') },
       ],
       [
         { label: 'Pricing rules', onPress: () => router.push('/settings/pricing') },
