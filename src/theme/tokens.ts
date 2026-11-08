@@ -100,6 +100,8 @@ export const radius = {
 export const size = {
   button: 52,
   touch: 44,
+  /** Photo mode's shutter on the scan screen. */
+  shutter: 72,
   rowVault: 64,
   rowCon: 74,
   thumbW: 36,
