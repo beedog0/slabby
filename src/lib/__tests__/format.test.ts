@@ -1,4 +1,4 @@
-import { saleDay, saleLine, salesWord, thinNote } from '../format';
+import { cardPrice, saleDay, saleLine, salesWord, thinNote } from '../format';
 
 const NOW = Date.parse('2026-11-06T12:00:00Z');
 
@@ -34,4 +34,11 @@ test('thinNote flags graded prices from 1 to 5 sales', () => {
   expect(thinNote(5)).toBe('Only 5 sales in 30 days');
   expect(thinNote(6)).toBeNull();
   expect(thinNote(null)).toBeNull();
+});
+
+test('cardPrice never rounds a sub-dollar card to $0', () => {
+  expect(cardPrice(25)).toBe('$0.25');
+  expect(cardPrice(49)).toBe('$0.49');
+  expect(cardPrice(110)).toBe('$1.10');
+  expect(cardPrice(1250)).toBe('$13');
 });

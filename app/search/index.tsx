@@ -14,7 +14,7 @@ import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
-import { money, pct } from '../../src/lib/format';
+import { cardPrice, money, pct } from '../../src/lib/format';
 import { buyPrices, cardNumber, displayName, type Game } from '../../src/services/search';
 import { sealedLabel, typeLabel, type TypeFilter } from '../../src/lib/sealed';
 import {
@@ -502,7 +502,7 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
             .join(' · ')}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-          {sealed ? 'market' : 'raw'} <Text style={{ color: color.ink }}>{card.marketCents != null ? money(card.marketCents) : '—'}</Text>
+          {sealed ? 'market' : 'raw'} <Text style={{ color: color.ink }}>{card.marketCents != null ? cardPrice(card.marketCents) : '—'}</Text>
           {change != null ? <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{`  ${pct(change)} ${days}d`}</Text> : null}
         </Text>
         {buy ? (
@@ -546,7 +546,7 @@ function ResultRow({ card, con, rules, change, days }: { card: Found; con: boole
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={[type.numberM, { color: card.marketCents != null ? color.ink : color.secondary }]}>
-          {card.marketCents != null ? money(card.marketCents) : '—'}
+          {card.marketCents != null ? cardPrice(card.marketCents) : '—'}
         </Text>
         {change != null ? (
           <Text style={[type.caption, { color: change >= 0 ? color.gain : color.loss }]}>

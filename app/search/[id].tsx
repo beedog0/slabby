@@ -18,7 +18,7 @@ import { PriceChart } from '../../src/components/PriceChart';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
-import { money, pct, thinNote } from '../../src/lib/format';
+import { cardPrice, money, pct, thinNote } from '../../src/lib/format';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
@@ -212,11 +212,11 @@ export default function SearchedCard() {
               style={[type.title, { color: quiet ? color.secondary : color.ink }]}
               accessibilityLabel={
                 price
-                  ? `${sealed ? 'Market' : gradeLabel(pick)} ${money(price.marketCents)}${change != null ? `, ${pct(change)} over ${hist!.days} days` : ''}`
+                  ? `${sealed ? 'Market' : gradeLabel(pick)} ${cardPrice(price.marketCents)}${change != null ? `, ${pct(change)} over ${hist!.days} days` : ''}`
                   : undefined
               }
             >
-              {price ? money(price.marketCents) : '—'}
+              {price ? cardPrice(price.marketCents) : '—'}
             </Text>
             {thin ? <Text style={[type.text, { color: color.secondary }]}>{thin}</Text> : null}
             {change != null ? (

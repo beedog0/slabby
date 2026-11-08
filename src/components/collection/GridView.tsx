@@ -2,7 +2,7 @@
 
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { cardLabel, money, pct, rowTitle } from '../../lib/format';
+import { cardLabel, cardPrice, money, pct, rowTitle } from '../../lib/format';
 import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
 import { CopiesMark, PinMark } from './PinMark';
@@ -63,7 +63,7 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
       <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
         {cardLabel(card)}
         {' · '}
-        <Text style={{ color: color.ink }}>{value != null ? money(value) : '—'}</Text>
+        <Text style={{ color: color.ink }}>{value != null ? cardPrice(value) : '—'}</Text>
         {sold ? ' sold' : ''}
       </Text>
       {/* Its own line so it never truncates; a blank line when there's nothing to say, so rows line up. */}
