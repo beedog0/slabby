@@ -60,12 +60,12 @@ import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, parseCertFromQr, 
 import { cardSteadyKey, findScannedCard, looksLikeSlab, correctionKey, findSimilarCards, missReason, parseCardText, printedNumber, printName, printOptions, readName, similarForSlab, withCorrection, type CardMatch, type ParsedCard } from '../src/services/cardScan';
 import { artRead, combine, identifyByArt, matchArt, printsOf, type ArtHit, type FoundCard, type Identified } from '../src/services/artMatch';
 import { useCorrections } from '../src/store/corrections';
-import { cardNumber, displayName, mockProductId, nameAndVariant, type CatalogCard } from '../src/services/search';
+import { cardNumber, displayName, mockProductId, nameAndVariant, searchCards, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
 import { usePrices } from '../src/store/prices';
-import { autoProgress, frameInPhoto, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type ParsedLabel } from '../src/services/label';
+import { autoProgress, frameInPhoto, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type LabelLine, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
 import { readPhoto } from '../src/services/photoScan';
 import { readPhotoWithVision } from '../src/services/vision';
@@ -157,6 +157,8 @@ export default function Scan() {
   const auto = useRef<AutoRead>(null);
   // Live scan by art: the card the last frame's art was sure of (two frames in a row add it).
   const lastArt = useRef<number | null>(null);
+  // What the last missed photo read, so "Type it in" starts from it.
+  const missLines = useRef<LabelLine[]>([]);
   // The last card read. Once it's in the vault, auto-read ignores it, so the slab just added (and
   // still in frame after the sheet closes) isn't read again. A tap still reads it.
   const lastRead = useRef<string | null>(null);
@@ -392,6 +394,8 @@ export default function Scan() {
     setLabelMiss(false);
     setRaw({ read, matches: known?.matches ?? null, pick: 0, choosing: !!known && known.matches.length > 1 && !known.confident, byArt: known?.byArt });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    // Kept for "Type it in": typed matches that look like the photo come first.
+    art.then((a) => a?.hits.length && setRaw((r) => (r && r.read === read ? { ...r, art: a.hits } : r))).catch(() => {});
     if (known) return;
     const byNumber = read.numbers.length
       ? findScannedCard(read)
@@ -664,6 +668,7 @@ export default function Scan() {
       // pick from, named the way TCGplayer and eBay list them ("Ancient Mew", "Birthday Pikachu").
       const named = artRead(seenLines, readName);
       if (named.name) return acceptCard(named);
+      missLines.current = seenLines;
       setSeen(aiDown ? '' : r.seen);
     } finally {
       setReading(false);
@@ -673,6 +678,11 @@ export default function Scan() {
     setLabelMiss(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     dropStill();
+  };
+  // From a missed photo: describe the card instead (name, number, set), then pick it.
+  const typeItIn = () => {
+    setLabelMiss(false);
+    setRaw({ read: artRead(missLines.current, readName), matches: [], pick: 0, choosing: false, typing: true, similar: [] });
   };
   const shoot = async () => {
     if (!camera.current || reading || inFlight.current) return;
@@ -870,6 +880,11 @@ export default function Scan() {
         <View style={styles.hint}>
           <Text style={[type.text, { color: cam.onInk, textAlign: 'center' }]}>{hint}</Text>
         </View>
+        {photoMode && labelMiss && !reading ? (
+          <Pressable accessibilityRole="button" onPress={typeItIn} style={[styles.hint, { marginTop: space.s }]}>
+            <Text style={[type.text, { color: cam.onInk, textAlign: 'center' }]}>Type it in ›</Text>
+          </Pressable>
+        ) : null}
         {labelMode && !photoMode && canUseCamera && !result ? (
           // What the read has so far: each pill lights up with its value once confirmed.
           <ScanPills
@@ -1264,6 +1279,10 @@ type RawRead = {
   showSimilar?: boolean;
   /** Found by the card's art, not its number (none was read). */
   byArt?: boolean;
+  /** "Type it in": the user describes the card (name, number, set) and picks from the matches. */
+  typing?: boolean;
+  /** The photo's nearest catalog cards by art, to rank typed matches by. */
+  art?: ArtHit[];
 };
 
 type ArtFound = { hits: ArtHit[]; edge: boolean } | null;
@@ -1323,6 +1342,66 @@ function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: Cat
       ))}
     </SheetScrollView>
   );
+}
+
+/**
+ * "Type it in": describe the card in one line (name, number, set, promo or event) and pick it.
+ * Search is our catalog (search_catalog, free); cards that look like the photo come first.
+ */
+function TypeItIn({ initial, art, onPick, onCancel }: { initial: string; art?: ArtHit[]; onPick: (c: CatalogCard) => void; onCancel: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
+  const [q, setQ] = useState(initial);
+  const [found, setFound] = useState<CatalogCard[] | null>(null);
+  useEffect(() => {
+    if (!q.trim()) return setFound(null);
+    let live = true;
+    const t = setTimeout(() => {
+      searchCards(q, null)
+        .catch(() => [] as CatalogCard[])
+        .then((cards) => live && setFound(rankTyped(cards, art).slice(0, 12)));
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [q, art]);
+  return (
+    <>
+      <Text style={[type.section, { color: color.ink }]}>Type it in</Text>
+      <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
+        Name, number or set, as on the card or an eBay listing. Magnezone 5/100, Ancient Mew.
+      </Text>
+      <TextInput
+        value={q}
+        onChangeText={setQ}
+        autoFocus
+        autoCorrect={false}
+        autoCapitalize="words"
+        returnKeyType="search"
+        placeholder="Name, number or set"
+        placeholderTextColor={color.secondary}
+        style={[type.body, styles.typeInput]}
+      />
+      {found?.length ? (
+        <CardPickList cards={found} onPick={onPick} />
+      ) : (
+        <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>{found ? 'No cards match yet. Try fewer words.' : ' '}</Text>
+      )}
+      <Pressable accessibilityRole="button" onPress={onCancel} style={styles.quiet}>
+        <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
+      </Pressable>
+    </>
+  );
+}
+
+/** Typed matches, the ones that look like the photo first (nearest art), then search order. */
+function rankTyped(cards: CatalogCard[], art?: ArtHit[]): CatalogCard[] {
+  const d = new Map((art ?? []).map((h) => [h.card.productId, h.distance]));
+  return cards
+    .map((c, i) => ({ c, i, d: d.get(c.productId) ?? Infinity }))
+    .sort((a, b) => a.d - b.d || a.i - b.i)
+    .map((x) => x.c);
 }
 
 /** Result sheet for a loose card: the best catalog match, or a short pick list when it's unclear. */
@@ -1428,6 +1507,17 @@ function RawSheet({
         .then((similar) => setRaw((r) => (r && r.read === raw.read ? { ...r, similar } : r)));
   };
   const remember = useCorrections((s) => s.remember);
+  const typeIt = () => setRaw((r) => (r ? { ...r, typing: true, showSimilar: false, choosing: false } : r));
+  // A typed pick is the right card for this read: remembered like any other correction.
+  const pickTyped = (c: CatalogCard) => {
+    if (raw.read.numbers.length) remember(correctionKey(raw.read), c.productId);
+    setRaw((r) => (r ? { ...r, matches: [{ card: c, score: Infinity }, ...(r.matches ?? []).filter((m) => m.card.productId !== c.productId)], pick: 0, choosing: false, showSimilar: false, typing: false } : r));
+  };
+  const typeLink = (
+    <Pressable accessibilityRole="button" onPress={typeIt} style={styles.quiet}>
+      <Text style={[type.text, { color: color.secondary }]}>Type it in</Text>
+    </Pressable>
+  );
   const again = (
     <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
       <Text style={[type.text, { color: color.secondary }]}>Scan again</Text>
@@ -1445,7 +1535,14 @@ function RawSheet({
     >
       <SheetScope value={sheet.scope}>
       <View style={styles.grabber} />
-      {raw.matches === null ? (
+      {raw.typing ? (
+        <TypeItIn
+          initial={[raw.read.name, n ? printedNumber(n) : null].filter(Boolean).join(' ')}
+          art={raw.art}
+          onPick={pickTyped}
+          onCancel={() => (raw.matches?.length ? setRaw((r) => (r ? { ...r, typing: false } : r)) : rescan())}
+        />
+      ) : raw.matches === null ? (
         <>
           <Text style={[type.text, { color: color.secondary }]}>{printed ? source : 'Looking at the card'}</Text>
           <Text style={[type.body, { color: color.ink, paddingVertical: space.l }]}>Finding the card</Text>
@@ -1462,14 +1559,12 @@ function RawSheet({
                 {best && preview ? 'Pick yours if it’s here.' : `Similar cards named ${raw.read.name}. Pick yours if it’s here.`}
               </Text>
               <CardPickList cards={raw.similar} onPick={pickSimilar} />
-              <Pressable accessibilityRole="button" onPress={() => router.replace({ pathname: '/search', params: raw.read.name ? { q: raw.read.name } : {} })} style={styles.quiet}>
-                <Text style={[type.text, { color: color.secondary }]}>Search cards</Text>
-              </Pressable>
+              {typeLink}
             </>
           ) : raw.similar === null ? (
             <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>Looking for similar cards</Text>
           ) : (
-            <PrimaryButton title="Search cards" onPress={() => router.replace({ pathname: '/search', params: raw.read.name ? { q: raw.read.name } : {} })} />
+            <PrimaryButton title="Type it in" onPress={typeIt} />
           )}
           {best && preview ? (
             <Pressable accessibilityRole="button" onPress={() => setRaw((r) => (r ? { ...r, showSimilar: false } : r))} style={styles.quiet}>
@@ -1543,6 +1638,7 @@ function RawSheet({
               </View>
             ))}
           </SheetScrollView>
+          {typeLink}
           {again}
         </>
       ) : (
@@ -1758,4 +1854,5 @@ const useStyles = themed((color) => StyleSheet.create({
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: space.l, paddingVertical: space.l },
   field: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   paidInput: { color: color.ink, textAlign: 'right', width: 120 },
+  typeInput: { minHeight: 48, color: color.ink, borderBottomWidth: size.hairline, borderBottomColor: color.hairline },
 }));
