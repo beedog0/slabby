@@ -2,8 +2,9 @@
 // the vault. Results show tonight's raw market; open a card for PSA prices with charts.
 // Typing, filtering and sorting only query our own catalog table, never a paid API.
 // Quiet controls under the field: "Filter" (language, rarity, set), the sort dropdown, and
-// List / Grid (remembered, like home's view switch). Scrolling down slides the title, field and
-// game tabs away and keeps that control row pinned; scrolling up brings them back.
+// List / Grid (remembered, like home's view switch). Scrolling down slides the whole header away
+// (title, field, game tabs, control row and filter chips) so results get the screen; any scroll up
+// brings it all back.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
@@ -65,19 +66,18 @@ export default function Search() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuTop, setMenuTop] = useState(0);
-  const [topH, setTopH] = useState(0); // the part that slides away
-  const [headerH, setHeaderH] = useState(0); // all of it, pinned row included
+  const [headerH, setHeaderH] = useState(0); // all of it: it slides away as one block
   const controlsRef = useRef<ComponentRef<typeof View>>(null);
   const listRef = useRef<FlatList<Found>>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
-  // Follows scroll direction: down hides up to topH, any scroll up reveals again.
+  // Follows scroll direction: down hides the whole header, any scroll up reveals it again.
   const slide = useMemo(
     () =>
-      Animated.diffClamp(scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' }), 0, Math.max(topH, 1)).interpolate({
-        inputRange: [0, Math.max(topH, 1)],
-        outputRange: [0, -Math.max(topH, 1)],
+      Animated.diffClamp(scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' }), 0, Math.max(headerH, 1)).interpolate({
+        inputRange: [0, Math.max(headerH, 1)],
+        outputRange: [0, -Math.max(headerH, 1)],
       }),
-    [scrollY, topH],
+    [scrollY, headerH],
   );
   const openSort = () => {
     // The row moves with the header, so measure where it is now.
@@ -139,7 +139,7 @@ export default function Search() {
         style={[styles.header, { top: insets.top, transform: [{ translateY: slide }] }]}
         onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
       >
-        <View onLayout={(e) => setTopH(e.nativeEvent.layout.height)}>
+        <View>
           <View style={styles.nav}>
             <IconButton label="Back" onPress={() => router.back()}>
               <BackIcon />
@@ -222,7 +222,7 @@ export default function Search() {
             ) : null}
           </ScrollView>
         ) : null}
-        {/* A hairline under the pinned row once results scroll beneath it. */}
+        {/* A hairline under the header once results scroll beneath it. */}
         <Animated.View
           style={{
             height: StyleSheet.hairlineWidth * 2,
