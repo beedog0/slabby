@@ -711,6 +711,9 @@ export default function Scan() {
       : labelMiss
         ? aiMiss
           ? 'Couldn’t read the card, and the AI backup didn’t answer. Try again, or get closer to the number.'
+          : photoMode && !aiBackup
+            // Usually distance: the print is too small for the on-device reader. Say so plainly.
+            ? 'Too far to read. Move closer so the label or card number fills the frame.'
           : seen
           ? `Couldn’t find a slab label or card number in “${seen.slice(0, 80)}”. ${photoMode ? 'Get closer so the label or number is sharp.' : 'Fit the slab or card in the frame and hold steady.'}`
           : photoMode
