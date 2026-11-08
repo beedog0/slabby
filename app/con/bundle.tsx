@@ -22,11 +22,14 @@ import { DEFAULT_CON_NAME, useCon } from '../../src/store/con';
 import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
 import { useVault } from '../../src/store/vault';
-import { color, size, space, type } from '../../src/theme/tokens';
+import { size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 
 const MAX_DIGITS = 7;
 
 export default function Bundle() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const cards = useVault((s) => s.cards);
@@ -304,7 +307,7 @@ export default function Bundle() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   nav: {
     height: size.touch + space.l,
     flexDirection: 'row',
@@ -316,4 +319,4 @@ const styles = StyleSheet.create({
   slabs: { gap: space.l, paddingRight: space.gutter },
   thumbs: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space.s },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center' },
-});
+}));

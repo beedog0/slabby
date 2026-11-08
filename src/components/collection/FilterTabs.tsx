@@ -2,7 +2,8 @@
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CollectionFilter } from '../../pricing/portfolio';
-import { color, size, space, type } from '../../theme/tokens';
+import { size, space, type } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 
 const FILTERS: { value: CollectionFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -12,6 +13,7 @@ const FILTERS: { value: CollectionFilter; label: string }[] = [
 ];
 
 export function FilterTabs({ value, onChange }: { value: CollectionFilter; onChange: (f: CollectionFilter) => void }) {
+  const color = useColors();
   return (
     <View accessibilityRole="tablist" style={styles.row}>
       {FILTERS.map((f) => {

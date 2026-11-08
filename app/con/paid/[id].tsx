@@ -10,11 +10,13 @@ import { Keypad } from '../../../src/components/Keypad';
 import { BackIcon, IconButton, PrimaryButton } from '../../../src/components/ui';
 import { cardLabel, money, rowTitle } from '../../../src/lib/format';
 import { useVault } from '../../../src/store/vault';
-import { color, size, space, type } from '../../../src/theme/tokens';
+import { size, space, type } from '../../../src/theme/tokens';
+import { useColors } from '../../../src/theme/theme';
 
 const MAX_DIGITS = 6;
 
 export default function WhatYouPaid() {
+  const color = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const card = useVault((s) => s.cards.find((c) => c.id === id));

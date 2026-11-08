@@ -11,16 +11,18 @@ import { splitTotal } from '../../pricing/split';
 import { useCardRow, useCardRows } from '../../pricing/useCardRow';
 import { useCon } from '../../store/con';
 import { useVault } from '../../store/vault';
-import { color, space, type } from '../../theme/tokens';
+import { space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import type { Card } from '../../types';
 import { Keypad } from '../Keypad';
 import { closeMenu, openMenu, type MenuItem } from '../menu/Menu';
 import { PrimaryButton } from '../ui';
+import { paidItem } from './paidSheet';
 import { removeSlabs } from './remove';
 
 type Kind = 'sell' | 'hold' | 'sold' | 'remove';
 
-/** The status and remove rows for a slab's … menu, as two groups. */
+/** Edit price paid, the status rows, and remove, for a slab's … menu, as two groups. */
 export function statusItems(card: Card, opts: { onRemoved?: () => void } = {}): MenuItem[][] {
   const sold = card.status === 'sold';
   const status: MenuItem[] = sold
@@ -30,7 +32,7 @@ export function statusItems(card: Card, opts: { onRemoved?: () => void } = {}): 
         ...(card.plan !== 'hold' ? [{ label: 'Move to holds', onPress: () => openStatusSheet(card, 'hold') }] : []),
         { label: 'Mark sold', onPress: () => openStatusSheet(card, 'sold') },
       ];
-  return [status, [{ label: 'Remove from vault', onPress: () => openStatusSheet(card, 'remove', opts.onRemoved) }]];
+  return [[paidItem(card), ...status], [{ label: 'Remove from vault', onPress: () => openStatusSheet(card, 'remove', opts.onRemoved) }]];
 }
 
 export function openStatusSheet(card: Card, kind: Kind, after?: () => void) {
@@ -81,6 +83,8 @@ const done = () => {
 
 /** Market and its 30-day move, then paid and the gain on it. Live: updates if prices refresh. */
 function Live({ id, children }: { id: string; children?: ReactNode }) {
+  const color = useColors();
+  const styles = useStyles();
   const row = useCardRow(id);
   if (!row) return null;
   const { card, price } = row;
@@ -90,16 +94,16 @@ function Live({ id, children }: { id: string; children?: ReactNode }) {
       <Line label={card.grader === 'raw' ? 'TCGplayer market' : 'Market, eBay 30 days'}>
         {price ? (
           <>
-            <Text style={ink}>{money(price.marketCents)}</Text>
+            <Text style={styles.ink}>{money(price.marketCents)}</Text>
             {row.trend30 ? <Text style={{ color: row.trend30 >= 0 ? color.gain : color.loss }}>{`  ${pct(row.trend30)}`}</Text> : null}
           </>
         ) : (
-          <Text style={muted}>No sales yet</Text>
+          <Text style={styles.muted}>No sales yet</Text>
         )}
       </Line>
       {card.paidCents != null ? (
         <Line label="Paid">
-          <Text style={ink}>{money(card.paidCents)}</Text>
+          <Text style={styles.ink}>{money(card.paidCents)}</Text>
           {gainCents != null ? (
             <Text style={{ color: gainCents >= 0 ? color.gain : color.loss }}>{`  ${gainCents >= 0 ? '+' : ''}${money(gainCents)}`}</Text>
           ) : null}
@@ -111,15 +115,17 @@ function Live({ id, children }: { id: string; children?: ReactNode }) {
 }
 
 function Line({ label, children }: { label: string; children: ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.line}>
-      <Text style={[type.text, muted]}>{label}</Text>
+      <Text style={[type.text, styles.muted]}>{label}</Text>
       <Text style={[type.body, { fontWeight: '500' }]}>{children}</Text>
     </View>
   );
 }
 
 function SellBody({ id }: { id: string }) {
+  const styles = useStyles();
   const row = useCardRow(id);
   const update = useVault((s) => s.update);
   if (!row) return null;
@@ -128,9 +134,9 @@ function SellBody({ id }: { id: string }) {
       <Live id={id}>
         {row.ask != null ? (
           <Line label="Ask · floor">
-            <Text style={ink}>{money(row.ask)}</Text>
-            <Text style={muted}>{'  ·  '}</Text>
-            <Text style={ink}>{row.floor != null ? money(row.floor) : '—'}</Text>
+            <Text style={styles.ink}>{money(row.ask)}</Text>
+            <Text style={styles.muted}>{'  ·  '}</Text>
+            <Text style={styles.ink}>{row.floor != null ? money(row.floor) : '—'}</Text>
           </Line>
         ) : null}
       </Live>
@@ -146,6 +152,7 @@ function SellBody({ id }: { id: string }) {
 }
 
 function HoldBody({ id }: { id: string }) {
+  const styles = useStyles();
   const row = useCardRow(id);
   const update = useVault((s) => s.update);
   if (!row) return null;
@@ -157,7 +164,7 @@ function HoldBody({ id }: { id: string }) {
       <Live id={id}>
         {sold && row.card.soldCents != null ? (
           <Line label="Sold for">
-            <Text style={ink}>{money(row.card.soldCents)}</Text>
+            <Text style={styles.ink}>{money(row.card.soldCents)}</Text>
           </Line>
         ) : null}
       </Live>
@@ -175,6 +182,8 @@ function HoldBody({ id }: { id: string }) {
 }
 
 function SoldBody({ id }: { id: string }) {
+  const color = useColors();
+  const styles = useStyles();
   const row = useCardRow(id);
   const update = useVault((s) => s.update);
   const con = useCon((s) => s.session);
@@ -192,7 +201,7 @@ function SoldBody({ id }: { id: string }) {
     <View>
       <Live id={id} />
       <View style={styles.amount}>
-        <Text style={[type.text, muted]}>Sold for</Text>
+        <Text style={[type.text, styles.muted]}>Sold for</Text>
         <Text style={[type.displayS, { color: cents != null ? color.ink : color.secondary }]}>
           {cents != null ? money(cents) : '$0'}
         </Text>
@@ -212,6 +221,7 @@ function SoldBody({ id }: { id: string }) {
 }
 
 function RemoveBody({ id, after }: { id: string; after?: () => void }) {
+  const styles = useStyles();
   return (
     <View>
       <Live id={id} />
@@ -222,17 +232,18 @@ function RemoveBody({ id, after }: { id: string; after?: () => void }) {
 }
 
 function RemoveManyBody({ cards, after }: { cards: Card[]; after?: () => void }) {
+  const styles = useStyles();
   const ids = cards.map((c) => c.id);
   const paid = cards.reduce((n, c) => n + (c.paidCents ?? 0), 0);
   return (
     <View>
       <View style={styles.live}>
         <Line label="Slabs">
-          <Text style={ink}>{cards.length}</Text>
+          <Text style={styles.ink}>{cards.length}</Text>
         </Line>
         {paid ? (
           <Line label="Paid in total">
-            <Text style={ink}>{money(paid)}</Text>
+            <Text style={styles.ink}>{money(paid)}</Text>
           </Line>
         ) : null}
       </View>
@@ -244,6 +255,8 @@ function RemoveManyBody({ cards, after }: { cards: Card[]; after?: () => void })
 
 /** Combined numbers for several slabs: market (and its 30-day move), paid and the gain on it. */
 function LiveMany({ ids, children }: { ids: string[]; children?: ReactNode }) {
+  const color = useColors();
+  const styles = useStyles();
   const rows = useCardRows(ids);
   let market = 0, before = 0, paid = 0, paidOfPriced = 0, priced = 0;
   for (const r of rows) {
@@ -261,16 +274,16 @@ function LiveMany({ ids, children }: { ids: string[]; children?: ReactNode }) {
       <Line label={priced < rows.length ? `Market, ${priced} of ${rows.length} priced` : 'Market together'}>
         {priced ? (
           <>
-            <Text style={ink}>{money(market)}</Text>
+            <Text style={styles.ink}>{money(market)}</Text>
             {Math.round(move * 100) ? <Text style={{ color: move >= 0 ? color.gain : color.loss }}>{`  ${pct(move)}`}</Text> : null}
           </>
         ) : (
-          <Text style={muted}>No sales yet</Text>
+          <Text style={styles.muted}>No sales yet</Text>
         )}
       </Line>
       {paid ? (
         <Line label="Paid">
-          <Text style={ink}>{money(paid)}</Text>
+          <Text style={styles.ink}>{money(paid)}</Text>
           {gain != null && paidOfPriced ? (
             <Text style={{ color: gain >= 0 ? color.gain : color.loss }}>{`  ${gain >= 0 ? '+' : ''}${money(gain)}`}</Text>
           ) : null}
@@ -282,6 +295,8 @@ function LiveMany({ ids, children }: { ids: string[]; children?: ReactNode }) {
 }
 
 function MoveManyBody({ ids, kind, after }: { ids: string[]; kind: 'sell' | 'hold' | 'sold'; after?: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   const rows = useCardRows(ids);
   const update = useVault((s) => s.update);
   const con = useCon((s) => s.session);
@@ -301,9 +316,9 @@ function MoveManyBody({ ids, kind, after }: { ids: string[]; kind: 'sell' | 'hol
         <LiveMany ids={ids}>
           {sell && ask ? (
             <Line label="Asks · floors">
-              <Text style={ink}>{money(ask)}</Text>
-              <Text style={muted}>{'  ·  '}</Text>
-              <Text style={ink}>{money(floor)}</Text>
+              <Text style={styles.ink}>{money(ask)}</Text>
+              <Text style={styles.muted}>{'  ·  '}</Text>
+              <Text style={styles.ink}>{money(floor)}</Text>
             </Line>
           ) : null}
         </LiveMany>
@@ -348,7 +363,7 @@ function MoveManyBody({ ids, kind, after }: { ids: string[]; kind: 'sell' | 'hol
     <View>
       <LiveMany ids={ids} />
       <View style={styles.amount}>
-        <Text style={[type.text, muted]}>Sold together for</Text>
+        <Text style={[type.text, styles.muted]}>Sold together for</Text>
         <Text style={[type.displayS, { color: total != null ? color.ink : color.secondary }]}>{total != null ? money(total) : '$0'}</Text>
         <Text style={[type.secondary, { color: vsPaid == null ? color.secondary : vsPaid >= 0 ? color.gain : color.loss }]}>
           {vsPaid != null ? `${vsPaid >= 0 ? '+' : ''}${money(vsPaid)} vs paid` : total == null ? 'Type the total, or leave it blank' : ' '}
@@ -368,14 +383,13 @@ function MoveManyBody({ ids, kind, after }: { ids: string[]; kind: 'sell' | 'hol
   );
 }
 
-const ink = { color: color.ink };
-const muted = { color: color.secondary };
-
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
+  ink: { color: color.ink },
+  muted: { color: color.secondary },
   live: { paddingTop: space.m, gap: space.xs },
   line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', minHeight: 28 },
   note: { color: color.secondary, paddingTop: space.s, paddingBottom: space.l },
   amount: { alignItems: 'center', paddingTop: space.l, paddingBottom: space.m, gap: 2 },
   // The keypad spans the sheet edge to edge, like the system number pad.
   pad: { marginHorizontal: -space.gutter, marginBottom: space.m },
-});
+}));

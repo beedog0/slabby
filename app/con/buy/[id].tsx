@@ -39,13 +39,16 @@ import { useCon } from '../../../src/store/con';
 import { useWishlist, wishKey, type WishGrade } from '../../../src/store/wishlist';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
-import { color, size, space, type } from '../../../src/theme/tokens';
+import { size, space, type } from '../../../src/theme/tokens';
+import { themed, useColors } from '../../../src/theme/theme';
 
 const MAX_DIGITS = 6;
 /** The grades on the switch. Lower grades still open from a wishlist item or the full card page. */
 const BUY_GRADES: (SearchGrade | 'raw')[] = ['raw', 'psa10', 'psa9', 'psa8'];
 
 export default function TheyreAsking() {
+  const color = useColors();
+  const styles = useStyles();
   const { id, grade: gradeParam } = useLocalSearchParams<{ id: string; grade?: string }>();
   const [grade, setGrade] = useState<SearchGrade | 'raw'>((gradeParam || 'psa10') as SearchGrade | 'raw');
   const insets = useSafeAreaInsets();
@@ -391,7 +394,7 @@ export default function TheyreAsking() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   nav: {
     height: size.touch + space.l,
     flexDirection: 'row',
@@ -403,4 +406,4 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: 'row', gap: space.m, alignItems: 'flex-start' },
   art: { width: 48, height: 67, borderRadius: 3, overflow: 'hidden', backgroundColor: color.well },
   links: { flexDirection: 'row', gap: space.l, paddingTop: space.xs },
-});
+}));

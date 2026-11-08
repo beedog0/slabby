@@ -5,7 +5,8 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { money } from '../../lib/format';
 import { KEYBOARD_DONE } from '../KeyboardDone';
-import { color, size, space, type } from '../../theme/tokens';
+import { size, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import { PrimaryButton } from '../ui';
 
 type Props = {
@@ -17,6 +18,8 @@ type Props = {
 };
 
 export function AskStep({ marketCents, suggestedCents, onContinue, onBack }: Props) {
+  const color = useColors();
+  const styles = useStyles();
   const [dollars, setDollars] = useState(suggestedCents ? String(Math.round(suggestedCents / 100)) : '');
   const cents = parseInt(dollars, 10) * 100;
   const ok = Number.isFinite(cents) && cents > 0;
@@ -50,7 +53,7 @@ export function AskStep({ marketCents, suggestedCents, onContinue, onBack }: Pro
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   input: { color: color.ink, paddingVertical: space.m },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center', marginTop: space.s },
-});
+}));

@@ -22,9 +22,12 @@ import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
 import { useTrade, type TheirCard } from '../../src/store/trade';
 import { useVault } from '../../src/store/vault';
-import { color, size, space, type } from '../../src/theme/tokens';
+import { size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 
 export default function Trade() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const cards = useVault((s) => s.cards);
@@ -176,6 +179,8 @@ export default function Trade() {
 }
 
 function Side({ title, addLabel, onAdd, children }: { title: string; addLabel: string; onAdd: () => void; children: React.ReactNode }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <View style={{ paddingTop: space.xxl }}>
       <View style={styles.sideHead}>
@@ -193,6 +198,8 @@ function Side({ title, addLabel, onAdd, children }: { title: string; addLabel: s
 }
 
 function TheirRow({ c, onPress }: { c: TheirCard; onPress: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   // Name on one line; variant, set (without its "SWSH07:" code) and grade on the next.
   const { name, variant } = nameAndVariant(c.name);
   const detail = [variant, setTitle(c.setName), gradeLabel(c.grade as SearchGrade | 'raw')].filter(Boolean).join(' · ');
@@ -208,7 +215,7 @@ function TheirRow({ c, onPress }: { c: TheirCard; onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   nav: {
     height: size.touch + space.l,
     flexDirection: 'row',
@@ -222,4 +229,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m, minHeight: size.rowVault, paddingVertical: space.s },
   art: { width: size.thumbW, height: size.thumbH, borderRadius: 3, overflow: 'hidden', backgroundColor: color.well },
   add: { flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: size.touch + space.s },
-});
+}));

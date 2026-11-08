@@ -10,9 +10,11 @@ import { rowFor } from '../../src/pricing/portfolio';
 import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
 import { useVault } from '../../src/store/vault';
-import { color, size, space, type } from '../../src/theme/tokens';
+import { size, space, type } from '../../src/theme/tokens';
+import { useColors } from '../../src/theme/theme';
 
 export default function PickCard() {
+  const color = useColors();
   const insets = useSafeAreaInsets();
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);

@@ -3,11 +3,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { bare, cardLabel, money, rowTitle } from '../lib/format';
 import type { CardRow } from '../pricing/portfolio';
-import { color, size, space, type } from '../theme/tokens';
+import { size, space, type } from '../theme/tokens';
+import { useColors } from '../theme/theme';
 import { CardThumb } from './CardThumb';
 import { Sparkline } from './Sparkline';
 
 export function ConRow({ row, onPress, onLongPress }: { row: CardRow; onPress: () => void; onLongPress?: () => void }) {
+  const color = useColors();
   const { card, price } = row;
   const sold = card.status === 'sold';
   // Trade only isn't for cash, so it shows what the card is worth instead of an ask and floor.

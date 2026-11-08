@@ -15,7 +15,8 @@ import type { CardPrice } from '../../services/comps';
 import { isQuiet, openPrices, type CatalogCard, type SearchGrade, type SearchPrices } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
 import { setCards } from '../../services/setCards';
-import { color, space, type } from '../../theme/tokens';
+import { space, type } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 import type { Card } from '../../types';
 import { Hairline } from '../ui';
 import { GradeLadder, RangeMeter, SetRow } from './CardInsights';
@@ -83,6 +84,7 @@ export function CardAnalyticsView({
  * card is matched, and nothing at all when it can't be.
  */
 export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
+  const color = useColors();
   const pick = choiceFor(card);
   const [cat, setCat] = useState<CatalogCard | null>(null);
   const [prices, setPrices] = useState<SearchPrices | null | undefined>(undefined);
@@ -148,6 +150,7 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
  * in src/pricing/cardStats.ts.
  */
 export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPrice; prices: SearchPrices }) {
+  const color = useColors();
   const hist = history(price);
   const cells: { label: string; value: string | null }[] = [];
   const read: ReactNode[] = [];
