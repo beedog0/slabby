@@ -15,7 +15,8 @@ import { matchNewCard, refreshPrices } from '../src/services/comps';
 import { ImportError, parseImport, SOURCE_NAME, type ImportSource } from '../src/services/importCsv';
 import { cardsFor, matchAll, type Matched } from '../src/services/importMatch';
 import { useVault } from '../src/store/vault';
-import { color, size, space, type } from '../src/theme/tokens';
+import { size, space, type } from '../src/theme/tokens';
+import { themed, useColors } from '../src/theme/theme';
 import type { Card } from '../src/types';
 
 type Step =
@@ -32,6 +33,8 @@ async function readText(uri: string): Promise<string> {
 }
 
 export default function ImportCollection() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const add = useVault((s) => s.add);
   const vault = useVault((s) => s.cards);
@@ -187,6 +190,8 @@ function summary(source: ImportSource, c: { matched: number; unmatched: number }
 }
 
 function ImportRowView({ item, out, onPress }: { item: Item; out: boolean; onPress: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   const { row, card, preview } = item;
   const second = [
     preview.setName ?? row.setName,
@@ -249,10 +254,10 @@ async function linkAll(added: { card: Card; productId?: string }[], width = 3): 
   await refreshPrices(added.map((a) => a.card));
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   lead: { color: color.secondary, paddingTop: space.s },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.gutter, paddingVertical: space.m },
-});
+}));
