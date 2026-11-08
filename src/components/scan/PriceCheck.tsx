@@ -179,7 +179,7 @@ export function PriceCheck({ productId, grade, fallback, onBought, onNext, onAdd
         <TextInput
           value={digits ? `$${digits}` : ''}
           onChangeText={setAsk}
-          placeholder="$0"
+          placeholder="—"
           placeholderTextColor={color.secondary}
           keyboardType="number-pad"
           inputAccessoryViewID={KEYBOARD_DONE}

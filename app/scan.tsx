@@ -58,7 +58,8 @@ import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
 import { cardPrice, gradeLabel, money, promoTag, rowTitle } from '../src/lib/format';
 import { CardName } from '../src/components/CardName';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
-import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
+import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, nameFromMatch, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
+import { productName } from '../supabase/functions/_shared/comps-math';
 import { cardSteadyKey, findScannedCard, looksLikeSlab, correctionKey, findSimilarCards, missReason, parseCardText, printedNumber, printName, printOptions, readName, similarForSlab, withCorrection, type CardMatch, type ParsedCard } from '../src/services/cardScan';
 import { artRead, combine, identifyByArt, matchArt, printsOf, type ArtHit, type FoundCard, type Identified } from '../src/services/artMatch';
 import { useCorrections } from '../src/store/corrections';
@@ -207,7 +208,8 @@ export default function Scan() {
   const price = preview && !gradeMissing ? (livePrice ?? priceFor(preview)) : null;
 
   // Match the scanned card right away: photo, then prices. One card-match call per scan; Add reuses it.
-  const [matched, setMatched] = useState<{ key: string; art: string | null; productId: number | null } | null>(null);
+  // name: the matched catalog card's name when the label read differs from it ("SHIONG MAGIKARP").
+  const [matched, setMatched] = useState<{ key: string; art: string | null; productId: number | null; name: string | null } | null>(null);
   const [matching, setMatching] = useState(false);
   const match = useRef<{ key: string; done: Promise<CardRef | null> } | null>(null);
   useEffect(() => {
@@ -224,11 +226,12 @@ export default function Scan() {
       match.current = { key: previewKey, done };
     }
     let live = true;
+    const labelName = preview.name;
     setMatching(true);
     match.current.done.then((ref) => {
       if (!live) return;
       const pid = ref?.tcgplayer_id ? Number(ref.tcgplayer_id) : NaN;
-      setMatched({ key: previewKey, art: artFor(ref), productId: Number.isFinite(pid) ? pid : null });
+      setMatched({ key: previewKey, art: artFor(ref), productId: Number.isFinite(pid) ? pid : null, name: nameFromMatch(labelName, ref?.matched_name) });
       setMatching(false);
     });
     return () => {
@@ -249,7 +252,8 @@ export default function Scan() {
     if (!preview || !previewKey) return;
     const card = preview;
     setSimilar(null);
-    setMatched({ key: previewKey, art: c.imageUrl, productId: c.productId });
+    const picked = nameFromMatch(card.name, productName(c.name));
+    setMatched({ key: previewKey, art: c.imageUrl, productId: c.productId, name: picked });
     setMatching(true);
     // An explicit product replaces the server's match for this card (card-match), for every device.
     const done = matchNewCard(card, String(c.productId))
@@ -262,12 +266,14 @@ export default function Scan() {
     done.then((ref) => {
       if (match.current?.done !== done) return;
       // The picked card's photo, even if an older server still answers with its first match.
-      setMatched({ key: previewKey, art: ref && String(ref.tcgplayer_id) === String(c.productId) ? (artFor(ref) ?? c.imageUrl) : c.imageUrl, productId: c.productId });
+      setMatched({ key: previewKey, art: ref && String(ref.tcgplayer_id) === String(c.productId) ? (artFor(ref) ?? c.imageUrl) : c.imageUrl, productId: c.productId, name: picked });
       setMatching(false);
     });
   };
   const art = matched && matched.key === previewKey ? matched.art : null;
-  const shown = preview && art ? { ...preview, imageFrontUrl: art } : preview;
+  // The card's name comes from the matched card, not the label read: glare turns "SHINING" into "SHIONG".
+  const matchName = matched && matched.key === previewKey ? matched.name : null;
+  const shown = preview ? { ...preview, ...(art ? { imageFrontUrl: art } : {}), ...(matchName ? { name: matchName } : {}) } : preview;
   const owned = preview?.certNumber ? existing.find((c) => c.certNumber === preview.certNumber && c.status === 'owned') : undefined;
   const already = !!owned;
   // Copies of this card (same card, grader and grade) already in the vault, whatever their cert.
@@ -296,6 +302,7 @@ export default function Scan() {
     if (result?.status !== 'found' || gradeMissing) return;
     const card = cardFromCert(result.payload, { paidCents: paidCentsOf(cost), plan });
     if (art) card.imageFrontUrl = art;
+    if (matchName) card.name = matchName;
     add(card);
     afterSave(card);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -309,6 +316,7 @@ export default function Scan() {
     if (result?.status !== 'found' || gradeMissing) return;
     const card = cardFromCert(result.payload, { paidCents: paidCentsOf(cost), plan: 'sell' });
     if (art) card.imageFrontUrl = art;
+    if (matchName) card.name = matchName;
     const productId = (matched?.key === previewKey ? matched.productId : null) ?? mockProductId(card);
     openSell({ card, productId, marketCents: price?.marketCents ?? null, askCents, cost: toCost(cost), afterSave }, startSell);
   };
@@ -319,6 +327,7 @@ export default function Scan() {
     Keyboard.dismiss();
     const card = { ...cardFromCert(result.payload, { paidCents: cents, plan: 'hold' }), boughtConId: session?.id, boughtMarketCents: marketCents };
     if (art) card.imageFrontUrl = art;
+    if (matchName) card.name = matchName;
     add(card);
     afterSave(card);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -431,6 +440,7 @@ export default function Scan() {
     if (!owned) {
       const card = cardFromCert(result.payload, { paidCents, plan: conStatus === 'sold' ? 'sell' : planPatch(conStatus).plan });
       if (art) card.imageFrontUrl = art;
+    if (matchName) card.name = matchName;
       add(card);
       afterSave(card);
       id = card.id;
@@ -1065,7 +1075,7 @@ export default function Scan() {
                 <SlabView card={shown ?? preview} width={size.sheetSlabW} posed={false} />
                 <View style={{ flex: 1 }}>
                   {/* Long names wrap to a second line; never cut off ("Tm.Aqua's Kyogre EX"). */}
-                  <CardName name={rowTitle(preview)} language={preview.language} numberOfLines={2} large style={[type.title, { color: color.ink }]} />
+                  <CardName name={rowTitle(shown ?? preview)} language={preview.language} numberOfLines={2} large style={[type.title, { color: color.ink }]} />
                   <Text style={[type.text, { color: color.secondary }]}>
                     {[gameOf(preview) === 'pokemon' ? null : GAMES[gameOf(preview)].name, promoTag(preview), gradeLabel(preview.grader, preview.grade)]
                       .filter(Boolean)

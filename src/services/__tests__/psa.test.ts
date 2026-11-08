@@ -63,6 +63,11 @@ describe('nameFromMatch', () => {
     // 2024 POKEMON JPN SV8a / PZA #236: the label line under the brand is a code, not the name.
     expect(nameFromMatch('Pza', 'Pikachu ex')).toBe('Pikachu ex');
   });
+  it('replaces an OCR slip with the matched card name', () => {
+    // Glare on cert 139877386: "SHI[glare]NG MAGIKARP-HOLO" read as SHIONG.
+    expect(nameFromMatch('Shiong Magikarp-holo', 'Shining Magikarp')).toBe('Shining Magikarp');
+    expect(nameFromMatch('Charizrd', 'Charizard')).toBe('Charizard');
+  });
   it('keeps a label name that agrees with the match', () => {
     expect(nameFromMatch('Mew ex', 'Mew ex')).toBeNull();
     expect(nameFromMatch('Charizard-holo', 'Charizard')).toBeNull();
