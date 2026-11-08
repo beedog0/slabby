@@ -50,14 +50,15 @@ import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
 import { cardPrice, gradeLabel, money, rowTitle } from '../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
 import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
-import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, correctionKey, findSimilarCards, missReason, parseCardText, printedNumber, printName, printOptions, similarForSlab, withCorrection, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { cardSteadyKey, findScannedCard, looksLikeSlab, correctionKey, findSimilarCards, missReason, parseCardText, printedNumber, printName, printOptions, readName, similarForSlab, withCorrection, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { artRead, combine, identifyByArt, matchArt, printsOf, type ArtHit, type FoundCard, type Identified } from '../src/services/artMatch';
 import { useCorrections } from '../src/store/corrections';
 import { cardNumber, displayName, mockProductId, nameAndVariant, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
 import { usePrices } from '../src/store/prices';
-import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type ParsedLabel } from '../src/services/label';
+import { autoProgress, frameInPhoto, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
 import { readPhoto } from '../src/services/photoScan';
 import { readPhotoWithVision } from '../src/services/vision';
@@ -130,6 +131,8 @@ export default function Scan() {
   const [raw, setRaw] = useState<RawRead | null>(null);
   // What auto-read has gathered so far for the card in frame (fields merge across frames).
   const auto = useRef<AutoRead>(null);
+  // Live scan by art: the card the last frame's art was sure of (two frames in a row add it).
+  const lastArt = useRef<number | null>(null);
   // The last card read. Once it's in the vault, auto-read ignores it, so the slab just added (and
   // still in frame after the sheet closes) isn't read again. A tap still reads it.
   const lastRead = useRef<string | null>(null);
@@ -327,24 +330,32 @@ export default function Scan() {
     if (rawOpen) sheet.reset();
   }, [rawOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const acceptCard = (read: ParsedCard) => {
+  // A loose card. The number read finds its candidates (exact), the art photographed reorders them
+  // or, with no number, finds them itself (src/services/artMatch.ts). `known` is an answer already
+  // worked out from the art, so the sheet opens on it straight away.
+  const acceptCard = (read: ParsedCard, art: Promise<ArtFound> = Promise.resolve(null), known?: Identified) => {
     lastKey.current = null;
+    lastArt.current = null;
     setSpotted(false);
     setLabelMiss(false);
-    setRaw({ read, matches: null, pick: 0, choosing: false });
+    setRaw({ read, matches: known?.matches ?? null, pick: 0, choosing: !!known && known.matches.length > 1 && !known.confident, byArt: known?.byArt });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    findScannedCard(read)
-      .catch(() => [] as CardMatch[])
-      // A card corrected before ("Not this card?") comes first, so it's never wrong twice.
-      .then((found) => withCorrection(found, useCorrections.getState().byKey[correctionKey(read)]))
-      .then((matches) => {
-        setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !isConfident(matches), similar: matches.length ? undefined : null } : r));
-        // No card with this number (a promo with no set, a print the catalog lacks): offer cards with the same name.
-        if (!matches.length)
-          findSimilarCards(read)
-            .catch(() => [] as CatalogCard[])
-            .then((similar) => setRaw((r) => (r && r.read === read ? { ...r, similar } : r)));
-      });
+    if (known) return;
+    const byNumber = read.numbers.length
+      ? findScannedCard(read)
+          .catch(() => [] as CardMatch[])
+          // A card corrected before ("Not this card?") comes first, so it's never wrong twice.
+          .then((found) => withCorrection(found, useCorrections.getState().byKey[correctionKey(read)]))
+      : Promise.resolve([] as CardMatch[]);
+    Promise.all([byNumber, art.catch(() => null)]).then(([found, seen]) => {
+      const { matches, confident, byArt } = combine(found, seen, read);
+      setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !confident, byArt, similar: matches.length ? undefined : null } : r));
+      // No card with this number (a promo with no set, a print the catalog lacks): offer cards with the same name.
+      if (!matches.length)
+        findSimilarCards(read)
+          .catch(() => [] as CatalogCard[])
+          .then((similar) => setRaw((r) => (r && r.read === read ? { ...r, similar } : r)));
+    });
   };
 
   /** Con mode: add (or re-mark) the slab with the chosen status. `again` keeps the camera up. */
@@ -427,7 +438,11 @@ export default function Scan() {
     try {
       const photo = await camera.current.takePictureAsync({ quality: manual ? 0.9 : 0.7, shutterSound: false });
       uri = photo?.uri;
+      // The card's art is found alongside the text (both on device), before the photo is dropped.
+      const region = photo ? frameInPhoto(photo, win, frameRect.current) : null;
+      const seenCard = uri && LabelReader.findCard ? LabelReader.findCard(uri, region ? { region } : undefined).catch(() => null) : Promise.resolve(null);
       const all = uri ? await LabelReader.recognize(uri) : [];
+      const cardPixels = await seenCard;
       // Only text inside the frame: a laptop screen or the next slab behind it never gets read.
       const inFrame = photo ? linesInFrame(all, photo, win, frameRect.current) : all;
       const lines = manual && !inFrame.length ? all : inFrame;
@@ -443,7 +458,14 @@ export default function Scan() {
         // A tap takes this frame, topped up with the grade or cert earlier frames read.
         const best = step.ready ?? withVotes(auto.current, parsed);
         if (best?.payload.PSACert.Subject && (slabbed || !loose)) return accept(best);
-        if (loose) return acceptCard(loose);
+        if (loose) return acceptCard(loose, artOf(cardPixels));
+        // No label, no number: the art may still know the card.
+        if (!slabbed && cardPixels) {
+          const read = artRead(lines, readName);
+          const art = await artOf(cardPixels);
+          const id = combine([], art, read);
+          if (id.matches.length) return acceptCard(read, Promise.resolve(art), id);
+        }
         setSeen(lines.slice(0, 4).map((l) => l.text).join(' · '));
         setLabelMiss(true);
         auto.current = null;
@@ -460,7 +482,7 @@ export default function Scan() {
           lastKey.current = null;
           setSpotted(false);
         } else if (key === lastKey.current) {
-          acceptCard(loose);
+          acceptCard(loose, artOf(cardPixels));
         } else {
           if (!lastKey.current) Haptics.selectionAsync().catch(() => {});
           lastKey.current = key;
@@ -470,6 +492,23 @@ export default function Scan() {
         return;
       }
       lastKey.current = null;
+      // Nothing to read yet, but a card in the frame: its art can name it. Sure twice in a row adds it.
+      if (!slabbed && !step.state && cardPixels?.found) {
+        const read = artRead(lines, readName);
+        const art = await artOf(cardPixels);
+        const id = combine([], art, read);
+        const top = id.confident ? id.matches[0].card.productId : null;
+        if (top && top === lastArt.current) return acceptCard(read, Promise.resolve(art), id);
+        if (top && top !== lastArt.current) {
+          if (!lastArt.current) Haptics.selectionAsync().catch(() => {});
+          setSpotted(true);
+          setLabelMiss(false);
+        }
+        lastArt.current = top;
+        if (top) return;
+      } else {
+        lastArt.current = null;
+      }
       if (step.ready && justAdded(step.ready)) {
         auto.current = null;
         setSpotted(false);
@@ -516,10 +555,22 @@ export default function Scan() {
     let aiDown = false;
     try {
       const reader = LabelReader;
+      // The art is found and looked up while the text is read; it costs no extra wait.
+      const art = identifyByArt(reader, uri).catch(() => null);
       // Small text on: Vision's default skips anything under 1/32 of the picture's height, which
       // is where a card's set code and number sit when the whole card is in the photo.
       const first = await reader.recognize(uri, { minTextHeight: PHOTO_MIN_TEXT }).catch(() => []);
       let r = readPhoto(first);
+      if (r.kind === 'card') return acceptCard(r.card, art);
+      // No number read: the art may settle it now, with no closer look and no AI.
+      let byArt: { read: ParsedCard; id: Identified; art: ArtFound } | null = null;
+      if (r.kind === 'miss') {
+        const seen = await art;
+        const read = artRead(first, readName);
+        const id = combine([], seen, read);
+        if (id.confident) return acceptCard(read, Promise.resolve(seen), id);
+        if (id.matches.length) byArt = { read, id, art: seen };
+      }
       // No label or number yet: read the photo again in enlarged pieces (the small print at arm's length).
       if (r.kind === 'miss') {
         setLooking('closer');
@@ -527,6 +578,8 @@ export default function Scan() {
         const again = readPhoto([...first, ...pieces]);
         if (again.kind !== 'miss') r = again;
       }
+      // The art's best guesses, to pick from, beat asking the AI or a miss.
+      if (r.kind === 'miss' && byArt) return acceptCard(byArt.read, Promise.resolve(byArt.art), byArt.id);
       // Still nothing, and the AI backup read is on: it looks at the whole card. Same parsers
       // and catalog match after that.
       if (r.kind === 'miss' && useScanPrefs.getState().aiBackup) {
@@ -536,7 +589,7 @@ export default function Scan() {
         else if (seenByVision.kind !== 'miss') r = seenByVision;
       }
       if (r.kind === 'slab') return accept(r.label);
-      if (r.kind === 'card') return acceptCard(r.card);
+      if (r.kind === 'card') return acceptCard(r.card, art);
       setSeen(aiDown ? '' : r.seen);
     } finally {
       setReading(false);
@@ -1108,7 +1161,19 @@ type RawRead = {
   similar?: CatalogCard[] | null;
   /** "Not this card?" opened the similar-cards list over a found card. */
   showSimilar?: boolean;
+  /** Found by the card's art, not its number (none was read). */
+  byArt?: boolean;
 };
+
+type ArtFound = { hits: ArtHit[]; edge: boolean } | null;
+
+/** Look up the art of a card found in a frame (null when none was found or the lookup failed). */
+function artOf(found: FoundCard | null): Promise<ArtFound> {
+  if (!found) return Promise.resolve(null);
+  return matchArt(printsOf(found))
+    .then((hits) => ({ hits, edge: found.found }))
+    .catch(() => null);
+}
 
 /**
  * A loose card as it would be saved: raw, priced at TCGplayer market. A print the scan can't see
@@ -1182,7 +1247,9 @@ function RawSheet({
   const rules = useRules((s) => s.rules);
   const startSell = useSellDraft((s) => s.start);
   const n = raw.read.numbers[0];
-  const printed = printedNumber(n);
+  const printed = n ? printedNumber(n) : null;
+  // What the sheet says it went by: the number read, or the art when no number was.
+  const source = printed ? `Read from the card · ${printed}` : 'Matched by the card’s art';
   const best = raw.matches?.[raw.pick]?.card ?? null;
   // Print: null is the catalog's own (base) printing. Holo vs reverse holo can't be told from a photo.
   const [print, setPrint] = useState<number | null>(null);
@@ -1206,7 +1273,8 @@ function RawSheet({
   const afterSave = (card: Card) => {
     if (!best) return;
     // The card saved is the right one for this read; the next scan of it picks it first.
-    remember(correctionKey(raw.read), best.productId);
+    // (Number reads only: an art match has no number to key the memory by.)
+    if (raw.read.numbers.length) remember(correctionKey(raw.read), best.productId);
     matchNewCard(card, String(best.productId))
       .then(() => refreshPrices([card]))
       .catch(() => {});
@@ -1259,12 +1327,12 @@ function RawSheet({
       <View style={styles.grabber} />
       {raw.matches === null ? (
         <>
-          <Text style={[type.text, { color: color.secondary }]}>Read from the card · {printed}</Text>
+          <Text style={[type.text, { color: color.secondary }]}>{printed ? source : 'Looking at the card'}</Text>
           <Text style={[type.body, { color: color.ink, paddingVertical: space.l }]}>Finding the card</Text>
         </>
       ) : !best || !preview || raw.showSimilar ? (
         <>
-          <Text style={[type.section, { color: color.ink }]}>{best && preview ? 'Which card is it?' : `Couldn’t find card ${printed}`}</Text>
+          <Text style={[type.section, { color: color.ink }]}>{best && preview ? 'Which card is it?' : printed ? `Couldn’t find card ${printed}` : 'Couldn’t place this card'}</Text>
           <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
             {best && preview ? `Cards named ${raw.read.name ?? displayName(best.name)}. Slabby will remember the one you pick.` : missReason(raw.read)}
           </Text>
@@ -1323,7 +1391,7 @@ function RawSheet({
         <>
           <Text style={[type.section, { color: color.ink }]}>Which card is it?</Text>
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
-            {raw.matches.length} cards {oneSet ? `in ${oneSet} ` : ''}are numbered {printed}.
+            {printed ? `${raw.matches.length} cards ${oneSet ? `in ${oneSet} ` : ''}are numbered ${printed}.` : `${raw.matches.length} cards look like this one.`}
           </Text>
           <SheetScrollView style={{ maxHeight: size.rowVault * 5 }}>
             {raw.matches.map((m, i) => (
@@ -1359,7 +1427,7 @@ function RawSheet({
         </>
       ) : (
         <>
-          <Text style={[type.text, { color: color.secondary }]}>Read from the card · {printed}</Text>
+          <Text style={[type.text, { color: color.secondary }]}>{source}</Text>
           <View style={styles.cardRow}>
             <SlabView card={preview} width={size.sheetSlabW} posed={false} />
             <View style={{ flex: 1 }}>
