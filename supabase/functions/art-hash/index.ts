@@ -19,7 +19,8 @@ const UA = { 'User-Agent': 'slabby-art-hash/0.1 (+https://github.com/beedog0/sla
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
 
 /** The 200 px wide version of a TCGplayer product image. */
-export const smallImage = (url: string) => url.replace(/_(?:\d+w|in_\d+x\d+)\.jpg$/, '_200w.jpg');
+export const smallImage = (url: string) =>
+  url.replace(/_(?:\d+w|in_\d+x\d+)\.jpg$/, '_200w.jpg').replace(/^(https:\/\/assets\.tcgdex\.net\/.*)\/high\.(?:jpg|png|webp)$/, '$1/low.jpg');
 
 async function allowed(req: Request, admin: ReturnType<typeof createClient>): Promise<boolean> {
   const cronToken = req.headers.get('x-cron-token');
@@ -34,13 +35,14 @@ Deno.serve(async (req) => {
 
   const { data: todo, error } = await admin.rpc('claim_art_batch', { n: BATCH });
   if (error) return json({ error: error.message }, 500);
-  const rows = (todo ?? []) as { product_id: number; image_url: string }[];
+  const rows = (todo ?? []) as { product_id: number; image_url: string; alt?: boolean }[];
 
   let cpu = 0;
   let hashed = 0;
   const failed: number[] = [];
   // TCGplayer has no picture yet (403 AccessDenied, or an empty 200): not worth retrying for days.
   const missing: number[] = [];
+  const missingAlt: number[] = [];
   const released: number[] = [];
   const out: Record<string, unknown>[] = [];
 
@@ -58,7 +60,7 @@ Deno.serve(async (req) => {
         const res = await fetch(smallImage(row.image_url), { headers: UA });
         if (res.ok) bytes = new Uint8Array(await res.arrayBuffer());
         if ((res.ok && !bytes?.length) || res.status === 403 || res.status === 404) {
-          missing.push(row.product_id);
+          (row.alt ? missingAlt : missing).push(row.product_id);
           continue;
         }
       } catch {
@@ -92,10 +94,11 @@ Deno.serve(async (req) => {
     if (e) return json({ error: e.message }, 500);
   }
   // No picture on TCGplayer: parked; claim_art_batch looks again after a few days (0019).
-  if (missing.length) {
+  if (missing.length || missingAlt.length) {
     const now = new Date().toISOString();
+    // tries 4: the backup picture (0022) is missing too; the 3-day look tries TCGplayer's again.
     await admin.from('catalog_art').upsert(
-      missing.map((product_id) => ({ product_id, tries: 3, claimed_at: now })),
+      [...missing.map((product_id) => ({ product_id, tries: 3, claimed_at: now })), ...missingAlt.map((product_id) => ({ product_id, tries: 4, claimed_at: now }))],
       { onConflict: 'product_id' },
     );
   }
@@ -103,5 +106,5 @@ Deno.serve(async (req) => {
   if (released.length) {
     await admin.rpc('release_art_claims', { ids: released });
   }
-  return json({ claimed: rows.length, hashed, failed: failed.length, missing: missing.length, released: released.length, cpuMs: Math.round(cpu) });
+  return json({ claimed: rows.length, hashed, failed: failed.length, missing: missing.length, missingAlt: missingAlt.length, released: released.length, cpuMs: Math.round(cpu) });
 });
