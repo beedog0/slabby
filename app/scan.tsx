@@ -67,6 +67,7 @@ import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type A
 import { useVault } from '../src/store/vault';
 import { readPhoto } from '../src/services/photoScan';
 import { readPhotoWithVision } from '../src/services/vision';
+import { useScanPrefs } from '../src/store/scanPrefs';
 import { LabelReader } from '../modules/label-reader';
 import type { Card } from '../src/types';
 import { light, radius, size, space, type } from '../src/theme/tokens';
@@ -574,8 +575,9 @@ export default function Scan() {
         .then(readPhoto)
         .catch(() => ({ kind: 'miss' as const, seen: '' }));
       // The text reader couldn't place it (far away, glare, a number it can't see): the vision
-      // fallback looks at the whole card. Same parsers and catalog match after that.
-      if (r.kind === 'miss') {
+      // fallback looks at the whole card. Same parsers and catalog match after that. It can be
+      // turned off from the home menu (AI photo backup) to see the on-device reading alone.
+      if (r.kind === 'miss' && useScanPrefs.getState().aiPhoto) {
         setLooking(true);
         const seenByVision = await readPhotoWithVision(uri);
         if (seenByVision && seenByVision.kind !== 'miss') r = seenByVision;
