@@ -6,7 +6,8 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 export type RecognizedLine = { text: string; x: number; y: number };
 
 type LabelReaderModule = {
-  recognize(uri: string): Promise<RecognizedLine[]>;
+  /** minTextHeight: smallest text to read, as a share of the photo's height (Vision's default is 1/32). */
+  recognize(uri: string, options?: { minTextHeight?: number }): Promise<RecognizedLine[]>;
   /** Delete a photo after reading it. Missing on builds made before it existed. */
   discard?(uri: string): void;
 };
