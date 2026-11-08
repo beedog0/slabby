@@ -116,6 +116,15 @@ export function salesWord(n: number): string {
   return `${n} ${n === 1 ? 'sale' : 'sales'}`;
 }
 
+/** Fewer graded sales than this in 30 days and the price is a guess, so screens say so. */
+export const THIN_SALES = 5;
+
+/** "Only 3 sales in 30 days" when a graded price rests on 1 to THIN_SALES sales; else null. */
+export function thinNote(sales30d: number | null | undefined): string | null {
+  if (!sales30d || sales30d > THIN_SALES) return null;
+  return `Only ${salesWord(sales30d)} in 30 days`;
+}
+
 /** 1 → "1st", 2 → "2nd", 11 → "11th", 23 → "23rd". */
 export function ordinal(n: number): string {
   const t = n % 100;

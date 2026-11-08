@@ -18,7 +18,7 @@ import { PriceChart } from '../../src/components/PriceChart';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
-import { money, pct } from '../../src/lib/format';
+import { money, pct, thinNote } from '../../src/lib/format';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
@@ -166,6 +166,8 @@ export default function SearchedCard() {
   const charted = chartable(price);
   const hist = history(price);
   const change = hist && !quiet ? hist.change : null;
+  // A graded price from a handful of sales is a guess; say so under the number.
+  const thin = !ready.sealedType && pick !== 'raw' && price && !quiet ? thinNote(price.sales30d) : null;
   const no = cardNumber(ready.number);
   // Sealed product: one TCGplayer market price with its nightly chart; no grades, no slab.
   const sealed = ready.sealedType ?? null;
@@ -216,6 +218,7 @@ export default function SearchedCard() {
             >
               {price ? money(price.marketCents) : '—'}
             </Text>
+            {thin ? <Text style={[type.text, { color: color.secondary }]}>{thin}</Text> : null}
             {change != null ? (
               <Text style={[type.text, { color: color.secondary }]}>
                 <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{pct(change)}</Text> {hist!.days}d
