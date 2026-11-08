@@ -18,6 +18,8 @@ import { setCards } from '../../services/setCards';
 import { color, space, type } from '../../theme/tokens';
 import type { Card } from '../../types';
 import { Hairline } from '../ui';
+import { buySignal } from '../../pricing/buySignal';
+import { BuySignalDial } from './BuySignal';
 import { GradeLadder, RangeMeter, SetRow } from './CardInsights';
 
 export type { Choice };
@@ -61,10 +63,12 @@ export function CardAnalyticsView({
   const price = !prices ? null : pick === 'raw' ? prices.raw : prices.grades[pick];
   const live = !!price && !!prices && (pick === 'raw' || !isQuiet(price, prices.fetchedAt));
   const hist = live ? history(price) : null;
+  const sig = hist ? buySignal(price, pick !== 'raw') : null;
   return (
     <>
       {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} /> : null}
       {hist && price ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
+      {sig ? <BuySignalDial signal={sig} /> : null}
       {prices ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}
       <SetRow setName={setTitle(setName)} cards={more} onAll={onAll} con={con} />
     </>
