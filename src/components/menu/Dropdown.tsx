@@ -19,11 +19,13 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { motion, radius, size, space, type } from '../../theme/tokens';
 import { themed, useColors } from '../../theme/theme';
 import { Check, groupsOf, type MenuItem, type MenuSpec } from "./Menu";
@@ -51,6 +53,7 @@ export function DropdownHost() {
   const color = useColors();
   const styles = useStyles();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [req, setReq] = useState<Request | null>(null);
   const progress = useRef(new Animated.Value(0)).current;
   const closing = useRef(false);
@@ -99,8 +102,15 @@ export function DropdownHost() {
   // Under the button; flipped above it if it would run off the bottom of the screen.
   const rows = groups.reduce((n, g) => n + g.length, 0);
   const panelH = rows * size.touch + (groups.length - 1) * space.s + space.s;
+  // A long list (a game's sets) scrolls inside the panel, on whichever side has more room.
   const below = anchor.y + anchor.h + space.xs;
-  const top = below + panelH > screenH - space.gutter ? Math.max(space.gutter, anchor.y - space.xs - panelH) : below;
+  const roomBelow = screenH - insets.bottom - space.gutter - below;
+  const roomAbove = anchor.y - space.xs - Math.max(insets.top, space.gutter);
+  const fitsBelow = panelH <= roomBelow;
+  const useAbove = !fitsBelow && (panelH <= roomAbove || roomAbove > roomBelow);
+  const maxH = fitsBelow ? undefined : useAbove ? Math.min(panelH, roomAbove) : roomBelow;
+  const top = useAbove ? anchor.y - space.xs - (maxH ?? panelH) : below;
+  const scrolls = maxH !== undefined && maxH < panelH;
   const scale = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [0.96, 1],
@@ -143,18 +153,24 @@ export function DropdownHost() {
           },
         ]}
       >
-        {groups.map((group, gi) => (
-          <View key={gi} style={gi > 0 ? styles.group : undefined}>
-            {group.map((item, i) => (
-              <Row
-                key={item.label}
-                item={item}
-                first={i === 0}
-                onPress={() => close(item.onPress)}
-              />
-            ))}
-          </View>
-        ))}
+        <ScrollView
+          scrollEnabled={scrolls}
+          style={maxH !== undefined ? { maxHeight: maxH - space.s } : undefined}
+          showsVerticalScrollIndicator={scrolls}
+        >
+          {groups.map((group, gi) => (
+            <View key={gi} style={gi > 0 ? styles.group : undefined}>
+              {group.map((item, i) => (
+                <Row
+                  key={item.label}
+                  item={item}
+                  first={i === 0}
+                  onPress={() => close(item.onPress)}
+                />
+              ))}
+            </View>
+          ))}
+        </ScrollView>
       </Animated.View>
     </Modal>
   );

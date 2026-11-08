@@ -18,7 +18,7 @@ import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConRow } from '../../src/components/ConRow';
 import { SearchSort } from '../../src/components/collection/SearchSort';
-import { effectiveGame, gamesIn, inGame, type GameFilter } from '../../src/lib/games';
+import { ALL_CARDS, effectivePick, filterMenu, inPick, type CardPick } from '../../src/lib/games';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { ConGrid } from '../../src/components/con/ConGrid';
 import { useDisplay } from '../../src/store/display';
@@ -62,7 +62,7 @@ export default function ConMode() {
   const [tab, setTab] = useState<Tab>('sale');
   const [query, setQuery] = useState('');
   // Starts on All each time: at a table, a hidden card is worse than a long list.
-  const [game, setGame] = useState<GameFilter>('all');
+  const [pick, setPick] = useState<CardPick>(ALL_CARDS);
   const { width } = useWindowDimensions();
   const layout = useDisplay((s) => s.conLayout);
   const setLayout = useDisplay((s) => s.setConLayout);
@@ -195,8 +195,8 @@ export default function ConMode() {
       ],
     });
 
-  // Pills for the games on the table or sold today, so they hold still between the three tabs.
-  const games = gamesIn(
+  // Filter choices from the cards on the table or sold today, so they hold still between the tabs.
+  const menu = filterMenu(
     rows
       .filter(
         (r) =>
@@ -205,8 +205,8 @@ export default function ConMode() {
       )
       .map((r) => r.card),
   );
-  const pickGame = effectiveGame(game, games);
-  const onTab = inGame(rows, pickGame).filter((r) => {
+  const picked = effectivePick(pick, menu);
+  const onTab = inPick(rows, picked).filter((r) => {
     const c = r.card;
     if (tab === 'sold') return c.status === 'sold' && !!c.soldAt && c.soldAt >= session.startedAt;
     if (tab === 'trade') return c.status === 'owned' && c.plan === 'trade';
@@ -326,7 +326,7 @@ export default function ConMode() {
                 sort={sort}
                 onSort={setSort}
                 sorts={CON_SORTS}
-                game={{ games, value: pickGame, onChange: setGame }}
+                filter={{ menu, value: picked, onChange: setPick }}
               />
             </View>
             <ViewSwitch value={layout} onChange={setLayout} modes={SEARCH_MODES} />

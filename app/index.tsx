@@ -21,7 +21,7 @@ import { FilterTabs } from '../src/components/collection/FilterTabs';
 import { GridView } from '../src/components/collection/GridView';
 import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
-import { effectiveGame, GAMES, gamesIn, inGame, type GameFilter } from '../src/lib/games';
+import { effectivePick, filterMenu, GAMES, inPick, type CardPick } from '../src/lib/games';
 import type { SlabActions } from '../src/components/collection/actions';
 import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/collection/statusSheets';
 import { openSoldTogether } from '../src/components/collection/soldTogether';
@@ -82,7 +82,7 @@ const VALUE_LABEL: Record<CollectionFilter, string> = {
   sell: 'For sale value',
   sold: 'Sold total',
 };
-// The same, for one game: "Pokémon value", "One Piece holds value".
+// The same, for one game or set: "Pokémon value", "OP05 holds value".
 const GAME_VALUE_LABEL: Record<CollectionFilter, (game: string) => string> = {
   all: (g) => `${g} value`,
   hold: (g) => `${g} holds value`,
@@ -102,7 +102,7 @@ export default function Home() {
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
   const prices = usePrices((s) => s.byKey);
-  const { mode, filter, sort, order, pinnedId, perShelf, setMode, setFilter: saveFilter, setSort, setOrder, setPinned, setPerShelf, game, setGame: saveGame } =
+  const { mode, filter, sort, order, pinnedId, perShelf, setMode, setFilter: saveFilter, setSort, setOrder, setPinned, setPerShelf, pick, setPick: savePick } =
     useDisplay();
   // Select mode: tap slabs to pick several, then share or remove them together.
   const [selecting, setSelecting] = useState(false);
@@ -112,23 +112,25 @@ export default function Home() {
     setSelected(new Set());
     saveFilter(f);
   };
-  // Same for the game pills.
-  const setGame = (g: GameFilter) => {
+  // Same for the game and set filter.
+  const setPick = (p: CardPick) => {
     setSelected(new Set());
-    saveGame(g);
+    savePick(p);
   };
-  // The pills show only when the vault spans more than one game, counted over the whole vault so
-  // they never come and go between the All / Holds / For sale / Sold tabs.
-  const games = useMemo(() => gamesIn(cards), [cards]);
-  const pickGame = effectiveGame(game, games);
+  // What the filter button offers, counted over the whole vault so it never comes and goes between
+  // the All / Holds / For sale / Sold tabs.
+  const menu = useMemo(() => filterMenu(cards), [cards]);
+  const picked = effectivePick(pick, menu);
+  // "Base Set" or "One Piece": what the header and empty state call the pick.
+  const pickName = picked.set ?? (picked.game === 'all' ? null : GAMES[picked.game].name);
 
   useEffect(() => {
     refreshPrices(cards);
   }, [cards]);
 
   const all = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
-  // The game narrows everything below it, header numbers included: "Pokémon value" counts only Pokémon.
-  const base = useMemo(() => collection(inGame(all, pickGame), filter), [all, filter, pickGame]);
+  // The pick narrows everything below it, header numbers included: "Pokémon value" counts only Pokémon.
+  const base = useMemo(() => collection(inPick(all, picked), filter), [all, filter, picked.game, picked.set]);
   const [query, setQuery] = useState('');
   // Holding the value chart: the big number and the line under it show that day instead.
   const [scrubbed, setScrubbed] = useState<{ cents: number; date?: string } | null>(null);
@@ -276,9 +278,9 @@ export default function Home() {
   // The header counts the whole filter; a search only narrows the slabs below it.
   const total = base.rows.length;
   const empty =
-    pickGame === 'all'
+    pickName === null
       ? EMPTY[filter]
-      : { title: `No ${GAMES[pickGame].name} cards here`, hint: 'Tap All to see every game.', chart: '' };
+      : { title: `No ${pickName} cards here`, hint: 'Use the filter button to see everything.', chart: '' };
   // "−$10 (−2.1%) this month", the numbers in gain or loss color, words in secondary.
   const change = changeText(stats.monthDeltaCents, stats.totalCents);
   const month = change ? (
@@ -301,7 +303,7 @@ export default function Home() {
     </>
   ) : null;
   // Line above the number: what it is, and how many slabs it counts.
-  const label = `${pickGame === 'all' ? VALUE_LABEL[filter] : GAME_VALUE_LABEL[filter](GAMES[pickGame].name)} · ${plural(total, 'slab')}`;
+  const label = `${pickName === null ? VALUE_LABEL[filter] : GAME_VALUE_LABEL[filter](pickName)} · ${plural(total, 'slab')}`;
   // Line under the number: how that value moved (or, for sale and sold, the number that matters there).
   const subline: ReactNode =
     filter === 'sell' ? (
@@ -451,7 +453,7 @@ export default function Home() {
                   onQuery={setQuery}
                   sort={sort}
                   onSort={setSort}
-                  game={{ games, value: pickGame, onChange: setGame }}
+                  filter={{ menu, value: picked, onChange: setPick }}
                 />
               )}
             </View>
