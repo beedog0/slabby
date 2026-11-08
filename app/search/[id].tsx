@@ -20,7 +20,7 @@ import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { cardPrice, money, pct, promoTag, thinNote } from '../../src/lib/format';
 import { CardName } from '../../src/components/CardName';
-import { chartable, history, realPoints } from '../../src/pricing/cardStats';
+import { chartRanges, history, rangeLabel, rangeSeries, realPoints, type Range } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
 import type { Found } from '../../src/services/searchFilters';
@@ -85,6 +85,8 @@ export default function SearchedCard() {
   const [tilting, setTilting] = useState(false);
   const wanted = useWishlist((s) => s.items.find((i) => i.key === wishKey(Number(id), pick as WishGrade)));
   const [attempt, setAttempt] = useState(0);
+  // Chart window; falls to the next one with a chart when this one has none.
+  const [range, setRange] = useState<Range>(90);
   const [more, setMore] = useState<Found[]>([]);
   const [groupId, setGroupId] = useState<number | null>(null);
 
@@ -170,9 +172,13 @@ export default function SearchedCard() {
   const price: CardPrice | null | undefined =
     prices === undefined ? undefined : pick === 'raw' ? prices?.raw : prices?.grades[pick];
   const quiet = pick !== 'raw' && !!prices && isQuiet(price, prices.fetchedAt);
-  const series = price?.series90 ?? [];
   // Only real prices make a chart; a single price carried forward is a flat line, not history.
-  const charted = chartable(price);
+  // A grade with no sale in 30 days still charts its older sales (up to 6 months).
+  const today = prices?.fetchedAt.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+  const ranges = chartRanges(price, today);
+  const shown = ranges.includes(range) ? range : (ranges.find((r) => r > range) ?? ranges[ranges.length - 1]);
+  const ranged = shown ? rangeSeries(price, shown, today) : null;
+  const sold = pick !== 'raw' ? lastSoldLine(price, quiet ? pick : null) : null;
   const hist = history(price);
   const change = hist && !quiet ? hist.change : null;
   // A graded price from a handful of sales is a guess; say so under the number.
@@ -288,15 +294,37 @@ export default function SearchedCard() {
           <View style={styles.chart}>
             {prices === undefined ? (
               <Text style={[type.text, { color: color.secondary }]}>Loading prices…</Text>
-            ) : charted && !quiet ? (
-              <PriceChart
-                values={series}
-                paidCents={null}
-                width={width - space.gutter * 2}
-                height={140}
-                tint={trendTint(series, color)}
-                asOf={price?.asOf}
-              />
+            ) : ranged ? (
+              <>
+                <PriceChart
+                  values={ranged.values}
+                  paidCents={null}
+                  width={width - space.gutter * 2}
+                  height={140}
+                  tint={trendTint(ranged.values, color)}
+                  asOf={ranged.asOf}
+                />
+                {ranges.length > 1 ? (
+                  <View style={styles.ranges}>
+                    {ranges.map((r) => {
+                      const on = r === shown;
+                      return (
+                        <Pressable
+                          key={r}
+                          onPress={() => setRange(r)}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={r === 180 ? 'Six months' : `${r} days`}
+                        >
+                          <Text style={[type.text, { color: on ? color.ink : color.secondary, fontWeight: on ? '600' : '400' }]}>{rangeLabel(r)}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+                {sold ? <Text style={[type.secondary, { color: color.secondary, paddingTop: space.s }]}>{sold}</Text> : null}
+              </>
             ) : (
               <>
                 <Text style={[type.text, { color: color.secondary }]}>
@@ -410,6 +438,17 @@ function TryAgain({ onPress }: { onPress: () => void }) {
   );
 }
 
+/**
+ * "Last sold Nov 6 · $412" (", 2 sold that day" when more than one), from the latest day with a
+ * sale. For a grade with none in 30 days (`quiet` is its grade) it leads with that.
+ */
+export function lastSoldLine(p: CardPrice | null | undefined, quiet: Choice | null): string | null {
+  const s = p?.lastSale;
+  if (!s) return null;
+  const line = `Last sold ${fmtDay(s.day)} · ${money(s.cents)}${s.count > 1 ? ` avg of ${s.count}` : ''}`;
+  return quiet && quiet !== 'raw' ? `No ${gradeLabel(quiet)} sales in 30 days. ${line}` : line;
+}
+
 /** A price we have but can't chart: say how much there is, not draw a flat line. */
 function thinLine(p: CardPrice & { points?: number; since?: string }): string {
   const n = realPoints(p);
@@ -424,8 +463,7 @@ function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string 
   if (prices.capped && prices.source === 'catalog') return 'Graded prices load again tomorrow.';
   if (prices.source === 'catalog') return 'Graded prices aren’t reachable right now.';
   // The price shown in the header for a quiet grade is the last 30-day median before it went quiet.
-  if (quiet)
-    return `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
+  if (quiet) return lastSoldLine(quiet, pick) ?? `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
   return `No ${gradeLabel(pick)} sales in the last 90 days.`;
 }
 
@@ -499,6 +537,7 @@ const useStyles = themed((color) => StyleSheet.create({
   nav: { position: 'absolute', left: space.gutter - 10, zIndex: 1 },
   hero: { alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.m, paddingHorizontal: space.gutter },
+  ranges: { flexDirection: 'row', gap: space.xl, paddingTop: space.m },
   chart: { minHeight: 172, justifyContent: 'center', paddingTop: space.xl, paddingBottom: space.m },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.l },
   buyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: space.l },
