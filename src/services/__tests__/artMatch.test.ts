@@ -185,3 +185,16 @@ describe('combine with a short bare number', () => {
     expect(combine([{ card: cardOf(9, 'Pikachu', '6'), score: 3 }], { hits: [hit(1, 'Sylveon', 10)], edge: true }, full).matches[0].card.productId).toBe(9);
   });
 });
+
+describe('combine with a digit misread in the right set', () => {
+  it('lets a sure art match fix 43/100 to 45/100', () => {
+    const read: ParsedCard = { numbers: [{ num: '43', total: '100' }], codes: [], language: null, words: new Set(), name: null };
+    const raichu = { ...cardOf(1, 'Raichu'), number: '45/100' };
+    const other = { ...cardOf(9, 'Medicham'), number: '43/100' };
+    const id = combine([{ card: other, score: 3 }], { hits: [{ card: raichu, distance: 9 }, hit(2, 'Eevee', 50)], edge: true }, read);
+    expect(id.matches[0].card.productId).toBe(1);
+    // A card from another set with the art sure: the number still decides.
+    const elsewhere = { ...cardOf(3, 'Raichu'), number: '45/102' };
+    expect(combine([{ card: other, score: 3 }], { hits: [{ card: elsewhere, distance: 9 }], edge: true }, read).matches[0].card.productId).toBe(9);
+  });
+});

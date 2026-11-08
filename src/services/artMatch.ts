@@ -142,6 +142,14 @@ export function weakNumber(read: ParsedCard | null): boolean {
   return !!read?.numbers.length && read.numbers.every((n) => !n.total && !n.code && /^\d{1,2}$/.test(n.num));
 }
 
+/** The read's set size ("/100") is the card's, though the number itself didn't find it. */
+export function sameSetSize(read: ParsedCard | null, c: CatalogCard): boolean {
+  const total = (c.number ?? '').split('/')[1];
+  if (!read || !total) return false;
+  const bare = (s: string) => s.replace(/^0+(?=\d)/, '').toUpperCase();
+  return read.numbers.some((n) => !!n.total && bare(n.total) === bare(total));
+}
+
 export type Identified = { matches: CardMatch[]; confident: boolean; byArt: boolean };
 
 /**
@@ -155,8 +163,9 @@ export function combine(byNumber: CardMatch[], art: { hits: ArtHit[]; edge: bool
   const hits = art?.hits ?? [];
   const dist = new Map(hits.map((h) => [h.card.productId, h.distance]));
   // A short bare number ("6", "43": no set size, no code) is easily a misread or another line's
-  // digits. When the art is sure of a card that number didn't find, the art wins.
-  if (byNumber.length && weakNumber(read) && art && artSure(hits, art.edge) && !byNumber.some((m) => m.score === Infinity || m.card.productId === hits[0].card.productId)) {
+  // digits, and so is a number in the right set with one digit wrong (45/100 read as 43/100). When
+  // the art is sure of a card that number didn't find, the art wins.
+  if (byNumber.length && (weakNumber(read) || (hits[0] && sameSetSize(read, hits[0].card))) && art && artSure(hits, art.edge) && !byNumber.some((m) => m.score === Infinity || m.card.productId === hits[0].card.productId)) {
     return { matches: [{ card: hits[0].card, score: Infinity }, ...byNumber], confident: true, byArt: true };
   }
   if (byNumber.length) {

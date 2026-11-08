@@ -216,6 +216,11 @@ export function numberVariants(n: CardNumber): string[] {
   if (/^\d+$/.test(n.num)) nums.push(n.num.padStart(3, '0'));
   for (const x of nums) {
     out.add(n.total ? `${x}/${n.total}` : x);
+    // Alternate arts carry a letter, lower case on TCGplayer ("063a/166"); OCR text is upper-cased.
+    if (/\d[A-Z]$/.test(x)) {
+      const lower = x.slice(0, -1) + x.slice(-1).toLowerCase();
+      out.add(n.total ? `${lower}/${n.total}` : lower);
+    }
     // TCGplayer writes the 30th anniversary promo code in lower case: "013/30th-P".
     if (n.total?.includes('TH-')) out.add(`${x}/${n.total.replace('TH-', 'th-')}`);
   }

@@ -13,7 +13,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { artRead, artSure, combine, printsOf, rankArt, weakNumber, type ArtHit, type FoundCard } from '../../src/services/artMatch';
+import { artRead, artSure, combine, printsOf, rankArt, sameSetSize, weakNumber, type ArtHit, type FoundCard } from '../../src/services/artMatch';
 import { fitsRead, numberVariants, readName, type ParsedCard } from '../../src/services/cardScan';
 import { readPhoto } from '../../src/services/photoScan';
 import type { CatalogCard } from '../../src/services/search';
@@ -116,7 +116,7 @@ run('backtest', async () => {
     let detail = '';
     const first = readPhoto(r.lines);
     const top = hits[0];
-    if (first.kind === 'card' && weakNumber(first.card) && top && artSure(hits, found.edge) && !(top.card.number && fitsRead(top.card, first.card))) {
+    if (first.kind === 'card' && top && (weakNumber(first.card) || sameSetSize(first.card, top.card)) && top && artSure(hits, found.edge) && !(top.card.number && fitsRead(top.card, first.card))) {
       // combine(): a sure art match overrules a short bare number it doesn't fit.
       outcome = isTruth(top.card, t) ? 'art' : 'wrong';
       detail = `art over number ${first.card.numbers.map((n) => n.num).join(',')}: ${top.card.name} ${top.card.number}`;
