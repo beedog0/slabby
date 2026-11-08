@@ -23,6 +23,7 @@ import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
 import { SearchSort } from '../src/components/collection/SearchSort';
 import type { SlabActions } from '../src/components/collection/actions';
 import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/collection/statusSheets';
+import { openSoldTogether } from '../src/components/collection/soldTogether';
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { openAppearance, APPEARANCE_LABEL } from '../src/components/menu/appearanceMenu';
 import { useAppearance } from '../src/store/appearance';
@@ -244,6 +245,9 @@ export default function Home() {
   };
   const removeSelected = () => confirmRemoveMany(picks, doneSelecting);
   const moveSelected = () => openMoveMany(picks, doneSelecting);
+  // One price for the whole deal: the number you remember, split across them by market.
+  const canSellTogether = picks.length > 0 && picks.every((c) => c.status !== 'sold');
+  const sellSelected = () => openSoldTogether(picks, { after: doneSelecting });
 
   const actions: SlabActions = selecting
     ? { selected, onPress: (r) => toggle(r.card.id), onLongPress: (r) => toggle(r.card.id) }
@@ -486,8 +490,13 @@ export default function Home() {
       ) : selecting && picks.length ? (
         <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
           <PrimaryButton title={`Share ${plural(picks.length, 'slab')}`} onPress={shareSelected} />
-          {/* Quiet actions under the one black button: move them (status) or remove them. */}
+          {/* Quiet actions under the one black button: sold together, move them (status) or remove them. */}
           <View style={styles.quietRow}>
+            {canSellTogether ? (
+              <Pressable accessibilityRole="button" onPress={sellSelected} style={styles.quietHalf}>
+                <Text style={[type.text, { color: color.ink }]}>{picks.length === 1 ? 'Mark sold' : 'Sold together'}</Text>
+              </Pressable>
+            ) : null}
             <Pressable accessibilityRole="button" onPress={moveSelected} style={styles.quietHalf}>
               <Text style={[type.text, { color: color.ink }]}>Move…</Text>
             </Pressable>

@@ -5,7 +5,7 @@
 // market (src/pricing/split.ts).
 
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { Keypad } from '../../src/components/Keypad';
 import { PriceLine, type Tick } from '../../src/components/PriceLine';
 import { ConGrid } from '../../src/components/con/ConGrid';
 import { SlabView } from '../../src/components/SlabView';
+import { openEditDeal, openSoldTogether } from '../../src/components/collection/soldTogether';
 import { BackIcon, IconButton, PrimaryButton } from '../../src/components/ui';
 import { money, rowTitle } from '../../src/lib/format';
 import { inputsFor, rowFor, type CardRow } from '../../src/pricing/portfolio';
@@ -28,6 +29,8 @@ import { themed, useColors } from '../../src/theme/theme';
 const MAX_DIGITS = 7;
 
 export default function Bundle() {
+  // ?mode=sold is con mode's "Sold together": pick the cards, then one total for the deal.
+  const soldMode = useLocalSearchParams<{ mode?: string }>().mode === 'sold';
   const color = useColors();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
@@ -92,6 +95,44 @@ export default function Bundle() {
       <View style={{ width: size.touch }} />
     </View>
   );
+
+  if (step === 'pick' && soldMode) {
+    const pickedRows = rows.filter((r) => picked.has(r.card.id));
+    const n = pickedRows.length;
+    const next = () => {
+      let where = session?.name ?? null;
+      if (!session) {
+        startCon(DEFAULT_CON_NAME);
+        where = DEFAULT_CON_NAME;
+      }
+      openSoldTogether(
+        pickedRows.map((r) => r.card),
+        { where, after: () => router.dismissTo({ pathname: '/con', params: { tab: 'sold', at: String(Date.now()) } }) },
+      );
+    };
+    return (
+      <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
+        {nav('Sold together')}
+        <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingBottom: space.xxl }}>
+          <Text style={[type.text, { color: color.secondary, paddingBottom: space.xl }]}>
+            Tap the cards that went in the deal. You’ll type one total next.
+          </Text>
+          {rows.length ? (
+            <ConGrid rows={rows} width={width - space.gutter * 2} onPress={toggle} onLongPress={() => undefined} selected={picked} />
+          ) : (
+            <Text style={[type.text, { color: color.secondary }]}>Nothing is on the table yet. Mark cards for sale or trade first.</Text>
+          )}
+        </ScrollView>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + space.l }]}>
+          {n ? (
+            <PrimaryButton title={n === 1 ? 'Next · 1 card' : `Next · ${n} cards`} onPress={next} />
+          ) : (
+            <Text style={[type.text, styles.hint, { color: color.secondary }]}>Pick the cards you sold</Text>
+          )}
+        </View>
+      </View>
+    );
+  }
 
   if (step === 'pick') {
     const n = chosen.length;
@@ -173,7 +214,10 @@ export default function Bundle() {
   };
 
   if (sold) {
-    const profit = sold.paidCents ? sold.cents - sold.paidCents : null;
+    // Live from the vault, so "Edit split" shows here as soon as it's saved.
+    const live = sold.cards.map((c) => cards.find((x) => x.id === c.id)?.soldCents ?? 0);
+    const liveTotal = live.reduce((a, b) => a + b, 0);
+    const profit = sold.paidCents ? liveTotal - sold.paidCents : null;
     return (
       <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
         {nav('Bundle sold')}
@@ -182,12 +226,12 @@ export default function Bundle() {
             {sold.cards.map((c, i) => (
               <View key={c.id} style={{ width: 72, alignItems: 'center', gap: 2 }}>
                 <SlabView card={c} width={72} posed={false} />
-                <Text style={[type.secondary, { color: color.ink, paddingTop: space.xs }]}>{money(sold.shares[i])}</Text>
+                <Text style={[type.secondary, { color: color.ink, paddingTop: space.xs }]}>{money(live[i])}</Text>
               </View>
             ))}
           </View>
           <Text style={[type.text, { color: color.secondary, paddingTop: space.l }]}>Sold {sold.cards.length} cards for</Text>
-          <Text style={[type.displayL, { color: color.ink }]}>{money(sold.cents)}</Text>
+          <Text style={[type.displayL, { color: color.ink }]}>{money(liveTotal)}</Text>
           {profit != null ? (
             <Text style={[type.body, { color: color.ink }]}>
               <Text style={{ color: profit >= 0 ? color.gain : color.loss }}>
@@ -197,7 +241,12 @@ export default function Bundle() {
               on {money(sold.paidCents)} paid
             </Text>
           ) : null}
-          <Text style={[type.secondary, { color: color.secondary }]}>Each card’s sale price is its share by market.</Text>
+          <Pressable accessibilityRole="button" onPress={() => openEditDeal(sold.cards[0])} hitSlop={8}>
+            <Text style={[type.secondary, { color: color.secondary }]}>
+              {live.every((c, i) => c === sold.shares[i]) ? 'Split by market. ' : 'Split set by you. '}
+              <Text style={{ color: color.ink }}>Edit split</Text>
+            </Text>
+          </Pressable>
         </View>
         <View style={[styles.footer, { paddingBottom: insets.bottom + space.l, gap: space.s }]}>
           <PrimaryButton title="Back to con mode" onPress={() => router.dismissTo({ pathname: '/con', params: { tab: 'sold', at: String(Date.now()) } })} />

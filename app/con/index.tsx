@@ -175,6 +175,7 @@ export default function ConMode() {
         [
           { label: 'Price list', detail: 'Every card for sale', onPress: () => router.push('/con/prices') },
           { label: 'Price a bundle', onPress: () => router.push('/con/bundle') },
+          { label: 'Sold together', detail: 'One price for several', onPress: () => router.push({ pathname: '/con/bundle', params: { mode: 'sold' } }) },
           { label: 'Trade calculator', onPress: () => router.push('/con/trade') },
         ],
         [

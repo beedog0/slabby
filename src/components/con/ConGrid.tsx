@@ -4,7 +4,9 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { bare, gradeLabel, money, rowTitle } from '../../lib/format';
+import { dealsFor } from '../../pricing/deals';
 import type { CardRow } from '../../pricing/portfolio';
+import { useVault } from '../../store/vault';
 import { space, type } from '../../theme/tokens';
 import { useColors } from '../../theme/theme';
 import { SlabView } from '../SlabView';
@@ -28,6 +30,7 @@ type Props = {
 
 export function ConGrid({ rows, width, onPress, onLongPress, flash, selected, market }: Props) {
   const color = useColors();
+  const deals = useVault((s) => dealsFor(s.cards));
   const cellW = Math.floor((width - GAP * (COLS - 1)) / COLS);
   const slabW = Math.floor(cellW * 0.82);
   return (
@@ -60,6 +63,11 @@ export function ConGrid({ rows, width, onPress, onLongPress, flash, selected, ma
               {!market && r.card.status === 'owned' && r.card.plan !== 'trade' && r.floor != null ? (
                 <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
                   floor {bare(r.floor)}
+                </Text>
+              ) : null}
+              {r.card.status === 'sold' && deals.get(r.card.id)?.totalCents != null ? (
+                <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+                  of {money(deals.get(r.card.id)!.totalCents!)} deal
                 </Text>
               ) : null}
             </View>
