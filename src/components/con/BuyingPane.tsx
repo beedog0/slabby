@@ -176,7 +176,7 @@ function WishRow({ item }: { item: WishItem }) {
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
     >
       <View style={styles.thumb}>
-        {item.imageUrl ? <ArtImage uri={item.imageUrl} recyclingKey={item.key} style={{ flex: 1 }} /> : null}
+        <ArtImage uri={item.imageUrl} label={item.name} recyclingKey={item.key} style={{ flex: 1 }} />
       </View>
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
