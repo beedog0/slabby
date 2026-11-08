@@ -2,12 +2,13 @@
 // the vault. Results show tonight's raw market; open a card for PSA prices with charts.
 // Typing, filtering and sorting only query our own catalog table, never a paid API.
 // Quiet controls under the field: "Filter" (language, rarity, set), the sort dropdown, and
-// List / Grid (remembered, like home's view switch). Scrolling down slides the title, field and
-// game tabs away and keeps that control row pinned; scrolling up brings them back.
+// List / Grid (remembered, like home's view switch). Scrolling down slides the whole header away
+// (title, field, game tabs, control row and filter chips) so results get the screen. Scrolling up
+// mid-list brings back only the slim control row; the title, field and game tabs return at the top.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { Animated, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, FlatList, Modal, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
 import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/sheet/useSheetDrag';
@@ -65,20 +66,28 @@ export default function Search() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuTop, setMenuTop] = useState(0);
-  const [topH, setTopH] = useState(0); // the part that slides away
-  const [headerH, setHeaderH] = useState(0); // all of it, pinned row included
+  const [topH, setTopH] = useState(0); // title, field and game tabs: back only at the top
+  const [headerH, setHeaderH] = useState(0); // all of it, control row and chips included
   const controlsRef = useRef<ComponentRef<typeof View>>(null);
   const listRef = useRef<FlatList<Found>>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
-  // Follows scroll direction: down hides up to topH, any scroll up reveals again.
-  const slide = useMemo(
-    () =>
-      Animated.diffClamp(scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' }), 0, Math.max(topH, 1)).interpolate({
-        inputRange: [0, Math.max(topH, 1)],
-        outputRange: [0, -Math.max(topH, 1)],
-      }),
-    [scrollY, topH],
-  );
+  // How far the header is slid up. The top part follows the list exactly; the control row under it
+  // hides on scroll down and peeks back on any scroll up, so a mid-list scroll up costs one slim row.
+  const slide = useRef(new Animated.Value(0)).current;
+  const scrollState = useRef({ y: 0, rowHidden: 0 });
+  const onListScroll = (y: number) => {
+    const st = scrollState.current;
+    const rowH = Math.max(0, headerH - topH);
+    const top = Math.max(0, y);
+    st.rowHidden = Math.max(0, Math.min(rowH, st.rowHidden + top - st.y));
+    st.y = top;
+    slide.setValue(-Math.min(top, topH + st.rowHidden));
+  };
+  // Switching list and grid remounts the list at the top, without a scroll event.
+  useEffect(() => {
+    scrollState.current = { y: 0, rowHidden: 0 };
+    slide.setValue(0);
+  }, [layout, slide]);
   const openSort = () => {
     // The row moves with the header, so measure where it is now.
     controlsRef.current?.measureInWindow((_x, y, _w, h) => {
@@ -146,7 +155,7 @@ export default function Search() {
             </IconButton>
           </View>
           <View style={styles.gutter}>
-            <Text style={[type.title, { color: color.ink, paddingBottom: space.l }]}>{con ? 'Search to buy' : 'Search'}</Text>
+            <Text style={[type.title, { color: color.ink, paddingBottom: space.m }]}>{con ? 'Search to buy' : 'Search'}</Text>
             <View style={styles.field}>
               <SearchIcon s={18} tint={color.secondary} />
               <TextInput
@@ -164,7 +173,7 @@ export default function Search() {
               />
             </View>
             <Segmented<GameFilter>
-              style={{ marginTop: space.m }}
+              style={{ marginTop: space.s }}
               value={f.game ?? 'all'}
               onChange={(g) =>
                 // Sets and rarities belong to one game; Japanese only exists for Pokémon.
@@ -222,7 +231,7 @@ export default function Search() {
             ) : null}
           </ScrollView>
         ) : null}
-        {/* A hairline under the pinned row once results scroll beneath it. */}
+        {/* A hairline under the header once results scroll beneath it. */}
         <Animated.View
           style={{
             height: StyleSheet.hairlineWidth * 2,
@@ -239,7 +248,10 @@ export default function Search() {
           ref={listRef}
           key={layout}
           data={hint ? [] : results}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+            listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => onListScroll(e.nativeEvent.contentOffset.y),
+          })}
           scrollEventThrottle={16}
           scrollIndicatorInsets={{ top: headerH }}
           style={{ paddingTop: insets.top }}
