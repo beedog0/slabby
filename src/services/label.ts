@@ -371,3 +371,21 @@ export function linesInFrame<T extends LabelLine>(lines: T[], photo: { width: nu
     return x >= frame.x - mx && x <= frame.x + frame.width + mx && y >= frame.y - my && y <= frame.y + frame.height + my;
   });
 }
+
+/**
+ * The on-screen frame as a share of the photo (0..1 from the top-left), the inverse of
+ * linesInFrame's mapping: where to look for the card in a live frame.
+ */
+export function frameInPhoto(photo: { width: number; height: number }, view: { width: number; height: number }, frame: Rect): Rect | null {
+  if (!photo.width || !photo.height || !frame.width || !frame.height) return null;
+  if (photo.width > photo.height !== view.width > view.height) photo = { width: photo.height, height: photo.width };
+  const scale = Math.max(view.width / photo.width, view.height / photo.height);
+  const dx = (photo.width * scale - view.width) / 2;
+  const dy = (photo.height * scale - view.height) / 2;
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+  const x0 = clamp((frame.x + dx) / scale / photo.width);
+  const y0 = clamp((frame.y + dy) / scale / photo.height);
+  const x1 = clamp((frame.x + frame.width + dx) / scale / photo.width);
+  const y1 = clamp((frame.y + frame.height + dy) / scale / photo.height);
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
