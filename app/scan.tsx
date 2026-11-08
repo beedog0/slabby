@@ -22,7 +22,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, AppState, Easing, Image, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { backToCon } from '../src/components/conStatusMenu';
@@ -51,6 +52,7 @@ import { cardKey } from '../src/pricing/cardKey';
 import { usePrices } from '../src/store/prices';
 import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
+import { readPhoto } from '../src/services/photoScan';
 import { LabelReader } from '../modules/label-reader';
 import type { Card } from '../src/types';
 import { color, radius, size, space, type } from '../src/theme/tokens';
@@ -126,6 +128,12 @@ export default function Scan() {
   const win = useWindowDimensions();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
+  // Live reads frames on its own; Photo reads one still when you tap (or one from the camera roll).
+  const [mode, setMode] = useState<'live' | 'photo'>('live');
+  const photoMode = labelMode && mode === 'photo';
+  // Photo mode: the still being read, shown in place of the camera until the sheet is put away.
+  const [still, setStill] = useState<string | null>(null);
+  const stillOwned = useRef(false);
 
   const handle = async (data: string) => {
     const cert = parseCertFromQr(data);
@@ -235,7 +243,7 @@ export default function Scan() {
   };
 
   const addToVault = () => {
-    if (result?.status !== 'found') return;
+    if (result?.status !== 'found' || gradeMissing) return;
     const card = cardFromCert(result.payload, { paidCents: paidCentsOf(cost), plan });
     if (art) card.imageFrontUrl = art;
     add(card);
@@ -248,7 +256,7 @@ export default function Scan() {
 
   const startSell = useSellDraft((s) => s.start);
   const toSell = (askCents: number) => {
-    if (result?.status !== 'found') return;
+    if (result?.status !== 'found' || gradeMissing) return;
     const card = cardFromCert(result.payload, { paidCents: paidCentsOf(cost), plan: 'sell' });
     if (art) card.imageFrontUrl = art;
     const productId = (matched?.key === previewKey ? matched.productId : null) ?? mockProductId(card);
@@ -270,6 +278,18 @@ export default function Scan() {
     setSoldFor('');
     setLossConfirm(false);
     setRaw(null);
+    dropStill();
+  };
+  const dropStill = () => {
+    setStill((uri) => {
+      if (uri && stillOwned.current) {
+        try {
+          LabelReader?.discard?.(uri);
+        } catch {}
+      }
+      stillOwned.current = false;
+      return null;
+    });
   };
 
   // Pull either result sheet down, from anywhere on it, to put it away: same as Scan again.
@@ -312,7 +332,8 @@ export default function Scan() {
 
   /** Con mode: add (or re-mark) the slab with the chosen status. `again` keeps the camera up. */
   const addForCon = (again: boolean) => {
-    if (result?.status !== 'found') return;
+    // Never a slab without its grade: the sheet says so and offers Scan again.
+    if (result?.status !== 'found' || gradeMissing) return;
     if (conStatus === 'sold' && !soldCents) return;
     if (soldLoss > 0 && !lossConfirm) {
       setLossConfirm(true);
@@ -466,6 +487,50 @@ export default function Scan() {
   const captureRef = useRef(capture);
   captureRef.current = capture;
 
+  // Photo mode: read one still in full, no frame and no second read. The still stays on screen
+  // behind the sheet, the way you took it. A miss says what it saw and goes back to the camera.
+  const readStill = async (uri: string, owned: boolean) => {
+    if (!LabelReader) return;
+    stillOwned.current = owned;
+    setStill(uri);
+    setReading(true);
+    setLabelMiss(false);
+    try {
+      const r = readPhoto(await LabelReader.recognize(uri));
+      if (r.kind === 'slab') return accept(r.label);
+      if (r.kind === 'card') return acceptCard(r.card);
+      setSeen(r.seen);
+    } catch {
+      setSeen('');
+    } finally {
+      setReading(false);
+    }
+    setLabelMiss(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    dropStill();
+  };
+  const shoot = async () => {
+    if (!camera.current || reading || inFlight.current) return;
+    inFlight.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      const photo = await camera.current.takePictureAsync({ quality: 0.9, shutterSound: false });
+      if (photo?.uri) await readStill(photo.uri, true);
+    } catch {
+      setSeen('');
+      setLabelMiss(true);
+    } finally {
+      inFlight.current = false;
+    }
+  };
+  // A photo you already have: one taken at the table, or a screenshot of a listing.
+  const pickPhoto = async () => {
+    if (reading) return;
+    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 }).catch(() => null);
+    const uri = picked && !picked.canceled ? picked.assets[0]?.uri : null;
+    if (uri) await readStill(uri, true);
+  };
+
   // From a failed lookup: close the sheet but keep the cert, so the label read can use it.
   const toLabel = () => {
     setLabelMiss(false);
@@ -486,7 +551,7 @@ export default function Scan() {
   }, []);
 
   // Auto read: while the camera is up and no sheet is open, read a frame, pause, repeat.
-  const autoOn = labelMode && !!canUseCamera && cameraReady && active && !result && !raw && !locked;
+  const autoOn = labelMode && !photoMode && !!canUseCamera && cameraReady && active && !result && !raw && !locked;
 
   // The sheet slides up whenever a result arrives.
   useEffect(() => {
@@ -522,7 +587,8 @@ export default function Scan() {
   // Slab-shaped window, the same proportions as a PSA slab (83.9 × 134.6 mm), sized so the whole
   // slab fits between the nav and the button. The picture outside it is dimmed.
   const slabRatio = size.heroH / size.heroW;
-  const frameRoom = win.height - (insets.top + space.s + NAV_H + space.xl) - (insets.bottom + space.l + size.button + space.xxxl * 2 + space.xl);
+  // Below the frame: the hint, the button (or shutter) and the Live / Photo switch.
+  const frameRoom = win.height - (insets.top + space.s + NAV_H + space.xl) - (insets.bottom + space.l + size.button + space.xxxl * 2 + space.xl + size.touch + space.m);
   const frameW = labelMode ? Math.round(Math.min(win.width * 0.66, frameRoom / slabRatio)) : 240;
   const frameH = labelMode ? Math.round(frameW * slabRatio) : frameW;
   const labelH = Math.round(frameH * LABEL_SHARE);
@@ -536,14 +602,18 @@ export default function Scan() {
       ? 'Reading'
       : labelMiss
         ? seen
-          ? `Couldn’t find a slab label or card number in “${seen.slice(0, 80)}”. Fit the slab or card in the frame and hold steady.`
-          : 'Couldn’t read any text. Move closer so the slab or card fills the frame.'
+          ? `Couldn’t find a slab label or card number in “${seen.slice(0, 80)}”. ${photoMode ? 'Get closer so the label or number is sharp.' : 'Fit the slab or card in the frame and hold steady.'}`
+          : photoMode
+            ? 'Couldn’t read any text. Get closer so the label or number is sharp.'
+            : 'Couldn’t read any text. Move closer so the slab or card fills the frame.'
         : spotted
           ? 'Hold still'
           : addedNote
             ? `${addedNote}. Scan the next slab`
             : added
               ? `${added.count} added. Scan the next card`
+            : photoMode
+              ? 'Take a photo of the slab or card'
             : labelMode
               ? 'Fit the slab or card in the frame'
               : 'Line up the QR or barcode on the back of the slab';
@@ -566,7 +636,21 @@ export default function Scan() {
         />
       ) : null}
 
-      {/* Scrim: four flat panels around the label window, so the picture behind the hint is dimmed. */}
+      {still ? <Image source={{ uri: still }} resizeMode="cover" style={[StyleSheet.absoluteFill, { backgroundColor: SCAN_BG }]} /> : null}
+
+      {/* Scrim: four flat panels around the label window, so the picture behind the hint is dimmed.
+          Photo mode reads the whole picture, so there's no window: only the lock shows, full screen. */}
+      {photoMode ? (
+        locked ? (
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.frameDone, { borderColor: color.conFill }]}>
+            <View style={styles.check}>
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M5 12.5l4.5 4.5L19 7.5" />
+              </Svg>
+            </View>
+          </View>
+        ) : null
+      ) : (
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <View style={[styles.scrim, { height: frameTop }]} />
         <View style={{ flexDirection: 'row', height: frameH }}>
@@ -589,6 +673,7 @@ export default function Scan() {
         </View>
         <View style={[styles.scrim, { flex: 1 }]} />
       </View>
+      )}
 
       <View style={[styles.nav, { paddingTop: insets.top + space.s }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={styles.navBtn}>
@@ -609,7 +694,7 @@ export default function Scan() {
         <View style={styles.hint}>
           <Text style={[type.text, { color: color.onInk, textAlign: 'center' }]}>{hint}</Text>
         </View>
-        {labelMode && canUseCamera && !result ? (
+        {labelMode && !photoMode && canUseCamera && !result ? (
           // What the read has so far: each pill lights up with its value once confirmed.
           <ScanPills
             pills={[
@@ -660,6 +745,33 @@ export default function Scan() {
 
       {canUseCamera && LabelReader && !result && !raw ? (
         <View style={[styles.capture, { paddingBottom: insets.bottom + space.l }]}>
+          {photoMode ? (
+            <View style={styles.shutterRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Choose a photo"
+                onPress={pickPhoto}
+                disabled={reading || locked}
+                hitSlop={space.s}
+                style={({ pressed }) => [styles.library, pressed && { opacity: 0.7 }]}
+              >
+                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color.onInk} strokeWidth={1.75} strokeLinejoin="round">
+                  <Path d="M4 5h16v14H4z" />
+                  <Path d="M4 16l5-5 4 4 2.5-2.5L20 17" strokeLinecap="round" />
+                </Svg>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Take photo"
+                onPress={shoot}
+                disabled={reading || locked}
+                style={({ pressed }) => [styles.shutter, (pressed || reading) && { opacity: 0.6 }]}
+              >
+                <View style={styles.shutterDisc} />
+              </Pressable>
+              <View style={styles.library} />
+            </View>
+          ) : (
           <Pressable
             accessibilityRole="button"
             onPress={() => capture(true)}
@@ -668,6 +780,27 @@ export default function Scan() {
           >
             <Text style={[type.button, { color: color.ink }]}>{reading ? 'Reading…' : 'Scan now'}</Text>
           </Pressable>
+          )}
+          <View style={styles.modes}>
+            {(['live', 'photo'] as const).map((m) => (
+              <Pressable
+                key={m}
+                accessibilityRole="button"
+                accessibilityState={{ selected: mode === m }}
+                disabled={reading || locked}
+                onPress={() => {
+                  setLabelMiss(false);
+                  setMode(m);
+                }}
+                hitSlop={space.s}
+                style={styles.modeBtn}
+              >
+                <Text style={[type.text, { color: color.onInk, opacity: mode === m ? 1 : 0.55, fontWeight: mode === m ? '600' : '400' }]}>
+                  {m === 'live' ? 'Live' : 'Photo'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       ) : null}
 
@@ -808,7 +941,7 @@ export default function Scan() {
               ) : null}
                   <Hairline />
                   <PrimaryButton
-                    style={{ marginTop: space.l, opacity: conStatus === 'sold' && !soldCents ? 0.35 : 1 }}
+                    style={{ marginTop: space.l, opacity: gradeMissing || (conStatus === 'sold' && !soldCents) ? 0.35 : 1 }}
                     title={conButtonTitle(conStatus, soldCents, !!owned)}
                     onPress={() => addForCon(false)}
                   />
@@ -862,7 +995,7 @@ export default function Scan() {
                     <PrimaryButton style={{ marginTop: space.l }} title="Set your price" onPress={() => setAsking(true)} />
                   ) : (
                     <PrimaryButton
-                      style={{ marginTop: space.l }}
+                      style={{ marginTop: space.l, opacity: gradeMissing ? 0.35 : 1 }}
                       title="Add to vault"
                       onPress={already ? () => setConfirmAgain(true) : addToVault}
                     />
@@ -1296,6 +1429,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   capture: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter },
+  shutterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.xl },
+  shutter: {
+    width: size.shutter,
+    height: size.shutter,
+    borderRadius: size.shutter / 2,
+    borderWidth: 3,
+    borderColor: color.onInk,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shutterDisc: { width: size.shutter - 14, height: size.shutter - 14, borderRadius: (size.shutter - 14) / 2, backgroundColor: color.onInk },
+  library: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
+  modes: { flexDirection: 'row', justifyContent: 'center', gap: space.xl, paddingTop: space.m },
+  modeBtn: { minHeight: size.touch, justifyContent: 'center' },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s },
   added: {
     flexDirection: 'row',
