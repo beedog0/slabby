@@ -25,7 +25,6 @@ import type { SlabActions } from '../src/components/collection/actions';
 import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/collection/statusSheets';
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { openAppearance, APPEARANCE_LABEL } from '../src/components/menu/appearanceMenu';
-import { useScanPrefs } from '../src/store/scanPrefs';
 import { useAppearance } from '../src/store/appearance';
 import { openSlabMenu } from '../src/components/menu/Menu';
 import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
@@ -201,7 +200,6 @@ export default function Home() {
 
   // Grouped by when you'd reach for it: at the con, around the shelf, then settings.
   const appearance = useAppearance((st) => st.mode);
-  const aiPhoto = useScanPrefs((st) => st.aiPhoto);
   const moreRef = useRef<ComponentRef<typeof View>>(null);
   const more = () =>
     openDropdown(moreRef, [
@@ -223,8 +221,6 @@ export default function Home() {
         { label: 'Pricing rules', onPress: () => router.push('/settings/pricing') },
         { label: 'Back up', onPress: () => router.push('/settings/account') },
         { label: 'Appearance', detail: APPEARANCE_LABEL[appearance], onPress: openAppearance },
-        // Photo mode's AI backup for photos the on-device reader can't place. On by default.
-        { label: 'AI photo backup', detail: aiPhoto ? 'On' : 'Off', onPress: () => useScanPrefs.getState().setAiPhoto(!aiPhoto) },
       ],
     ]);
 
