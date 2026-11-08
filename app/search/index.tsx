@@ -29,6 +29,7 @@ import {
   filterCount,
   findCards,
   findFacets,
+  NO_FILTERS,
   runnable,
   SORTS,
   type Facets,
@@ -40,6 +41,7 @@ import { useDisplay } from '../../src/store/display';
 import { useRules } from '../../src/store/rules';
 import { color, radius, shadow, size, space, type } from '../../src/theme/tokens';
 import type { PricingRules } from '../../src/types';
+import { ART_TYPES, ART_TYPES_BY_GAME, artLabel, type ArtType } from '../../src/lib/artType';
 
 type GameFilter = 'all' | Game;
 const GRID_GAP = space.l;
@@ -171,6 +173,8 @@ export default function Search() {
                   sets: [],
                   rarities: [],
                   languages: g === 'all' || g === 'pokemon' ? f.languages : [],
+                  // Keep art types the new game has (One Piece has no illustration rares).
+                  arts: g === 'all' ? f.arts : (f.arts ?? []).filter((a) => ART_TYPES_BY_GAME[g].includes(a)),
                 })
               }
               options={[
@@ -214,7 +218,7 @@ export default function Search() {
               </Pressable>
             ))}
             {filterCount(f) > 1 ? (
-              <Pressable accessibilityRole="button" onPress={() => set({ languages: [], sets: [], rarities: [], types: [] })} hitSlop={8} style={styles.chipClear}>
+              <Pressable accessibilityRole="button" onPress={() => set(NO_FILTERS)} hitSlop={8} style={styles.chipClear}>
                 <Text style={[type.secondary, { color: color.secondary }]}>Clear</Text>
               </Pressable>
             ) : null}
@@ -348,6 +352,13 @@ function FilterSheet({
   // Keep picked sets and rarities visible even when they fall out of the facet list.
   const setRows = [...f.sets.filter((x) => !sets.some((s) => s.id === x.id)).map((x) => ({ ...x, n: 0 })), ...sets];
   const rarityRows = [...f.rarities.filter((r) => !rarities.some((x) => x.key === r)).map((key) => ({ key, n: 0 })), ...rarities];
+  // Art type: what the matches have, in fixed order; with no search yet, what the game can have.
+  const pickedArts = f.arts ?? [];
+  const artRows: { key: ArtType; n: number }[] = facets
+    ? [...facets.arts, ...pickedArts.filter((a) => !facets.arts.some((x) => x.key === a)).map((key) => ({ key, n: 0 }))].sort(
+        (a, b) => ART_TYPES.indexOf(a.key) - ART_TYPES.indexOf(b.key),
+      )
+    : (f.game ? ART_TYPES_BY_GAME[f.game] : ART_TYPES).map((key) => ({ key, n: 0 }));
   // Type: Cards, then All sealed (once there's more than one kind), then each kind of sealed.
   const picked = f.types ?? [];
   const kinds = facets?.types ?? [];
@@ -381,12 +392,51 @@ function FilterSheet({
         <View style={styles.sheetHead}>
           <Text style={[type.section, { color: color.ink }]}>Filter</Text>
           {filterCount(f) ? (
-            <Pressable accessibilityRole="button" onPress={() => onChange({ languages: [], sets: [], rarities: [], types: [] })} hitSlop={8}>
+            <Pressable accessibilityRole="button" onPress={() => onChange(NO_FILTERS)} hitSlop={8}>
               <Text style={[type.text, { color: color.secondary }]}>Clear</Text>
             </Pressable>
           ) : null}
         </View>
         <SheetScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: space.l }}>
+          {artRows.length ? (
+            <View style={styles.sheetSection}>
+              <Text style={[type.body, styles.sectionTitle]}>Art type</Text>
+              {/* Pills, not rows: eight short choices fit in a few lines near the top. */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, paddingHorizontal: space.gutter, paddingBottom: space.s }}>
+                {artRows.map((a) => {
+                  const on = pickedArts.includes(a.key);
+                  return (
+                    <Pressable
+                      key={a.key}
+                      accessibilityRole="button"
+                      accessibilityLabel={a.n ? `${artLabel(a.key)}, ${a.n}` : artLabel(a.key)}
+                      accessibilityState={{ selected: on }}
+                      onPress={() => onChange({ arts: toggle(pickedArts, a.key) })}
+                      hitSlop={{ top: 4, bottom: 4 }}
+                      style={({ pressed }) => [
+                        {
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: space.xs,
+                          minHeight: size.chip + 6,
+                          paddingHorizontal: space.m,
+                          borderRadius: radius.chip + 3,
+                          backgroundColor: on ? color.ink : color.well,
+                        },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <Text style={[type.text, { color: on ? color.onInk : color.ink }]}>{artLabel(a.key)}</Text>
+                      {a.n ? (
+                        <Text style={[type.secondary, { color: on ? color.onInk : color.secondary, fontVariant: ['tabular-nums'], opacity: on ? 0.7 : 1 }]}>{a.n}</Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
           {typeRows.length > 1 || picked.length ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Type</Text>

@@ -86,3 +86,36 @@ describe('sealed product', () => {
     expect(filterCount(withoutChip(f, chips(f)[0]))).toBe(0);
   });
 });
+
+describe('art type', () => {
+  it('filters by art type across games, OR within the group', async () => {
+    const alt = await findCards(q({ q: 'umbreon', arts: ['alt_art'] }));
+    expect(alt.map((c) => c.name).sort()).toEqual(['Umbreon V (Alternate Art)', 'Umbreon VMAX (Alternate Art Secret)']);
+    const sir = await findCards(q({ q: 'ex', arts: ['special_illustration'] }));
+    expect(sir.length).toBe(3);
+    expect((await findCards(q({ q: 'ex', arts: ['special_illustration', 'secret'] }))).length).toBe(4);
+    expect((await findCards(q({ q: 'luffy', arts: ['alt_art'] }))).length).toBe(1);
+    expect((await findCards(q({ q: 'jinx', arts: ['alt_art'] }))).length).toBe(1);
+  });
+  it('never matches sealed product', async () => {
+    const evs = q({ sets: [{ id: setId('SWSH07: Evolving Skies'), name: 'SWSH07: Evolving Skies' }] });
+    expect((await findCards(q({ ...evs, arts: ['standard', 'alt_art', 'secret'] }))).every((c) => !c.sealedType)).toBe(true);
+  });
+  it('offers art facets in their fixed order, not by count', async () => {
+    const f = await findFacets(q({ q: 'umbreon' }));
+    expect(f.arts).toEqual([
+      { key: 'alt_art', n: 2 },
+      { key: 'special_illustration', n: 1 },
+    ]);
+    expect(facetsFrom([{ kind: 'art', key: 'promo', label: 'promo', n: 9 }, { kind: 'art', key: 'holo', label: 'holo', n: 1 }, { kind: 'art', key: 'shiny?', label: 'x', n: 1 }]).arts).toEqual([
+      { key: 'holo', n: 1 },
+      { key: 'promo', n: 9 },
+    ]);
+  });
+  it('counts, chips and removes art types', () => {
+    const f = q({ q: 'ex', arts: ['alt_art', 'secret'] });
+    expect(filterCount(f)).toBe(2);
+    expect(chips(f).map((c) => c.label)).toEqual(['Alt art', 'Secret and gold']);
+    expect(withoutChip(f, chips(f)[0]).arts).toEqual(['secret']);
+  });
+});
