@@ -14,6 +14,7 @@ import { SoldState } from '../../../src/components/SoldState';
 import { TrendSentence } from '../../../src/components/TrendSentence';
 import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, Stepper } from '../../../src/components/ui';
 import { cardLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
+import { sourceWord } from '../../../src/pricing/estimate';
 import { minFloorOverride } from '../../../src/pricing/rules';
 import { freshnessLine, freshnessWorthShowing, trendSentence, trendVerdict } from '../../../src/pricing/trend';
 import { useCardRow } from '../../../src/pricing/useCardRow';
@@ -183,11 +184,11 @@ export default function BeforeTheTable() {
             <Text style={[type.text, { color: color.secondary, flex: 1 }]}>
               {selling ? (
                 <>
-                  Ask = {raw ? 'TCGplayer' : 'market'} {em(rulePct(rules.askPct))} · {floorWhy}
+                  Ask = {sourceWord(price, raw)} {em(rulePct(rules.askPct))} · {floorWhy}
                 </>
               ) : (
                 <>
-                  Target = {raw ? 'TCGplayer' : 'market'} {em(rulePct(rules.buyTargetPct))} · max = {raw ? 'TCGplayer' : 'market'}{' '}
+                  Target = {sourceWord(price, raw)} {em(rulePct(rules.buyTargetPct))} · max = {sourceWord(price, raw)}{' '}
                   {em(rulePct(rules.buyMaxPct))}
                 </>
               )}

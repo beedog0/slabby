@@ -3,7 +3,7 @@
 // One Piece and Riftbound: the only source. PPT is Pokémon-only, so these games get their art and
 // raw TCGplayer market price here.
 
-import { numberMatches } from './comps-math.ts';
+import { groupsFor, pickProduct } from './comps-math.ts';
 
 const TCGCSV = 'https://tcgcsv.com/tcgplayer';
 const UA = { 'User-Agent': 'slabby-card-match/0.1 (+https://github.com/beedog0/slabby)' };
@@ -19,7 +19,6 @@ async function results<T>(path: string): Promise<T[]> {
   return ((await res.json()) as { results: T[] }).results ?? [];
 }
 
-const compact = (t: string | null | undefined) => (t ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // Pokémon's ids are long-standing. Other games are looked up by name once per function instance,
 // so a new or renamed TCGplayer category doesn't need a code change.
@@ -82,65 +81,23 @@ export async function tcgcsvMatch(c: MatchInput): Promise<TcgMatch | null> {
 async function matchIn(category: number, c: MatchInput) {
   if (!c.number || (!c.setCode && !c.setName)) return null;
   const groups = await results<Group>(`/${category}/groups`);
-  const code = compact(c.setCode);
-  const group =
-    (code && groups.find((g) => compact(g.abbreviation) === code)) ||
-    (code && groups.find((g) => compact(g.name).startsWith(code))) ||
-    (c.setName && groups.find((g) => compact(g.name).includes(compact(c.setName)))) ||
-    // Abbreviated label sets: "25TH ANNIV-GOLDEN BOX" is "25th Anniversary Golden Box".
-    (c.setName && groups.find((g) => wordsPrefix(c.setName!, g.name)));
-  if (!group) return null;
-
-  const products = await results<Product>(`/${category}/${group.groupId}/products`);
-  const hits = products.filter((p) => {
-    const n = p.extendedData?.find((e) => e.name === 'Number')?.value;
-    return n && numberMatches(n, c.number);
-  });
-  if (!hits.length) return null;
-  const nameWords = c.name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-  const bare = (c.number ?? '').replace(/^0+(?=\d)/, '');
-  const byVariety = (c.game ?? 'pokemon') !== 'pokemon'; // Pokémon numbers are unique per printing
-  const variant = varietyWords(c.variety);
-  const score = (p: Product) => {
-    const n = p.name.toLowerCase();
-    const tagged = /\(|\[/.test(n); // "Monkey.D.Luffy (Parallel)", "Shanks (Manga)"
-    const fits = variant.filter((w) => n.includes(w)).length;
-    return (
-      // The title carries the printed number ("Pikachu - 120/SV-P"); reprint rows sometimes don't.
-      (new RegExp(`\\b0*${escape(bare)}\\s*/`).test(n) ? 5 : 0) +
-      nameWords.filter((w) => n.includes(w)).length +
-      // One Piece and Riftbound reuse the number for parallels and alt arts, so the label's variety
-      // picks the printing: tagged rows only when the label names one, the plain row otherwise.
-      (!byVariety ? 0 : variant.length ? (fits ? 3 * fits : tagged ? -1 : -2) : tagged ? -2 : 0)
-    );
-  };
-  const best = hits.sort((a, b) => score(b) - score(a))[0];
-  return {
-    tcgPlayerId: String(best.productId),
-    image: `https://tcgplayer-cdn.tcgplayer.com/product/${best.productId}_400w.jpg`,
-    setName: group.name,
-    name: best.name,
-    category,
-    group: group.groupId,
-  };
+  // Several groups can carry a set's code: One Piece's "OP14-EB04" (main set plus extra booster)
+  // and "OP14 RE" (release event cards). Try each, most likely first, until one has the card.
+  for (const group of groupsFor(groups, c)) {
+    const products = await results<Product>(`/${category}/${group.groupId}/products`);
+    const best = pickProduct(products, c);
+    if (best)
+      return {
+        tcgPlayerId: String(best.productId),
+        image: `https://tcgplayer-cdn.tcgplayer.com/product/${best.productId}_400w.jpg`,
+        setName: group.name,
+        name: best.name,
+        category,
+        group: group.groupId,
+      };
+  }
+  return null;
 }
-
-// PSA and TCGplayer word variants differently ("PARALLEL" vs "Alternate Art"), so both count.
-const SAME: Record<string, string[]> = { parallel: ['parallel', 'alternate', 'alt'], alternate: ['parallel', 'alternate', 'alt'], alt: ['parallel', 'alternate', 'alt'] };
-function varietyWords(v: string | null | undefined): string[] {
-  const words = (v ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !['art', 'rare', 'holo', 'the'].includes(w));
-  return [...new Set(words.flatMap((w) => SAME[w] ?? [w]))];
-}
-
-/** Every word of the label's set starts a word of the group's name, in any order. */
-function wordsPrefix(label: string, group: string): boolean {
-  const split = (t: string) => t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-  const want = split(label);
-  const have = split(group);
-  return want.length >= 2 && want.every((w) => have.some((h) => h.startsWith(w)));
-}
-
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Per function run: a set's prices file covers all its cards, so nightly fetches it once.
 const groupPrices = new Map<string, Promise<TcgPrice[]>>();

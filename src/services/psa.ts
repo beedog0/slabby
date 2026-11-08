@@ -192,10 +192,11 @@ const nameWords = (t: string) =>
     .filter((w) => w && !NAME_FILLER.has(w));
 
 /**
- * The name to show once a card is matched to its catalog product. Newer Japanese labels can print
- * a short code where the name goes ("PZA #236" on SV8a), so a label name that shares no word with
- * the matched product's name was a misread and the product's name wins. A name that agrees
- * ("Charizard-holo" vs "Charizard") is kept. Null when nothing should change.
+ * The name to show once a card is matched to its catalog product: the product's name, whenever the
+ * label read has a word the product's name doesn't. That covers a code printed where the name goes
+ * ("PZA #236" on SV8a) and OCR slips through glare ("SHIONG MAGIKARP-HOLO" for Shining Magikarp).
+ * A read that agrees ("Charizard-holo" vs "Charizard", "Pikachu" vs "Pikachu ex") is kept, so a
+ * correct name isn't rewritten for nothing. Null when nothing should change.
  */
 export function nameFromMatch(current: string, matched: string | null | undefined): string | null {
   const m = matched?.trim();
@@ -203,7 +204,7 @@ export function nameFromMatch(current: string, matched: string | null | undefine
   const have = nameWords(current);
   const want = new Set(nameWords(m));
   if (!want.size) return null;
-  return have.some((w) => want.has(w)) ? null : m;
+  return have.every((w) => want.has(w)) ? null : m;
 }
 
 /** OCR often drops the space before the suffix: "PIKACHUex" → "PIKACHU ex". */
