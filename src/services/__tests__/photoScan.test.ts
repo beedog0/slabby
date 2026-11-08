@@ -62,3 +62,14 @@ describe('fromVision', () => {
     expect(fromVision({ kind: 'card', name: null, englishName: null, number: null }).kind).toBe('miss');
   });
 });
+
+describe('readPhoto on a promo held in a toploader', () => {
+  it('finds the Mega Evolution promo number once the small print is read', () => {
+    const r = readPhoto(['BASIC', 'Oshawott', 'Razor Shell OaR', '10+', 'J MEP EN 051 ★']);
+    expect(r.kind).toBe('card');
+    if (r.kind === 'card') {
+      expect(r.card.numbers[0]).toMatchObject({ num: '051', code: 'MEP' });
+      expect(r.card.name).toBe('Oshawott');
+    }
+  });
+});

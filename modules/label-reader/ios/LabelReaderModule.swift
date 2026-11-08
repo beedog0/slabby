@@ -15,7 +15,10 @@ public class LabelReaderModule: Module {
       if url.isFileURL { try? FileManager.default.removeItem(at: url) }
     }
 
-    AsyncFunction("recognize") { (uri: String, promise: Promise) in
+    // options.minTextHeight: smallest text to read, as a share of the photo's height. Vision's
+    // default (1/32) skips a card's set code and number in a photo of the whole card, so Photo
+    // mode asks for much smaller text. Leaving it out keeps the default (live scan).
+    AsyncFunction("recognize") { (uri: String, options: [String: Any]?, promise: Promise) in
       guard let image = Self.loadImage(uri), let cgImage = image.cgImage else {
         promise.reject("E_IMAGE", "Couldn't open the photo")
         return
@@ -44,6 +47,9 @@ public class LabelReaderModule: Module {
       // Labels are codes and names, not prose: autocorrect would "fix" SV2a or ex.
       request.usesLanguageCorrection = false
       request.recognitionLanguages = ["en-US"]
+      if let h = options?["minTextHeight"] as? Double, h > 0 {
+        request.minimumTextHeight = Float(h)
+      }
 
       let handler = VNImageRequestHandler(cgImage: cgImage, orientation: Self.orientation(image.imageOrientation))
       DispatchQueue.global(qos: .userInitiated).async {

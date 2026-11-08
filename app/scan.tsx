@@ -68,6 +68,7 @@ import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type A
 import { useVault } from '../src/store/vault';
 import { readPhoto } from '../src/services/photoScan';
 import { readPhotoWithVision } from '../src/services/vision';
+import { PHOTO_MIN_TEXT, readInTiles } from '../src/services/photoTiles';
 import { useScanPrefs } from '../src/store/scanPrefs';
 import { LabelReader } from '../modules/label-reader';
 import type { Card } from '../src/types';
@@ -168,9 +169,12 @@ export default function Scan() {
   const photoMode = labelMode && mode === 'photo';
   // Photo mode: the still being read, shown in place of the camera until the sheet is put away.
   const [still, setStill] = useState<string | null>(null);
-  const [looking, setLooking] = useState(false);
+  // Photo mode's second and third tries: reading the photo in enlarged pieces, then the AI backup.
+  const [looking, setLooking] = useState<'closer' | 'ai' | null>(null);
   // AI backup read: off unless switched on, so the on-device read can be judged by itself.
   const aiBackup = useScanPrefs((s) => s.aiBackup);
+  // The AI backup read didn't answer (slow, offline, not set up): the miss says so.
+  const [aiMiss, setAiMiss] = useState(false);
   const setAiBackup = useScanPrefs((s) => s.setAiBackup);
   const stillOwned = useRef(false);
 
@@ -574,24 +578,37 @@ export default function Scan() {
     setStill(uri);
     setReading(true);
     setLabelMiss(false);
+    setAiMiss(false);
+    let aiDown = false;
     try {
-      let r = await LabelReader.recognize(uri)
-        .then(readPhoto)
-        .catch(() => ({ kind: 'miss' as const, seen: '' }));
-      // The text reader couldn't place it (far away, glare, a number it can't see): the vision
-      // fallback looks at the whole card. Same parsers and catalog match after that.
+      const reader = LabelReader;
+      // Small text on: Vision's default skips anything under 1/32 of the picture's height, which
+      // is where a card's set code and number sit when the whole card is in the photo.
+      const first = await reader.recognize(uri, { minTextHeight: PHOTO_MIN_TEXT }).catch(() => []);
+      let r = readPhoto(first);
+      // No label or number yet: read the photo again in enlarged pieces (the small print at arm's length).
+      if (r.kind === 'miss') {
+        setLooking('closer');
+        const pieces = await readInTiles(uri).catch(() => []);
+        const again = readPhoto([...first, ...pieces]);
+        if (again.kind !== 'miss') r = again;
+      }
+      // Still nothing, and the AI backup read is on: it looks at the whole card. Same parsers
+      // and catalog match after that.
       if (r.kind === 'miss' && useScanPrefs.getState().aiBackup) {
-        setLooking(true);
+        setLooking('ai');
         const seenByVision = await readPhotoWithVision(uri);
-        if (seenByVision && seenByVision.kind !== 'miss') r = seenByVision;
+        if (seenByVision === 'unavailable') aiDown = true;
+        else if (seenByVision.kind !== 'miss') r = seenByVision;
       }
       if (r.kind === 'slab') return accept(r.label);
       if (r.kind === 'card') return acceptCard(r.card);
-      setSeen(r.seen);
+      setSeen(aiDown ? '' : r.seen);
     } finally {
       setReading(false);
-      setLooking(false);
+      setLooking(null);
     }
+    setAiMiss(aiDown);
     setLabelMiss(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     dropStill();
@@ -685,12 +702,16 @@ export default function Scan() {
     ? 'Got it'
     : busy
     ? 'Checking with PSA'
-    : looking
+    : looking === 'ai'
+      ? 'Asking the AI backup'
+    : looking === 'closer'
       ? 'Looking closer'
     : reading
       ? 'Reading'
       : labelMiss
-        ? seen
+        ? aiMiss
+          ? 'Couldn’t read the card, and the AI backup didn’t answer. Try again, or get closer to the number.'
+          : seen
           ? `Couldn’t find a slab label or card number in “${seen.slice(0, 80)}”. ${photoMode ? 'Get closer so the label or number is sharp.' : 'Fit the slab or card in the frame and hold steady.'}`
           : photoMode
             ? 'Couldn’t read any text. Get closer so the label or number is sharp.'
@@ -881,6 +902,7 @@ export default function Scan() {
                 disabled={reading || locked}
                 onPress={() => {
                   setLabelMiss(false);
+                  setAiMiss(false);
                   setMode(m);
                 }}
                 hitSlop={space.s}
