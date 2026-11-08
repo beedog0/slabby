@@ -846,7 +846,7 @@ export default function Scan() {
                 hitSlop={space.s}
                 style={({ pressed }) => [styles.library, pressed && { opacity: 0.7 }]}
               >
-                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color.onInk} strokeWidth={1.75} strokeLinejoin="round">
+                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={cam.onInk} strokeWidth={1.75} strokeLinejoin="round">
                   <Path d="M4 5h16v14H4z" />
                   <Path d="M4 16l5-5 4 4 2.5-2.5L20 17" strokeLinecap="round" />
                 </Svg>
@@ -886,7 +886,7 @@ export default function Scan() {
                 hitSlop={space.s}
                 style={styles.modeBtn}
               >
-                <Text style={[type.text, { color: color.onInk, opacity: mode === m ? 1 : 0.55, fontWeight: mode === m ? '600' : '400' }]}>
+                <Text style={[type.text, { color: cam.onInk, opacity: mode === m ? 1 : 0.55, fontWeight: mode === m ? '600' : '400' }]}>
                   {m === 'live' ? 'Live' : 'Photo'}
                 </Text>
               </Pressable>
@@ -901,7 +901,7 @@ export default function Scan() {
               onPress={() => setAiBackup(!aiBackup)}
               style={styles.modeBtn}
             >
-              <Text style={[type.secondary, { color: color.onInk, opacity: 0.7, textAlign: 'center' }]}>
+              <Text style={[type.secondary, { color: cam.onInk, opacity: 0.7, textAlign: 'center' }]}>
                 AI backup read · <Text style={{ fontWeight: '600', opacity: 1 }}>{aiBackup ? 'On' : 'Off'}</Text>
               </Text>
             </Pressable>
@@ -1584,11 +1584,11 @@ const useStyles = themed((color) => StyleSheet.create({
     height: size.shutter,
     borderRadius: size.shutter / 2,
     borderWidth: 3,
-    borderColor: color.onInk,
+    borderColor: light.onInk,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterDisc: { width: size.shutter - 14, height: size.shutter - 14, borderRadius: (size.shutter - 14) / 2, backgroundColor: color.onInk },
+  shutterDisc: { width: size.shutter - 14, height: size.shutter - 14, borderRadius: (size.shutter - 14) / 2, backgroundColor: light.onInk },
   library: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
   modes: { flexDirection: 'row', justifyContent: 'center', gap: space.xl, paddingTop: space.m },
   modeBtn: { minHeight: size.touch, justifyContent: 'center' },
