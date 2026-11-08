@@ -711,11 +711,14 @@ export default function Scan() {
       : labelMiss
         ? aiMiss
           ? 'Couldn’t read the card, and the AI backup didn’t answer. Try again, or get closer to the number.'
-          : seen
-          ? `Couldn’t find a slab label or card number in “${seen.slice(0, 80)}”. ${photoMode ? 'Get closer so the label or number is sharp.' : 'Fit the slab or card in the frame and hold steady.'}`
           : photoMode
-            ? 'Couldn’t read any text. Get closer so the label or number is sharp.'
-            : 'Couldn’t read any text. Move closer so the slab or card fills the frame.'
+            // A photo miss is nearly always distance: say what to get closer to, not what was read.
+            ? looksLikeSlab([seen])
+              ? 'Move closer so the label fills the frame.'
+              : 'Move closer so the card’s number is readable.'
+          : seen
+          ? `Couldn’t find a slab label or card number in “${seen.slice(0, 80)}”. Fit the slab or card in the frame and hold steady.`
+          : 'Couldn’t read any text. Move closer so the slab or card fills the frame.'
         : spotted
           ? 'Hold still'
           : addedNote

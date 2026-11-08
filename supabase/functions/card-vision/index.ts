@@ -18,6 +18,9 @@ const MODEL = Deno.env.get('VISION_MODEL') ?? 'claude-opus-5-5';
 const DAILY_CAP = Number(Deno.env.get('VISION_DAILY_CAP') ?? 300);
 // About 1200 px on the long side arrives near 300 KB as base64; anything far bigger isn't from the app.
 const MAX_IMAGE_CHARS = 4_000_000;
+// Every step logs how long it took, and the whole request answers within HANDLER_MS: Bryan's
+// first calls hung until the 150 s wall-clock limit with nothing logged.
+const HANDLER_MS = 30_000;
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
 
 const Read = z.object({
@@ -42,21 +45,43 @@ Write down only what is printed. Never guess text you can't see; use null or an 
 - No card in the photo, or nothing readable: kind "none".
 If several cards show, describe the largest, most central one.`;
 
-Deno.serve(async (req) => {
+Deno.serve((req) => {
+  const t0 = Date.now();
+  const log = (step: string) => console.log(`card-vision ${step} +${Date.now() - t0}ms`);
+  log('start');
+  return Promise.race([
+    handle(req, log).catch((e) => {
+      console.error('card-vision failed', e);
+      return json({ error: 'vision failed' }, 502);
+    }),
+    new Promise<Response>((resolve) =>
+      setTimeout(() => {
+        log('gave up');
+        resolve(json({ error: 'timeout' }, 504));
+      }, HANDLER_MS),
+    ),
+  ]);
+});
+
+async function handle(req: Request, log: (step: string) => void): Promise<Response> {
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const jwt = req.headers.get('Authorization')?.replace('Bearer ', '');
   if (!jwt || !(await admin.auth.getUser(jwt)).data.user) return json({ error: 'Sign in first' }, 401);
+  log('signed in');
   if (!Deno.env.get('ANTHROPIC_API_KEY')) return json({ error: 'not_configured' }, 503);
 
   const body = await req.json().catch(() => null);
+  log(`body ${typeof body?.image === 'string' ? body.image.length : 0} chars`);
   const image = typeof body?.image === 'string' ? body.image.replace(/^data:image\/\w+;base64,/, '') : '';
   if (!image || image.length > MAX_IMAGE_CHARS) return json({ error: 'Bad request' }, 400);
 
   const ok = (await admin.rpc('claim_ppt_credits', { bucket_name: 'vision', n: 1, daily_cap: DAILY_CAP })).data === true;
+  log(`claimed ${ok}`);
   if (!ok) return json({ error: 'capped' }, 429);
 
   try {
-    const client = new Anthropic();
+    // One try, and well inside HANDLER_MS: a slow answer is a miss, not a hung scan.
+    const client = new Anthropic({ timeout: 25_000, maxRetries: 0 });
     const res = await client.messages.parse({
       model: MODEL,
       max_tokens: 4000,
@@ -72,12 +97,14 @@ Deno.serve(async (req) => {
         },
       ],
     });
+    log(`answered ${res.stop_reason} in:${res.usage.input_tokens} out:${res.usage.output_tokens}`);
     if (res.stop_reason === 'refusal' || !res.parsed_output) return json({ kind: 'none' });
     return json(res.parsed_output);
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError) return json({ error: 'busy' }, 429);
     if (e instanceof Anthropic.AuthenticationError) return json({ error: 'not_configured' }, 503);
     if (e instanceof Anthropic.APIError) return json({ error: `vision ${e.status}` }, 502);
+    console.error('card-vision model call failed', e);
     return json({ error: 'vision failed' }, 502);
   }
-});
+}
