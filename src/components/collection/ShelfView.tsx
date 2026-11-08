@@ -1,4 +1,5 @@
-// Display shelves: slabs standing on a flat wood ledge, 1 to 5 per shelf (3 by default; set in
+// Display shelves: slabs and raw singles standing on a flat wood ledge (singles rest on it, not
+// centred in the air above it), 1 to 5 per shelf (3 by default; set in
 // Arrange shelf). Tap a slab for its detail.
 
 import { router } from 'expo-router';
@@ -55,9 +56,9 @@ export function ShelfView({
                 style={({ pressed }) => [pressed && { opacity: 0.85 }, dimmed(actions, r) && { opacity: 0.35 }]}
               >
                 <View>
-                  <SlabView card={r.card} width={slabW} posed={false} />
-                  {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} card={r.card} /> : null}
-                  <CopiesMark slabW={slabW} card={r.card} copies={r.copies ?? 1} />
+                  <SlabView card={r.card} width={slabW} posed={false} anchor="bottom" />
+                  {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} card={r.card} anchor="bottom" /> : null}
+                  <CopiesMark slabW={slabW} card={r.card} copies={r.copies ?? 1} anchor="bottom" />
                   <SelectOutline on={!!actions?.selected?.has(r.card.id)} slabW={slabW} />
                 </View>
               </Pressable>
