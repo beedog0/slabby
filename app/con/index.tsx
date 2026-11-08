@@ -5,7 +5,9 @@
 // for the same choices. Whatever changed is flashed on the tab it landed on. Search and sort sit
 // under the tabs, like on home.
 //
-// The … beside Done holds the table tools: Price a bundle (/con/bundle), Trade calculator
+// The list button beside "Got an offer" opens the price list (/con/prices): every card for sale
+// with its ask and floor, editable one by one or as a total.
+// The … beside Done holds the table tools: Price list, Price a bundle (/con/bundle), Trade calculator
 // (/con/trade), Last-day prices (rule floors drop by a set percent until midnight) and Refresh
 // prices. Starting a con runs con-day prep once (src/services/conPrep.ts).
 
@@ -23,6 +25,7 @@ import type { CardRow } from '../../src/pricing/portfolio';
 import { Segmented } from '../../src/components/Segmented';
 import { openConStatusMenu, takeScanAdded } from '../../src/components/conStatusMenu';
 import { BuyingPane } from '../../src/components/con/BuyingPane';
+import { PriceListIcon } from '../../src/components/con/priceSheets';
 import { TableSheet, type TableSheetOpen } from '../../src/components/con/TableSheet';
 import { openMenu } from '../../src/components/menu/Menu';
 import { Hairline, MoreIcon, PlusIcon, PrimaryButton } from '../../src/components/ui';
@@ -170,6 +173,7 @@ export default function ConMode() {
       title: 'Con tools',
       items: [
         [
+          { label: 'Price list', detail: 'Every card for sale', onPress: () => router.push('/con/prices') },
           { label: 'Price a bundle', onPress: () => router.push('/con/bundle') },
           { label: 'Trade calculator', onPress: () => router.push('/con/trade') },
         ],
@@ -350,6 +354,14 @@ export default function ConMode() {
 
           <View style={[styles.footer, { paddingBottom: insets.bottom + space.l }]}>
             <PrimaryButton style={{ flex: 1 }} title="Got an offer" onPress={() => router.push('/con/pick')} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Price list"
+              onPress={() => router.push('/con/prices')}
+              style={({ pressed }) => [styles.add, pressed && { opacity: 0.6 }]}
+            >
+              <PriceListIcon />
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Add a slab to the table"
