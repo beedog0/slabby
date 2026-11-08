@@ -3,7 +3,8 @@
 // ink), how many sales the price rests on, then "They're asking" with a live Steal / Good buy /
 // Fair / Over market rating against your buying rules. One primary action per rating, like the
 // They're asking page (app/con/buy/[id].tsx): Bought for, Counter, Walk away. Adding to the vault
-// without buying stays a quiet line at the bottom.
+// without buying stays a quiet line at the bottom. Colors are only read in render (never in the
+// StyleSheet), so dark mode's useColors() drops in with one line.
 
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
@@ -180,7 +181,7 @@ export function PriceCheck({ productId, grade, fallback, onBought, onNext, onAdd
           placeholderTextColor={color.secondary}
           keyboardType="number-pad"
           inputAccessoryViewID={KEYBOARD_DONE}
-          style={[type.rowPrice, styles.input]}
+          style={[type.rowPrice, styles.input, { color: color.ink }]}
           accessibilityLabel="They're asking"
         />
       </View>
@@ -213,7 +214,7 @@ const styles = StyleSheet.create({
   rung: { flex: 1, gap: 2 },
   field: { minHeight: size.touch + space.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   // Same as the scan sheet's Paid and Sold for fields.
-  input: { width: 140, textAlign: 'right', color: color.ink, paddingVertical: space.s },
+  input: { width: 140, textAlign: 'right', paddingVertical: space.s },
   verdict: { minHeight: size.touch, justifyContent: 'center', paddingVertical: space.s },
   quiet: { minHeight: size.touch, alignItems: 'center', justifyContent: 'center' },
 });
