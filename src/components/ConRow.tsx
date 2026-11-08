@@ -3,6 +3,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { bare, cardLabel, money, rowTitle } from '../lib/format';
 import type { CardRow } from '../pricing/portfolio';
+import { useDeal } from '../pricing/useDeal';
 import { size, space, type } from '../theme/tokens';
 import { useColors } from '../theme/theme';
 import { CardThumb } from './CardThumb';
@@ -14,6 +15,7 @@ export function ConRow({ row, onPress, onLongPress }: { row: CardRow; onPress: (
   const sold = card.status === 'sold';
   // Trade only isn't for cash, so it shows what the card is worth instead of an ask and floor.
   const trade = !sold && card.plan === 'trade';
+  const deal = useDeal(card.id);
   return (
     <Pressable accessibilityRole="button" onPress={onPress} onLongPress={onLongPress} style={styles.row}>
       <CardThumb card={card} />
@@ -31,7 +33,7 @@ export function ConRow({ row, onPress, onLongPress }: { row: CardRow; onPress: (
           {sold ? money(card.soldCents ?? 0) : trade ? (price ? money(price.marketCents) : '—') : row.ask != null ? money(row.ask) : '—'}
         </Text>
         <Text style={[type.secondary, { color: color.secondary }]}>
-          {sold ? 'sold' : trade ? 'trade only' : row.floor != null ? `floor ${bare(row.floor)}` : 'no comps yet'}
+          {sold ? (deal?.totalCents != null ? `of ${money(deal.totalCents)} deal` : 'sold') : trade ? 'trade only' : row.floor != null ? `floor ${bare(row.floor)}` : 'no comps yet'}
         </Text>
       </View>
     </Pressable>

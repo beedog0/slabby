@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { cardLabel, money, pct, rowTitle } from '../../lib/format';
 import { weekChange, type CardRow } from '../../pricing/portfolio';
+import { useDeal } from '../../pricing/useDeal';
 import { dimmed, type SlabActions } from './actions';
 import { CopiesMark, PinMark } from './PinMark';
 import { SelectOutline } from './SelectOutline';
@@ -56,6 +57,7 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
   const value = sold ? card.soldCents : price?.marketCents;
   // Last 7 days of market movement, as "+3% this week". What you paid is on the card.
   const week = weekChange(row);
+  const deal = useDeal(card.id);
   const align = center ? 'center' : 'flex-start';
   return (
     <View style={{ gap: 2, alignItems: align }}>
@@ -70,7 +72,16 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
       </Text>
       {/* Its own line so it never truncates; a blank line when there's nothing to say, so rows line up. */}
       <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-        {week ? (
+        {deal ? (
+          // Sold with others: the deal total and how many, since line 2 is only this card's share.
+          deal.totalCents != null ? (
+            <>
+              <Text style={{ color: color.ink }}>{money(deal.totalCents)}</Text> deal · {deal.ids.length} cards
+            </>
+          ) : (
+            `Sold with ${deal.ids.length - 1} more`
+          )
+        ) : week ? (
           <>
             <Text style={{ color: week.cents >= 0 ? color.gain : color.loss }}>{pct(week.fraction)}</Text> this week
           </>
