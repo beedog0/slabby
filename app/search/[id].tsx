@@ -305,7 +305,7 @@ export default function SearchedCard() {
             )}
           </View>
 
-          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} trade={trading} sealed={!!sealed} />
+          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} trade={trading} sealed={!!sealed} ebay={ready} />
           {prices?.capped ? (
             <Text style={[type.secondary, { color: color.secondary, paddingTop: space.m }]}>
               Graded prices for new cards are paused until tomorrow to save credits for your scans.
