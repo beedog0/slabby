@@ -59,3 +59,25 @@ export function gameFromBrand(brand: string): Game | null {
 }
 
 export const LANGUAGE_NAME: Record<string, string> = { ja: 'Japanese', en: 'English', ko: 'Korean', zh: 'Chinese' };
+
+/** The game filter on home and in con mode: every game, or just one. */
+export type GameFilter = Game | 'all';
+
+/** The games present in these cards, in GAME_LIST order. */
+export function gamesIn(cards: Pick<Card, 'game'>[]): Game[] {
+  const seen = new Set(cards.map(gameOf));
+  return GAME_LIST.filter((g) => seen.has(g.id)).map((g) => g.id);
+}
+
+/**
+ * The filter actually in effect. A saved pick for a game that's no longer in the vault (or a vault
+ * with one game, where the filter isn't shown) means every game, so nothing hides silently.
+ */
+export function effectiveGame(pick: GameFilter, present: Game[]): GameFilter {
+  return pick !== 'all' && present.length > 1 && present.includes(pick) ? pick : 'all';
+}
+
+/** Keeps the rows whose card is in the picked game. */
+export function inGame<T extends { card: Pick<Card, 'game'> }>(rows: T[], pick: GameFilter): T[] {
+  return pick === 'all' ? rows : rows.filter((r) => gameOf(r.card) === pick);
+}
