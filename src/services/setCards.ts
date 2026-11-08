@@ -12,7 +12,7 @@ import { setId, type Found } from './searchFilters';
 import { supabase } from './supabase';
 
 type Mock = CatalogCard & { mock: unknown };
-const COLS = 'product_id, game, language, name, number, rarity, set_name, set_code, image_url, market_cents, low_cents, change_7d, change_30d, group_id';
+const COLS = 'product_id, game, language, name, number, rarity, set_name, set_code, image_url, image_alt_url, market_cents, low_cents, change_7d, change_30d, group_id';
 
 type Row = {
   product_id: number;
@@ -24,6 +24,7 @@ type Row = {
   set_name: string;
   set_code: string | null;
   image_url: string | null;
+  image_alt_url?: string | null;
   market_cents: number | null;
   low_cents: number | null;
   change_7d: number | null;
@@ -40,7 +41,7 @@ const fromRow = (r: Row): Found => ({
   rarity: r.rarity,
   setName: r.set_name,
   setCode: r.set_code,
-  imageUrl: r.image_url,
+  imageUrl: r.image_alt_url ?? r.image_url,
   marketCents: r.market_cents,
   lowCents: r.low_cents,
   change7d: r.change_7d ?? null,

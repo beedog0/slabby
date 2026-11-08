@@ -471,7 +471,7 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
   return (
     <Pressable accessibilityRole="button" onPress={() => openCard(card, con)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
       <View style={[styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
-        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}
+        <ArtImage uri={card.imageUrl} label={card.name} recyclingKey={String(card.productId)} style={{ flex: 1 }} />
       </View>
       <View style={{ gap: 2, paddingTop: space.m }}>
         <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
@@ -506,7 +506,7 @@ function ResultRow({ card, con, rules, change, days }: { card: Found; con: boole
       onPress={() => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`)}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.5 }]}
     >
-      <View style={styles.thumb}>{card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}</View>
+      <View style={styles.thumb}><ArtImage uri={card.imageUrl} label={card.name} recyclingKey={String(card.productId)} style={{ flex: 1 }} /></View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
           {displayName(card.name)}

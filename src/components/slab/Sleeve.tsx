@@ -36,6 +36,7 @@ export function Sleeve({ card, width, transform, sharp = false }: { card: Card; 
       {uri ? (
         <ArtImage
           uri={uri}
+          label={card.name}
           recyclingKey={card.id}
           sharp={sharp}
           fit="contain"

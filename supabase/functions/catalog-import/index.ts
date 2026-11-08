@@ -5,6 +5,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { CATEGORIES, catalogRows, packPrice, type TcgPrice, type TcgProduct } from '../_shared/catalog-math.ts';
+import { pictureIndex, setKeys, tcgdexLang, tcgdexPicture, type TcgdexSet, type TcgdexSetBrief } from '../_shared/alt-images.ts';
 
 const TCGCSV = 'https://tcgcsv.com/tcgplayer';
 const UA = { 'User-Agent': 'slabby-catalog-import/0.1 (+https://github.com/beedog0/slabby)' };
@@ -90,5 +91,97 @@ Deno.serve(async (req) => {
     .from('catalog_groups')
     .select('group_id', { count: 'exact', head: true })
     .or(`imported_on.is.null,imported_on.lt.${today}`);
-  return json({ sets: todo?.length ?? 0, cards, setsLeft: left ?? null, failed });
+
+  // 3. Every set done for today: spend the rest of the night's runs on backup pictures for cards
+  //    TCGplayer has no picture for (0021_catalog_alt_images.sql). Never fails the import.
+  let pictures: Record<string, unknown> | null = null;
+  if (!todo?.length || left === 0) {
+    try {
+      pictures = await fillAltImages(admin);
+    } catch (e) {
+      pictures = { error: (e as Error).message };
+    }
+  }
+  return json({ sets: todo?.length ?? 0, cards, setsLeft: left ?? null, failed, pictures });
 });
+
+const TCGDEX = 'https://api.tcgdex.net/v2';
+const ALT_BATCH = 300;
+
+async function tcgdex<T>(path: string): Promise<T | null> {
+  const res = await fetch(`${TCGDEX}${path}`, { headers: UA });
+  return res.ok ? ((await res.json()) as T) : null;
+}
+
+/**
+ * One batch of cards with no TCGplayer picture: same-set printing first, then TCGdex by set code
+ * + number, then the same card in another set. image_url is never written.
+ */
+async function fillAltImages(admin: ReturnType<typeof createClient>) {
+  const { data: cleared } = await admin.rpc('clear_found_alt_images');
+  const { data: claimed, error } = await admin.rpc('claim_alt_image_batch', { n: ALT_BATCH });
+  if (error) throw error;
+  const rows = (claimed ?? []) as { product_id: number; game: string; language: string; number: string | null; set_code: string | null }[];
+  if (!rows.length) return { cleared, looked: 0 };
+
+  const { data: sib, error: sibErr } = await admin.rpc('sibling_alt_images', { ids: rows.map((r) => r.product_id) });
+  if (sibErr) throw sibErr;
+  const siblings = new Map(((sib ?? []) as { product_id: number; image_url: string; source: string }[]).map((s) => [s.product_id, s]));
+
+  // TCGdex: only the sets these cards are in, one set list per language.
+  const sets = new Map<string, Map<string, Map<string, string>>>(); // lang → set code → pictures
+  for (const lang of ['en', 'ja']) {
+    const wanted = new Set(
+      rows
+        .filter((r) => r.game === 'pokemon' && tcgdexLang(r.language) === lang && siblings.get(r.product_id)?.source !== 'same_set')
+        .map((r) => (r.set_code ?? '').trim().toUpperCase())
+        .filter(Boolean),
+    );
+    if (!wanted.size) continue;
+    // Japanese set ids are the set codes; English sets are found by their official abbreviation
+    // (a substring filter, so setKeys checks it exactly). "PR" is every promo/kit and too vague.
+    const briefs =
+      lang === 'ja'
+        ? ((await tcgdex<TcgdexSetBrief[]>(`/ja/sets`)) ?? []).filter((s) => wanted.has(s.id.toUpperCase()))
+        : (
+            await Promise.all(
+              [...wanted].filter((k) => k !== 'PR').map((k) => tcgdex<TcgdexSetBrief[]>(`/en/sets?abbreviation.official=${encodeURIComponent(k)}`)),
+            )
+          ).flatMap((l) => (l ?? []).slice(0, 4));
+    const byCode = new Map<string, Map<string, string>>();
+    const ids = [...new Set(briefs.map((s) => s.id))];
+    for (let i = 0; i < ids.length; i += 12) {
+      const got = await Promise.all(ids.slice(i, i + 12).map((id) => tcgdex<TcgdexSet>(`/${lang}/sets/${encodeURIComponent(id)}`)));
+      for (const set of got) {
+        if (!set) continue;
+        for (const k of setKeys(set, lang)) {
+          if (!wanted.has(k)) continue;
+          byCode.set(k, new Map([...(byCode.get(k) ?? []), ...pictureIndex(set)]));
+        }
+      }
+    }
+    sets.set(lang, byCode);
+  }
+
+  const found: { product_id: number; url: string; source: string }[] = [];
+  const by: Record<string, number> = { same_set: 0, tcgdex: 0, other_set: 0 };
+  for (const r of rows) {
+    const s = siblings.get(r.product_id);
+    let pick: { url: string; source: string } | null = s?.source === 'same_set' ? { url: s.image_url, source: 'same_set' } : null;
+    if (!pick && r.game === 'pokemon') {
+      const lang = tcgdexLang(r.language);
+      const url = lang ? tcgdexPicture(sets.get(lang) ?? new Map(), r) : null;
+      if (url) pick = { url, source: 'tcgdex' };
+    }
+    if (!pick && s) pick = { url: s.image_url, source: s.source };
+    if (pick) {
+      found.push({ product_id: r.product_id, ...pick });
+      by[pick.source]++;
+    }
+  }
+  if (found.length) {
+    const { error: saveErr } = await admin.rpc('save_alt_images', { rows: found });
+    if (saveErr) throw saveErr;
+  }
+  return { cleared, looked: rows.length, found: found.length, ...by };
+}
