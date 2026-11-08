@@ -55,6 +55,8 @@ export const radius = {
   thumb: 3,
   slab: 12,
   chip: 15,
+  /** Language badge next to a card name (JP, KR, CN). */
+  badge: 5,
 } as const;
 
 export const size = {
