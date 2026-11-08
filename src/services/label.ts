@@ -42,6 +42,14 @@ const SET_LINE = /\b(?:ANNIV(?:ERSARY)?|BOX|COLLECTION|PROMO|DECK|STMP|STAMP|PRO
 // Short words real card names use: "M CHARIZARD EX", "MR. MIME", "N", "PIKACHU V".
 const SHORT_WORDS = new Set(['EX', 'GX', 'V', 'M', 'MR', 'DR', 'JR', 'LV', 'X', 'Y', 'N', 'OF', 'UP', 'ON', 'TO', 'DE']);
 
+// A set code then its name: "SFD-SPIRITFORGED", "OP14-THE AZURE SEA'S SEVEN", "PRB02-PREMIUM BOOSTER".
+const SET_CODE_START = /^(?:[A-Z]{1,4}-?\d{1,2}[a-z]?|[A-Z]{3})-[A-Z]/i;
+/** The brand after the game's name and language: where a set code would start. */
+const brandRest = (b: string) =>
+  b
+    .replace(/^(?:[O0]NE\s?P[I1]ECE(?:\s+CARD\s+GAME)?|R[I1]FTB[O0]UND:?(?:\s*LEAGUE\s+OF\s+LEGENDS)?(?:\s+(?:TCG|TRADING\s+CARD\s+GAME))?)\s*/i, '')
+    .replace(/^(?:(?:SIMPLIFIED|TRADITIONAL)\s+)?(?:JAPANESE|CHINESE|ENGLISH|JPN?)\s*/i, '');
+
 /** A misread line: mostly one- and two-letter fragments ("TT TH AN NY - COLDEN BOX"). */
 function garbled(t: string): boolean {
   const words = t.split(/[\s-]+/).filter((w) => /[A-Z]/i.test(w));
@@ -91,16 +99,16 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   lines.forEach((l, i) => {
     const t = l.text;
 
-    const num = t.match(/#\s*([A-Z0-9-]{1,8})\b/i);
+    const num = t.match(/#\s*([A-Z0-9-]{1,8}\*?)(?![A-Z0-9])/i);
     if (num && !number) number = num[1].replace(/^0+(?=\d)/, '');
 
     const yb = t.match(YEAR_BRAND);
     if (yb && !brand) {
       year = yb[1];
-      brand = yb[2].replace(/#\s*[A-Z0-9-]+.*$/i, '').trim();
+      brand = yb[2].replace(/#\s*[A-Z0-9-]+\*?.*$/i, '').trim();
       brandIndex = i;
       // Single-line labels carry the name after the number: "... #11 CHARIZARD-HOLO GEM MT 10 2647..."
-      const after = yb[2].match(/#\s*[A-Z0-9-]+\s+(.+)$/i)?.[1];
+      const after = yb[2].match(/#\s*[A-Z0-9-]+\*?\s+(.+)$/i)?.[1];
       if (after) {
         const nameOnly = after.split(GRADE_WORDS)[0].replace(/\b\d{8,10}\b/, '').trim();
         if (nameOnly && nameLike(nameOnly)) name = nameOnly;
@@ -127,7 +135,7 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   if (!brand) {
     const i = lines.findIndex((l) => BRAND_ONLY.test(l.text));
     if (i >= 0) {
-      brand = lines[i].text.replace(/#\s*[A-Z0-9-]+.*$/i, '').trim();
+      brand = lines[i].text.replace(/#\s*[A-Z0-9-]+\*?.*$/i, '').trim();
       brandIndex = i;
       year = lines.map((l) => l.text.match(YEAR_ONLY)?.[1]).find(Boolean);
     }
@@ -136,7 +144,17 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   if (brand && /RIFTB/i.test(brand)) {
     const next = lines[brandIndex + 1]?.text;
     if (next && BRAND_WRAP.test(next) && !/LEGENDS/i.test(brand)) {
-      brand = `${brand} ${next.replace(/#\s*[A-Z0-9-]+.*$/i, '').trim()}`;
+      brand = `${brand} ${next.replace(/#\s*[A-Z0-9-]+\*?.*$/i, '').trim()}`;
+      brandIndex += 1;
+    }
+  }
+  // One Piece and Riftbound labels often end the brand line at the game ("2026 RIFTBOUND: LEAGUE
+  // OF LEGENDS") and print the set on the next line ("SFD-SPIRITFORGED #225*"). That line is the
+  // set, not the card name; without it the slab has no set and can't be matched to a card.
+  if (brand && /^(?:[O0]NE\s?P[I1]ECE|R[I1]FTB[O0]UND)/i.test(brand) && !SET_CODE_START.test(brandRest(brand))) {
+    const next = lines[brandIndex + 1]?.text.replace(/#\s*[A-Z0-9*-]+.*$/i, '').trim();
+    if (next && SET_CODE_START.test(next)) {
+      brand = `${brand} ${next}`;
       brandIndex += 1;
     }
   }
@@ -169,7 +187,7 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   // OCR can join the right column on: "SURFING PIKACHU VMAX GEM MT", "FULL ART 10".
   const freeText = (text: string) => {
     const t = text
-      .replace(/#\s*[A-Z0-9-]+/i, '')
+      .replace(/#\s*[A-Z0-9-]+\*?/i, '')
       .replace(JOINED_GRADE, '')
       .replace(/\s(10|[1-9](?:\.5)?)$/, '')
       .trim();
