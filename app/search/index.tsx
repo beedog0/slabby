@@ -301,7 +301,10 @@ function SortMenu({ open, top, sort, onSort, onClose }: { open: boolean; top: nu
 
 /**
  * Filters for the current search, from what actually matches it (with counts). Every group is
- * pick-several: languages (Pokémon only), rarities, sets. Changes apply as you tap.
+ * pick-several: art type, type (cards or sealed), languages (Pokémon only), rarities, sets. Changes apply as
+ * you tap. Order (chosen in a design review, 2026-11-08): short, decisive groups first and the long
+ * lists last. Art type leads (Bryan asked for it near the top); Rarity, its detailed version, sits
+ * low so its 10–30 rows don't bury Language; Set, up to 40 rows, is last.
  * The scrim fades and the sheet slides as one motion, starting only once the sheet's height is
  * known, so nothing dims before the sheet is there.
  */
@@ -352,6 +355,8 @@ function FilterSheet({
   // Keep picked sets and rarities visible even when they fall out of the facet list.
   const setRows = [...f.sets.filter((x) => !sets.some((s) => s.id === x.id)).map((x) => ({ ...x, n: 0 })), ...sets];
   const rarityRows = [...f.rarities.filter((r) => !rarities.some((x) => x.key === r)).map((key) => ({ key, n: 0 })), ...rarities];
+  // Boxes and ETBs have no art type or rarity, so with only sealed kinds picked those groups hide.
+  const sealedOnly = (f.types ?? []).length > 0 && !(f.types ?? []).includes('card');
   // Art type: what the matches have, in fixed order; with no search yet, what the game can have.
   const pickedArts = f.arts ?? [];
   const artRows: { key: ArtType; n: number }[] = facets
@@ -398,7 +403,7 @@ function FilterSheet({
           ) : null}
         </View>
         <SheetScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: space.l }}>
-          {artRows.length ? (
+          {artRows.length && !sealedOnly ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Art type</Text>
               {/* Pills, not rows: eight short choices fit in a few lines near the top. */}
@@ -446,7 +451,11 @@ function FilterSheet({
                   label={typeLabel(t.key)}
                   detail={t.n ? String(t.n) : undefined}
                   on={picked.includes(t.key)}
-                  onPress={() => onChange({ types: toggle(picked, t.key) })}
+                  onPress={() => {
+                    const types = toggle(picked, t.key);
+                    // Picking only sealed drops art type and rarity picks, which no box can match.
+                    onChange(types.length && !types.includes('card') ? { types, arts: [], rarities: [] } : { types });
+                  }}
                 />
               ))}
             </View>
@@ -467,7 +476,7 @@ function FilterSheet({
             </View>
           ) : null}
 
-          {rarityRows.length ? (
+          {rarityRows.length && !sealedOnly ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Rarity</Text>
               {rarityRows.map((r) => (
