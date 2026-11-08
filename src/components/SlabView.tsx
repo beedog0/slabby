@@ -8,6 +8,7 @@
 import { useRef, useState } from 'react';
 import { Animated, PanResponder, View } from 'react-native';
 import { size, slabPose } from '../theme/tokens';
+import { SealedPhoto } from './SealedPhoto';
 import { Slab3D } from './slab/Slab3D';
 import { Sleeve } from './slab/Sleeve';
 import { SlabViewer } from './slab/SlabViewer';
@@ -38,6 +39,9 @@ const TILT_PITCH = 22;
 export function SlabView({ card, width = size.heroW, posed = true, shadow: floorShadow, interactive = false, onDragChange }: Props) {
   const label = `${card.name}, ${card.grader === 'raw' ? 'raw' : `${card.grader.toUpperCase()} ${card.grade}`}`;
   const height = (width * size.heroH) / size.heroW;
+
+  // Sealed product is its box photo, never a slab or a sleeve.
+  if (card.sealed) return <SealedPhoto card={card} width={width} height={height} sharp={interactive} />;
 
   if (card.grader === 'raw' && !interactive) {
     return (

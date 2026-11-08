@@ -1,4 +1,4 @@
-import { catalogRows, isFresh, packPrice, primaryPrice, printings, summarize } from '../../../supabase/functions/_shared/catalog-math';
+import { catalogRows, catalogSummary, isFresh, sealedType, packPrice, primaryPrice, printings, summarize } from '../../../supabase/functions/_shared/catalog-math';
 
 describe('primaryPrice', () => {
   it('prefers the base printing over a pricier reverse holo', () => {
@@ -35,17 +35,23 @@ describe('printings', () => {
 describe('catalogRows', () => {
   const cat = { id: 3, game: 'pokemon', language: 'en' };
   const group = { groupId: 604, name: 'SWSH07: Evolving Skies', abbreviation: 'EVS' };
-  it('keeps singles, drops sealed product, joins prices', () => {
+  it('keeps singles and tags sealed product, joins prices', () => {
     const rows = catalogRows(
       cat,
       group,
       [
         { productId: 10, groupId: 604, name: 'Umbreon VMAX (Alternate Art Secret)', extendedData: [{ name: 'Number', value: '215/203' }, { name: 'Rarity', value: 'Secret Rare' }] },
         { productId: 11, groupId: 604, name: 'Evolving Skies Booster Box', extendedData: [] },
+        { productId: 12, groupId: 604, name: 'Evolving Skies Code Card', extendedData: [] },
       ],
-      [{ productId: 10, subTypeName: 'Holofoil', marketPrice: 1420.5, lowPrice: 1300 }],
+      [
+        { productId: 10, subTypeName: 'Holofoil', marketPrice: 1420.5, lowPrice: 1300 },
+        { productId: 11, subTypeName: 'Normal', marketPrice: 1899.99, lowPrice: 1750 },
+      ],
     );
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ product_id: 11, number: null, rarity: null, sealed_type: 'booster_box', market_cents: 189999, printings: [] });
+    expect(rows[0].sealed_type).toBeNull();
     expect(rows[0]).toMatchObject({
       product_id: 10,
       game: 'pokemon',
@@ -100,5 +106,65 @@ describe('packPrice', () => {
   it('is null when a set has no priced pack', () => {
     expect(packPrice([prod(5, 'Base Set Booster Pack')], [])).toBeNull();
     expect(packPrice([prod(1, 'Pikachu', '58/102')], [{ productId: 1, marketPrice: 3 }])).toBeNull();
+  });
+});
+
+describe('sealedType', () => {
+  it.each([
+    ['Surging Sparks Booster Box', 'booster_box'],
+    ['Booster Box Case', 'case'],
+    ['Prismatic Evolutions Elite Trainer Box', 'etb'],
+    ['Pokemon Center Elite Trainer Box', 'etb'],
+    ['Surging Sparks Booster Bundle', 'booster_bundle'],
+    ['Surging Sparks Booster Pack', 'booster_pack'],
+    ['Sleeved Booster Pack', 'booster_pack'],
+    ['Surging Sparks 3 Pack Blister [Pikachu]', 'blister'],
+    ['Paldean Fates Tin [Charizard ex]', 'tin'],
+    ['Charizard ex Premium Collection', 'collection'],
+    ['Build & Battle Box', 'collection'],
+    ['Pikachu ex Box', 'collection'],
+    ['Surging Sparks Pin Collection', 'collection'],
+    ['League Battle Deck [Miraidon ex]', 'deck'],
+    ['Booster Display Box (24 Packs)', 'booster_box'],
+  ])('%s → %s', (name, kind) => expect(sealedType(name)).toBe(kind));
+  it.each(['Surging Sparks Code Card', 'Card Sleeves [Pikachu]', 'Jumbo Card Pikachu', 'Deck Box', 'Playmat', 'Binder', 'Random Thing'])(
+    'drops %s',
+    (name) => expect(sealedType(name)).toBeNull(),
+  );
+});
+
+describe('catalogSummary', () => {
+  it('charts the nightly history, newest market last', () => {
+    expect(catalogSummary({ market_cents: 1250, low_cents: 1100, market_hist: [1000, 1100, 1200], updated_on: '2026-11-07' })).toEqual({
+      marketCents: 1250,
+      lowCents: 1100,
+      highCents: 1250,
+      sales30d: 0,
+      asOf: '2026-11-07',
+      series90: [1000, 1100, 1250],
+      points: 3,
+      since: '2026-11-05',
+      lastReal: '2026-11-07',
+    });
+  });
+  it('is one point without history, null without a price', () => {
+    expect(catalogSummary({ market_cents: 500, low_cents: null, market_hist: [], updated_on: '2026-11-07' })?.series90).toEqual([500]);
+    expect(catalogSummary({ market_cents: null, low_cents: null, market_hist: [400], updated_on: '2026-11-07' })).toBeNull();
+  });
+});
+
+describe('catalogRows: number-less promos', () => {
+  it('keeps a single with a rarity but no number, as a card', () => {
+    const rows = catalogRows(
+      { id: 3, game: 'pokemon', language: 'en' },
+      { groupId: 1418, name: 'WoTC Promo', abbreviation: 'PR' },
+      [
+        { productId: 20, groupId: 1418, name: 'Ancient Mew', extendedData: [{ name: 'Rarity', value: 'Promo' }] },
+        { productId: 21, groupId: 1418, name: 'Random Accessory', extendedData: [] },
+      ],
+      [{ productId: 20, subTypeName: 'Holofoil', marketPrice: 25, lowPrice: 20 }],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ product_id: 20, number: null, rarity: 'Promo', sealed_type: null, market_cents: 2500 });
   });
 });

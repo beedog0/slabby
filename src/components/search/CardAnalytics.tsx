@@ -49,6 +49,7 @@ export function CardAnalyticsView({
   onPick,
   onAll,
   con,
+  sealed,
 }: {
   pick: Choice;
   prices: SearchPrices | null | undefined;
@@ -57,15 +58,17 @@ export function CardAnalyticsView({
   onPick: (c: Choice) => void;
   onAll?: () => void;
   con?: boolean;
+  /** Sealed product: market stats only, no grades. */
+  sealed?: boolean;
 }) {
   const price = !prices ? null : pick === 'raw' ? prices.raw : prices.grades[pick];
   const live = !!price && !!prices && (pick === 'raw' || !isQuiet(price, prices.fetchedAt));
   const hist = live ? history(price) : null;
   return (
     <>
-      {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} /> : null}
+      {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} sealed={sealed} /> : null}
       {hist && price ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
-      {prices ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}
+      {prices && !sealed ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}
       <SetRow setName={setTitle(setName)} cards={more} onAll={onAll} con={con} />
     </>
   );
@@ -141,13 +144,18 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
  * two to a row. A stat with too little behind it is left out, never shown as a dash. Math lives
  * in src/pricing/cardStats.ts.
  */
-export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPrice; prices: SearchPrices }) {
+export function KeyStats({ pick, price, prices, sealed }: { pick: Choice; price: CardPrice; prices: SearchPrices; sealed?: boolean }) {
   const hist = history(price);
   const cells: { label: string; value: string | null }[] = [];
   const read: ReactNode[] = [];
   let grading: string | null = null;
 
-  if (pick === 'raw') {
+  if (sealed) {
+    cells.push(
+      { label: 'TCGplayer market', value: money(price.marketCents) },
+      { label: 'TCGplayer low', value: price.lowCents < price.marketCents ? money(price.lowCents) : null },
+    );
+  } else if (pick === 'raw') {
     const p10 = prices.grades.psa10;
     const p9 = prices.grades.psa9;
     cells.push(
@@ -223,7 +231,9 @@ export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPri
       </View>
       {grading ? <Text style={[type.text, { color: color.ink, paddingTop: space.l }]}>{grading}</Text> : null}
       <Text style={[type.caption, { color: color.secondary, paddingTop: grading ? space.xs : space.m }]}>
-        {pick === 'raw'
+        {sealed
+          ? 'TCGplayer market price, sealed. Updated every night.'
+          : pick === 'raw'
           ? grading
             ? 'TCGplayer market. Grading math assumes $25 to grade, $8 shipping, eBay fees, and a PSA 9 when it misses.'
             : 'TCGplayer market price, near mint.'

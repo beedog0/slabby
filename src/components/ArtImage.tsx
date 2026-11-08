@@ -24,6 +24,7 @@ export function ArtImage({
   recyclingKey,
   sharp = false,
   fit = 'cover',
+  position,
   onLoad,
 }: {
   uri: string;
@@ -32,6 +33,8 @@ export function ArtImage({
   sharp?: boolean;
   /** 'contain' never crops (raw singles, whose scans vary in aspect). */
   fit?: 'cover' | 'contain';
+  /** Where a contained image sits: 'bottom' stands a sealed box on the floor line. */
+  position?: 'center' | 'bottom';
   onLoad?: (e: ImageLoadEventData) => void;
 }) {
   return (
@@ -39,6 +42,7 @@ export function ArtImage({
       source={{ uri: hiResArt(uri) }}
       style={style}
       contentFit={fit}
+      contentPosition={position}
       onLoad={onLoad}
       cachePolicy="memory-disk"
       transition={0}

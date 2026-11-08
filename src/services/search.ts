@@ -6,7 +6,8 @@ import catalogJson from '../mocks/catalog.json';
 import pricesJson from '../mocks/prices.json';
 import type { CardPrice } from './comps';
 import { buyMax, buyTarget } from '../pricing/rules';
-import type { PricingRules } from '../types';
+import type { PricingRules, SealedType } from '../types';
+import { isSealedType } from '../lib/sealed';
 import { supabase } from './supabase';
 
 export type { Game } from '../types';
@@ -26,6 +27,8 @@ export type CatalogCard = {
   lowCents: number | null;
   /** Priced printings, the base one first (0011_catalog_printings.sql). Empty until imported. */
   printings?: Printing[];
+  /** Sealed product (0015_sealed.sql): its kind. Null or missing for a single card. */
+  sealedType?: SealedType | null;
 };
 
 /** One printing of a card and its TCGplayer market: "Holofoil", "Reverse Holofoil", "1st Edition". */
@@ -61,6 +64,7 @@ export type Row = {
   market_cents: number | null;
   low_cents: number | null;
   printings?: { name: string; market_cents: number | null; low_cents: number | null }[] | null;
+  sealed_type?: string | null;
 };
 
 export const fromRow = (r: Row): CatalogCard => ({
@@ -76,7 +80,15 @@ export const fromRow = (r: Row): CatalogCard => ({
   marketCents: r.market_cents,
   lowCents: r.low_cents,
   printings: (r.printings ?? []).map((x) => ({ name: x.name, marketCents: x.market_cents, lowCents: x.low_cents })),
+  sealedType: sealedOf(r.sealed_type),
 });
+
+/** A row's sealed kind; an unknown one still counts as sealed (shown as "Sealed"). */
+export function sealedOf(t: string | null | undefined): SealedType | null {
+  if (!t) return null;
+  // A kind added on the server after this build shows as "Sealed" (sealedLabel).
+  return isSealedType(t) ? t : (t as SealedType);
+}
 
 /** Words a search is split into; "#205" and "205/165" both search the number. */
 export function terms(q: string): string[] {
@@ -236,6 +248,17 @@ export function cardNumber(n: string | null): string {
 
 /** Params for the Add a slab screen, prefilled from a searched card at the chosen grade. */
 export function addParams(c: CatalogCard, grade: SearchGrade | 'raw'): Record<string, string> {
+  if (c.sealedType)
+    return {
+      game: c.game,
+      name: c.name.trim(),
+      set: c.setName,
+      setCode: c.setCode ?? '',
+      language: c.language === 'ja' ? 'ja' : 'en',
+      sealed: c.sealedType,
+      productId: String(c.productId),
+      image: c.imageUrl ?? '',
+    };
   return {
     game: c.game,
     name: displayName(c.name),

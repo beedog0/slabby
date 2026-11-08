@@ -36,7 +36,8 @@ describe('mock search with filters', () => {
     const sir = await findCards(q({ q: 'ex', rarities: ['Special Illustration Rare'] }));
     expect(sir.length).toBe(3);
     const evs = await findCards(q({ sets: [{ id: setId('SWSH07: Evolving Skies'), name: 'SWSH07: Evolving Skies' }] }));
-    expect(evs.length).toBe(2);
+    // The set's two singles and its booster box.
+    expect(evs.length).toBe(3);
   });
   it('offers the sets and rarities that match', async () => {
     const f = await findFacets(q({ q: 'umbreon' }));
@@ -60,5 +61,28 @@ describe('multi-select', () => {
     expect(filterCount(withoutChip(f, chips(f)[2]))).toBe(2);
     expect(toggle(['a'], 'b')).toEqual(['a', 'b']);
     expect(toggle(['a', 'b'], 'a')).toEqual(['b']);
+  });
+});
+
+describe('sealed product', () => {
+  it('filters by type: cards, all sealed, one kind', async () => {
+    const evs = { sets: [{ id: setId('SWSH07: Evolving Skies'), name: 'SWSH07: Evolving Skies' }] };
+    expect((await findCards(q({ ...evs, types: ['card'] }))).map((c) => c.sealedType ?? null)).toEqual([null, null]);
+    expect((await findCards(q({ ...evs, types: ['sealed'] }))).map((c) => c.name)).toEqual(['Evolving Skies Booster Box']);
+    expect((await findCards(q({ q: 'box', types: ['etb'] }))).map((c) => c.productId)).toEqual([9100002]);
+    expect((await findCards(q({ q: 'box', types: ['etb', 'booster_box'] }))).length).toBe(2);
+  });
+  it('offers Cards and each sealed kind as type facets, cards first', async () => {
+    const f = await findFacets(q({ q: 'evolving' }));
+    expect(f.types.map((t) => t.key)).toEqual(['card', 'booster_box']);
+    expect(facetsFrom([{ kind: 'type', key: 'etb', label: 'etb', n: 1 }, { kind: 'type', key: 'card', label: 'card', n: 9 }, { kind: 'type', key: 'mystery', label: 'x', n: 1 }]).types).toEqual([
+      { key: 'card', n: 9 },
+      { key: 'etb', n: 1 },
+    ]);
+  });
+  it('shows a type chip that removes', () => {
+    const f = q({ types: ['booster_box'] });
+    expect(chips(f).map((c) => c.label)).toEqual(['Booster box']);
+    expect(filterCount(withoutChip(f, chips(f)[0]))).toBe(0);
   });
 });

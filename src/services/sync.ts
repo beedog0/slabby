@@ -43,6 +43,8 @@ export type CardRowDb = {
   condition: string | null;
   created_at: string;
   card_key: string;
+  /** Sealed product's kind (0015_sealed.sql); its product id is in card_key ("sealed:<id>"). */
+  sealed_type?: string | null;
 };
 
 export function toRow(c: Card, userId: string): CardRowDb {
@@ -73,6 +75,8 @@ export function toRow(c: Card, userId: string): CardRowDb {
     condition: c.condition ?? null,
     created_at: c.createdAt,
     card_key: cardKey(c),
+    // Only on sealed rows, so pushing cards never needs the column before 0015 is applied.
+    ...(c.sealed ? { sealed_type: c.sealed } : {}),
   };
 }
 
@@ -101,8 +105,16 @@ export function fromRow(r: CardRowDb): Card {
     soldAt: r.sold_at,
     soldWhere: r.sold_where,
     ...(r.condition ? { condition: r.condition } : {}),
+    ...sealedFrom(r),
     createdAt: r.created_at,
   };
+}
+
+/** A sealed row's kind and product id (from its card_key, "sealed:<TCGplayer product id>"). */
+function sealedFrom(r: CardRowDb): Pick<Card, 'sealed' | 'productId'> | Record<string, never> {
+  const m = /^sealed:(\d+)$/.exec(r.card_key ?? '');
+  if (!r.sealed_type || !m) return {};
+  return { sealed: r.sealed_type as Card['sealed'], productId: Number(m[1]) };
 }
 
 export function rulesToRow(r: PricingRules, userId: string) {
