@@ -136,11 +136,14 @@ export default function Search() {
             : `No cards match${nFilters ? ' with these filters' : ` “${f.q.trim()}”`}.${loadingLine}`
           : null;
   const sortLabel = SORTS.find((s) => s.value === f.sort)!.label;
+  // As a sheet (con mode) the top inset is the sheet's, not the status bar's. Header, cover and
+  // list all have to use the same number, or the first results sit under the header.
+  const top = sheetTop(insets.top, con);
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
       <Animated.View
-        style={[styles.header, { top: insets.top, transform: [{ translateY: slide }] }]}
+        style={[styles.header, { top, transform: [{ translateY: slide }] }]}
         onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
       >
         <View onLayout={(e) => setTopH(e.nativeEvent.layout.height)}>
@@ -236,7 +239,7 @@ export default function Search() {
         />
       </Animated.View>
       {/* Covers the status bar so the header slides under it. */}
-      <View style={[styles.statusCover, { height: insets.top }]} />
+      <View style={[styles.statusCover, { height: top }]} />
 
       {headerH ? (
         <Animated.FlatList
@@ -246,7 +249,9 @@ export default function Search() {
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
           scrollEventThrottle={16}
           scrollIndicatorInsets={{ top: headerH }}
-          style={{ paddingTop: sheetTop(insets.top, con) }}
+          style={{ paddingTop: top }}
+          // Last results stay reachable above the keyboard instead of hiding behind it.
+          automaticallyAdjustKeyboardInsets
           ListEmptyComponent={hint ? <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text> : undefined}
           numColumns={layout === 'grid' ? 2 : 1}
           keyExtractor={(c) => String(c.productId)}
