@@ -152,3 +152,19 @@ describe('catalogSummary', () => {
     expect(catalogSummary({ market_cents: null, low_cents: null, market_hist: [400], updated_on: '2026-11-07' })).toBeNull();
   });
 });
+
+describe('catalogRows: number-less promos', () => {
+  it('keeps a single with a rarity but no number, as a card', () => {
+    const rows = catalogRows(
+      { id: 3, game: 'pokemon', language: 'en' },
+      { groupId: 1418, name: 'WoTC Promo', abbreviation: 'PR' },
+      [
+        { productId: 20, groupId: 1418, name: 'Ancient Mew', extendedData: [{ name: 'Rarity', value: 'Promo' }] },
+        { productId: 21, groupId: 1418, name: 'Random Accessory', extendedData: [] },
+      ],
+      [{ productId: 20, subTypeName: 'Holofoil', marketPrice: 25, lowPrice: 20 }],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ product_id: 20, number: null, rarity: 'Promo', sealed_type: null, market_cents: 2500 });
+  });
+});

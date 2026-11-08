@@ -140,7 +140,9 @@ export function catalogRows(
     const number = ext(p, 'Number');
     const rarity = ext(p, 'Rarity');
     const sealed = !number && !rarity ? sealedType(p.name) : null;
-    if (!number && !sealed) continue;
+    // A product with a rarity is a single, numbered or not: old promos ("Ancient Mew") have no
+    // printed number and are found by name. Without either, only sealed product is kept.
+    if (!number && !sealed && !rarity) continue;
     rows.push({
       product_id: p.productId,
       category_id: category.id,
