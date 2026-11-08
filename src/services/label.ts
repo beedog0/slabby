@@ -53,6 +53,8 @@ const BRAND_ONLY = new RegExp(String.raw`^(${BRAND_START}(?:\b|:).*)$`, 'i');
 // Riftbound's brand is long and wraps: "2025 RIFTBOUND: LEAGUE OF" / "LEGENDS OGN-ORIGINS".
 const BRAND_WRAP = /^(?:LEAGUE OF LEGENDS|OF LEGENDS|LEGENDS)\b/i;
 const YEAR_ONLY = /^((?:19|20)\d{2})$/;
+/** A card's printed copyright line; never on a grader label. OCR often reads © as 9, @ or Q. */
+export const COPYRIGHT = /nintendo|creatures|game\s*freak|©/i;
 const CERT = /^\d{8,10}$/;
 const VARIETY = /^(HOLO|REVERSE HOLO|1ST EDITION|SHADOWLESS|FULL ART|ALT(?:ERNATE)? ART|SPECIAL ART RARE|ILLUSTRATION RARE|SPECIAL ILLUSTRATION RARE|SECRET|RAINBOW|GOLD|PROMO|STAFF|ART RARE|SUPER RARE|ULTRA RARE|HYPER RARE|PARALLEL|MANGA|SP|SPECIAL|1ST ANNIVERSARY|TREASURE RARE|SIGNATURE|OVERNUMBERED|SHOWCASE|FOIL)\b/i;
 
@@ -96,7 +98,8 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
     .map((l) => (typeof l === 'string' ? { text: l, x: 0, y: 0 } : l))
     // OCR spells PSA's hyphens as dashes or with spaces: "EX – MT" is "EX-MT".
     .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').replace(/\s*[–—]\s*/g, '-').replace(/\b(EX|NM|VG) - ?(MT|EX)\b/g, '$1-$2').trim() }))
-    .filter((l) => l.text.length > 0);
+    // A loose card's copyright line ("©2008 Pokémon/Nintendo") reads like a label's year and brand.
+    .filter((l) => l.text.length > 0 && !COPYRIGHT.test(l.text));
   if (!lines.length) return null;
 
   let year: string | undefined;

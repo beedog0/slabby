@@ -1,4 +1,5 @@
 import { fromVision, readPhoto } from '../photoScan';
+import { readName } from '../cardScan';
 
 describe('readPhoto', () => {
   it('reads a slab label from one still', () => {
@@ -71,5 +72,34 @@ describe('readPhoto on a promo held in a toploader', () => {
       expect(r.card.numbers[0]).toMatchObject({ num: '051', code: 'MEP' });
       expect(r.card.name).toBe('Oshawott');
     }
+  });
+});
+
+// Bryan's Magnezone LV.44 (Stormfront 5/100), 2026-11-08: the "5/100" was too small to read, and
+// the copyright line "©2008 Pokémon/Nintendo" passed for a slab label's year and brand, so Photo
+// mode opened a slab sheet named after the next line, warning "Couldn't read the grade".
+describe('readPhoto on a loose card whose number was missed', () => {
+  const lines = [
+    'Magnezone LV.44',
+    'HP 120',
+    'STAGE2 Evolves from Magneton',
+    'NO.462 Magnet Area Pokemon HT:3\'11" WT:396.8 lbs.',
+    'Speed Shot',
+    'Crush Volt',
+    '80',
+    'Illus.Masakazu Fukuda',
+    'weakness resistance retreat cost',
+    '©2008 Pokémon/Nintendo',
+  ];
+  it('never takes the copyright line for a slab label', () => {
+    expect(readPhoto(lines).kind).toBe('miss');
+    expect(readPhoto([...lines.slice(0, 7), '92008 Fokémon/Nintendo']).kind).toBe('miss');
+  });
+  it('reads the name without its level, for the art match', () => {
+    expect(readName(lines)).toBe('Magnezone');
+  });
+  it('still reads the number when it is there', () => {
+    const r = readPhoto([...lines, '5/100 ★']);
+    expect(r.kind === 'card' && r.card.numbers[0]).toEqual({ num: '5', total: '100' });
   });
 });

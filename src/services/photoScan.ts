@@ -22,7 +22,9 @@ export function readPhoto(lines: (LabelLine | string)[]): PhotoRead {
   const card = slabbed ? null : parseCardText(rows);
   if (card) return { kind: 'card', card };
   const label = parseLabel(rows);
-  if (label?.payload.PSACert.Subject) return { kind: 'slab', label };
+  // A slab needs a sign of a grader label (cert line, PSA/BGS/CGC, grade words) or a read grade:
+  // a loose card's text alone (its name, HP, copyright line) must never become a "slab".
+  if (label?.payload.PSACert.Subject && (slabbed || label.payload.PSACert.CardGrade)) return { kind: 'slab', label };
   return {
     kind: 'miss',
     seen: rows
