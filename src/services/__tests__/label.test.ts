@@ -270,3 +270,30 @@ describe('auto-read keeps the set line from any frame', () => {
     expect(st.ready).not.toBeNull();
   });
 });
+
+describe('parseLabel: lower grades from photos (Bryan, 2026-11-08)', () => {
+  const grade = (lines: string[]) => parseLabel(lines)?.payload.PSACert;
+
+  it('reads EX 5 when OCR joins the columns', () => {
+    expect(grade(['2010 POKEMON HG & SS #97', 'MEW-HOLO EX', 'TRIUMPHANT 5', '159046169'])).toMatchObject({ Subject: 'MEW-HOLO', CardGrade: 'EX 5', CertNumber: '159046169' });
+  });
+
+  it('reads EX 5 from separate column lines', () => {
+    expect(grade(['2010 POKEMON HG & SS', '#97', 'MEW-HOLO', 'EX', 'TRIUMPHANT', '5', '159046169'])).toMatchObject({ Subject: 'MEW-HOLO', CardGrade: 'EX 5' });
+  });
+
+  it('reads EX-MT 6 on a card whose name ends in EX', () => {
+    expect(grade(['2015 POKEMON XY #6', "TM.AQUA'S KYOGRE EX EX-MT", 'DOUBLE CRISIS-FA 6', '159213946'])).toMatchObject({ Subject: "TM.AQUA'S KYOGRE EX", CardGrade: 'EX-MT 6' });
+    expect(grade(['2015 POKEMON XY', '#6', "TM.AQUA'S KYOGRE EX", 'EX - MT', 'DOUBLE CRISIS-FA', '6', '159213946'])).toMatchObject({ Subject: "TM.AQUA'S KYOGRE EX", CardGrade: 'EX-MT 6' });
+    expect(grade(['2015 POKEMON XY #6', "TM.AQUA'S KYOGRE EX", 'DOUBLE CRISIS-FA', '6 159213946'])).toMatchObject({ CardGrade: 'EX-MT 6', CertNumber: '159213946' });
+  });
+
+  it('keeps an EX card name when the grade word is printed on its own', () => {
+    expect(grade(['2016 POKEMON XY EVOLUTIONS #12', 'M CHARIZARD EX', 'NM-MT', 'FULL ART', '8', '12345678'])).toMatchObject({ Subject: 'M CHARIZARD EX', CardGrade: 'NM-MT 8' });
+  });
+
+  it('reads half grades and still never guesses without a number by the cert', () => {
+    expect(grade(['1999 POKEMON GAME #4', 'CHARIZARD-HOLO NM-MT+', 'UNLIMITED 8.5', '12345679'])).toMatchObject({ CardGrade: 'NM-MT+ 8.5' });
+    expect(grade(['2010 POKEMON HG & SS #97', 'MEW-HOLO EX', 'TRIUMPHANT', '159046169'])?.CardGrade ?? '').not.toMatch(/\d/);
+  });
+});
