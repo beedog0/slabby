@@ -18,7 +18,7 @@ import { PriceChart } from '../../src/components/PriceChart';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
-import { money, pct } from '../../src/lib/format';
+import { money, pct, promoTag } from '../../src/lib/format';
 import { CardName } from '../../src/components/CardName';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
@@ -167,7 +167,7 @@ export default function SearchedCard() {
   const hist = history(price);
   const change = hist && !quiet ? hist.change : null;
   const no = cardNumber(ready.number);
-  const detail = no ? `#${no}` : '';
+  const detail = [no && `#${no}`, promoTag(ready, { setShown: true })].filter(Boolean).join(' · ');
   const openSet = () => openSetPage(ready, groupId);
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
   const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;

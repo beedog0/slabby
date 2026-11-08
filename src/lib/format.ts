@@ -49,6 +49,27 @@ export function langTag(language: string | null | undefined): string {
   return LANG_SHORT[language] ?? language.toUpperCase();
 }
 
+// A promo's catalog number carries its promo code: "001/SV-P", "013/30th-P", "SWSH123", "SVP 049".
+const PROMO_NUMBER = /\/(?:SV|SM|XY|BW|DP|S|M|30TH)-?P$|^(?:SWSH|HGSS|SM|XY|BW|DP)\d{2,3}$|^(?:SVP|MEP|SWSHP)\b|^P-\d/i;
+
+/**
+ * Whether a card is a promo: TCGplayer's "Promo" rarity, a promo set ("SV: Scarlet & Violet
+ * Promo Cards", "SV-P Promotional Cards", "One Piece Promotion Cards"), or a promo code in its
+ * number. Stamped prize-pack and league reprints aren't promos and aren't caught.
+ */
+export function isPromo(c: { setName?: string | null; rarity?: string | null; number?: string | null; variety?: string | null }): boolean {
+  if (c.rarity && /^promo$/i.test(c.rarity.trim())) return true;
+  if (c.setName && /\bpromo(?:s|tion(?:al)?)?\b|black star/i.test(c.setName)) return true;
+  if (c.number && PROMO_NUMBER.test(c.number.trim())) return true;
+  return !!c.variety && /\bpromo\b/i.test(c.variety);
+}
+
+/** "Promo" for a detail line, unless the set name shown beside it already says so. */
+export function promoTag(c: Parameters<typeof isPromo>[0], { setShown = false } = {}): string | null {
+  if (!isPromo(c)) return null;
+  return setShown && c.setName && /promo/i.test(c.setName) ? null : 'Promo';
+}
+
 /** Row subtitle: "JP · PSA 10", "PSA 10", "Raw · near mint". */
 export function cardLabel(c: { language: string; grader: string; grade: number | null; condition?: string }): string {
   return [langTag(c.language), gradeLabel(c.grader, c.grade, c.condition)].filter(Boolean).join(' · ');

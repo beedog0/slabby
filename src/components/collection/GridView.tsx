@@ -2,7 +2,7 @@
 
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { gradeLabel, money, pct, rowTitle } from '../../lib/format';
+import { gradeLabel, money, pct, promoTag, rowTitle } from '../../lib/format';
 import { CardName } from '../CardName';
 import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
@@ -60,7 +60,7 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
     <View style={{ gap: 2, alignItems: align }}>
       <CardName name={rowTitle(card)} language={card.language} center={center} style={[type.text, { color: color.ink, fontWeight: '500' }]} />
       <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-        {gradeLabel(card.grader, card.grade, card.condition)}
+        {[gradeLabel(card.grader, card.grade, card.condition), promoTag(card)].filter(Boolean).join(' · ')}
         {' · '}
         <Text style={{ color: color.ink }}>{value != null ? money(value) : '—'}</Text>
         {sold ? ' sold' : ''}

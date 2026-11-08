@@ -39,7 +39,7 @@ import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
 import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
-import { cardPrice, gradeLabel, money, rowTitle } from '../src/lib/format';
+import { cardPrice, gradeLabel, money, promoTag, rowTitle } from '../src/lib/format';
 import { CardName } from '../src/components/CardName';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
 import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
@@ -716,7 +716,7 @@ export default function Scan() {
                 <View style={{ flex: 1 }}>
                   <CardName name={rowTitle(preview)} language={preview.language} large style={[type.title, { color: color.ink }]} />
                   <Text style={[type.text, { color: color.secondary }]}>
-                    {[gameOf(preview) === 'pokemon' ? null : GAMES[gameOf(preview)].name, gradeLabel(preview.grader, preview.grade)]
+                    {[gameOf(preview) === 'pokemon' ? null : GAMES[gameOf(preview)].name, promoTag(preview), gradeLabel(preview.grader, preview.grade)]
                       .filter(Boolean)
                       .join(' · ')}
                   </Text>
@@ -951,7 +951,7 @@ function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: Cat
             <View style={{ flex: 1 }}>
               <CardName name={nameAndVariant(c.name).name} language={c.language} numberOfLines={2} style={[type.body, { color: color.ink }]} />
               <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
-                {[nameAndVariant(c.name).variant, c.setName, c.number ? `#${cardNumber(c.number)}` : null].filter(Boolean).join(' · ')}
+                {[nameAndVariant(c.name).variant, c.setName, c.number ? `#${cardNumber(c.number)}` : null, promoTag(c, { setShown: true })].filter(Boolean).join(' · ')}
               </Text>
             </View>
             <Text style={[type.rowPrice, { color: color.ink }]}>{c.marketCents ? cardPrice(c.marketCents) : '—'}</Text>
@@ -1147,6 +1147,7 @@ function RawSheet({
                       {[
                         nameAndVariant(m.card.name).variant ?? 'Regular',
                         oneSet ? null : m.card.setName,
+                        promoTag(m.card, { setShown: !oneSet }),
                       ]
                         .filter(Boolean)
                         .join(' · ')}

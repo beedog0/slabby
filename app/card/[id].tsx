@@ -19,7 +19,7 @@ import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
 import { CardAnalytics } from '../../src/components/search/CardAnalytics';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
-import { gradeLabel, money, rowTitle } from '../../src/lib/format';
+import { gradeLabel, money, promoTag, rowTitle } from '../../src/lib/format';
 import { CardName } from '../../src/components/CardName';
 import { GAMES, gameOf } from '../../src/lib/games';
 import { detailFor } from '../../src/pricing/portfolio';
@@ -58,7 +58,7 @@ export default function SlabDetail() {
 
   // Pokémon is the default, so only other games are named.
   const game = gameOf(card) === 'pokemon' ? null : GAMES[gameOf(card)].name;
-  const subtitle = [game, gradeLabel(card.grader, card.grade, card.condition)]
+  const subtitle = [game, promoTag(card), gradeLabel(card.grader, card.grade, card.condition)]
     .filter(Boolean)
     .join(' · ');
 

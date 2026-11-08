@@ -14,7 +14,7 @@ import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
-import { money, pct } from '../../src/lib/format';
+import { money, pct, promoTag } from '../../src/lib/format';
 import { CardName } from '../../src/components/CardName';
 import { buyPrices, cardNumber, displayName, type Game } from '../../src/services/search';
 import {
@@ -467,7 +467,7 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
       <View style={{ gap: 2, paddingTop: space.m }}>
         <CardName name={displayName(card.name)} language={card.language} style={[type.text, { color: color.ink, fontWeight: '500' }]} />
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-          {[no && `#${no}`, card.setName].filter(Boolean).join(' · ')}
+          {[no && `#${no}`, promoTag(card, { setShown: true }), card.setName].filter(Boolean).join(' · ')}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           raw <Text style={{ color: color.ink }}>{card.marketCents != null ? money(card.marketCents) : '—'}</Text>
@@ -486,7 +486,7 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
 function ResultRow({ card, con, rules, change, days }: { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number }) {
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
-  const sub = [card.setName, no && `#${no}`].filter(Boolean).join(' · ');
+  const sub = [card.setName, no && `#${no}`, promoTag(card, { setShown: true })].filter(Boolean).join(' · ');
   return (
     <Pressable
       accessibilityRole="button"
