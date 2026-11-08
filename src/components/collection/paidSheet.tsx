@@ -123,7 +123,7 @@ function PaidBody({ ids }: { ids: string[] }) {
           {diff != null ? (
             <>
               <Text style={{ color: diff >= 0 ? color.gain : color.loss }}>{`${diff >= 0 ? '+' : ''}${money(diff)}`}</Text>
-              {sold ? ` profit${each}` : ` vs market${each}`}
+              {sold ? ` profit${each}` : ` at today's market${each}`}
             </>
           ) : cents == null ? (
             'Not set. Type what you paid'
