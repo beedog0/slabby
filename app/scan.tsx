@@ -21,6 +21,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
+import { handleFromLink } from '../src/profile/publicProfile';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, AppState, Easing, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -131,6 +132,20 @@ export default function Scan() {
   const win = useWindowDimensions();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
+
+  // A friend's profile code opens their profile, whether or not label reading is on.
+  const openedProfile = useRef(false);
+  const onCode = (data: string) => {
+    const friend = handleFromLink(data);
+    if (friend) {
+      if (openedProfile.current) return;
+      openedProfile.current = true;
+      Haptics.selectionAsync().catch(() => {});
+      router.replace(`/u/${friend}`);
+      return;
+    }
+    if (!labelMode) handle(data);
+  };
 
   const handle = async (data: string) => {
     const cert = parseCertFromQr(data);
@@ -567,7 +582,7 @@ export default function Scan() {
           flash="off"
           onCameraReady={() => setCameraReady(true)}
           barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'code39'] }}
-          onBarcodeScanned={result || labelMode ? undefined : ({ data }) => handle(data)}
+          onBarcodeScanned={result ? undefined : ({ data }) => onCode(data)}
         />
       ) : null}
 
