@@ -4,7 +4,7 @@
 // cards, eBay sales in 30 days. Anything without enough data behind it returns null and is hidden.
 
 import type { CardPrice } from '../services/comps';
-import { history, MIN_POINTS, MIN_SPAN_DAYS, realPoints, type Priced } from './cardStats';
+import { history, MIN_POINTS, MIN_SPAN_DAYS, realPoints, saleRange, type Priced } from './cardStats';
 
 /** 30-day move that counts as fast, either way. */
 export const FAST_MOVE = 0.08;
@@ -143,9 +143,9 @@ export function lastReal(p: Priced | null | undefined): string | null {
 export function thinRead(p: Priced | null | undefined): { lastSale: string | null; saleDays: number; low: number | null; high: number | null } | null {
   if (!p) return null;
   const n = realPoints(p);
-  const s = p.series90.filter((v) => v > 0);
-  const lo = s.length ? Math.min(...s) : null;
-  const hi = s.length ? Math.max(...s) : null;
+  const r = p.series90.some((v) => v > 0) ? saleRange({ ...p, series90: p.series90.filter((v) => v > 0) }) : null;
+  const lo = r?.low ?? null;
+  const hi = r?.high ?? null;
   const ranged = n >= 2 && lo != null && hi != null && hi > lo;
   return { lastSale: lastReal(p), saleDays: n, low: ranged ? lo : null, high: ranged ? hi : null };
 }
