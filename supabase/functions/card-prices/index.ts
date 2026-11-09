@@ -6,7 +6,7 @@
 // tonight's TCGplayer market with its last 31 nightly prices as the chart. No credits.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { ANSWER_VERSION, catalogSummary, denseHistory, hasAllGrades, isFresh, lastSale, realDays, SEARCH_GRADES, summarize, withPoints, type Summary } from '../_shared/catalog-math.ts';
+import { ANSWER_VERSION, catalogSummary, denseHistory, extendHistory, hasAllGrades, isFresh, lastSale, realDays, SEARCH_GRADES, summarize, withPoints, type Summary } from '../_shared/catalog-math.ts';
 import { gradedDaily, rawDaily, type DailySales } from '../_shared/comps-math.ts';
 import { fetchComps } from '../_shared/ppt.ts';
 
@@ -45,6 +45,14 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (!card) return json({ error: 'Unknown card' }, 404);
 
+  // Weekly TCGplayer market back to Feb 2024 (raw_price_weekly), for the 1Y / All chart.
+  const { data: weekly } = await admin.from('raw_price_weekly').select('from_day, cents').eq('product_id', productId).maybeSingle();
+  const longRaw = (raw: Summary | null): Summary | null => {
+    if (!raw) return raw;
+    const ext = extendHistory(raw.hist && raw.histFrom ? { histFrom: raw.histFrom, hist: raw.hist } : null, weekly);
+    return ext ? { ...raw, ...ext } : raw;
+  };
+
   const fallback = (capped = false): Answer => ({
     productId,
     raw: catalogSummary(card),
@@ -55,11 +63,14 @@ Deno.serve(async (req) => {
   });
 
   // PokemonPriceTracker only covers Pokémon singles; sealed has no grades to look up.
-  if (card.game !== 'pokemon' || card.sealed_type) return json(fallback());
+  if (card.game !== 'pokemon' || card.sealed_type) {
+    const f = fallback();
+    return json({ ...f, raw: longRaw(f.raw) });
+  }
 
   const { data: cached } = await admin.from('search_cache').select('payload, fetched_at').eq('product_id', productId).maybeSingle();
   if (cached && isFresh(cached.fetched_at) && hasAllGrades(cached.payload) && (cached.payload?.v ?? 1) >= ANSWER_VERSION)
-    return json(cached.payload);
+    return json({ ...cached.payload, raw: longRaw(cached.payload.raw) });
 
   const ok = (await admin.rpc('claim_ppt_credits', { bucket_name: 'search', n: CREDITS_PER_OPEN, daily_cap: SEARCH_CAP })).data === true;
   if (!ok) return json(cached?.payload ? { ...cached.payload, capped: true } : fallback(true));
@@ -77,7 +88,7 @@ Deno.serve(async (req) => {
     if (raw && card.market_cents != null && card.updated_on && (!raw.lastReal || raw.lastReal < card.updated_on)) {
       raw = { ...raw, marketCents: card.market_cents, series90: [...raw.series90.slice(0, -1), card.market_cents], asOf: card.updated_on };
     }
-    if (raw) raw = { ...raw, ...denseHistory(rawDaily(history, today, HISTORY_DAYS)) };
+    if (raw) raw = longRaw({ ...raw, ...denseHistory(rawDaily(history, today, HISTORY_DAYS)) });
     const grades = Object.fromEntries(
       SEARCH_GRADES.map((g) => {
         const sales = (comps?.ebay?.priceHistory?.[g] ?? {}) as DailySales;

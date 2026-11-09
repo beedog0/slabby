@@ -324,7 +324,7 @@ export default function SearchedCard() {
                           hitSlop={8}
                           accessibilityRole="button"
                           accessibilityState={{ selected: on }}
-                          accessibilityLabel={r === 180 ? 'Six months' : `${r} days`}
+                          accessibilityLabel={rangeLabel(r) === 'All' ? 'All time' : r === 365 ? 'One year' : r === 180 ? 'Six months' : `${r} days`}
                         >
                           <Text style={[type.text, { color: on ? color.ink : color.secondary, fontWeight: on ? '600' : '400' }]}>{rangeLabel(r)}</Text>
                         </Pressable>
