@@ -18,7 +18,7 @@ import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSw
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
 import { cardPrice, money, pct, promoTag } from '../../src/lib/format';
 import { CardName } from '../../src/components/CardName';
-import { buyPrices, cardNumber, displayName, type Game } from '../../src/services/search';
+import { buyPrices, displayName, shownNumber, type Game } from '../../src/services/search';
 import { sealedLabel, typeLabel, type TypeFilter } from '../../src/lib/sealed';
 import {
   catalogProgress,
@@ -660,7 +660,7 @@ const openCard = (card: Found, con: boolean, trade = false) => {
 function ResultTile({ card, width, con, trade, rules, change, days }: ResultProps & { width: number }) {
   const color = useColors();
   const styles = useStyles();
-  const no = cardNumber(card.number);
+  const no = shownNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
   const sealed = card.sealedType;
   return (
@@ -691,7 +691,7 @@ function ResultTile({ card, width, con, trade, rules, change, days }: ResultProp
 function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
   const color = useColors();
   const styles = useStyles();
-  const no = cardNumber(card.number);
+  const no = shownNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
   const sealed = card.sealedType;
   const sub = (sealed ? [sealedLabel(sealed)] : [card.setName, no && `#${no}`, promoTag(card, { setShown: true })]).filter(Boolean).join(' · ');

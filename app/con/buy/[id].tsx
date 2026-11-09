@@ -30,7 +30,7 @@ import { cardFromDetails } from '../../../src/services/psa';
 import {
   addParams,
   buyPrices,
-  cardNumber,
+  shownNumber,
   catalogCard,
   nameAndVariant,
   gradeLabel,
@@ -195,7 +195,7 @@ export default function TheyreAsking() {
           <Text style={[type.body, { color: color.ink }]}>{card ? nameAndVariant(card.name).name : ' '}</Text>
           <Text style={[type.secondary, { color: color.secondary }]}>
             {card
-              ? [nameAndVariant(card.name).variant, setTitle(card.setName), cardNumber(card.number) && `#${cardNumber(card.number)}`]
+              ? [nameAndVariant(card.name).variant, setTitle(card.setName), shownNumber(card.number) && `#${shownNumber(card.number)}`]
                   .filter(Boolean)
                   .join(' · ')
               : ' '}

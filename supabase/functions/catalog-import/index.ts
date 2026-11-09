@@ -5,7 +5,18 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { CATEGORIES, catalogRows, packPrice, type TcgPrice, type TcgProduct } from '../_shared/catalog-math.ts';
-import { pictureIndex, setKeys, tcgdexLang, tcgdexPicture, type TcgdexSet, type TcgdexSetBrief } from '../_shared/alt-images.ts';
+import {
+  pictureIndex,
+  riotCardsFromPage,
+  riotIndex,
+  riotPicture,
+  setKeys,
+  tcgdexLang,
+  tcgdexPicture,
+  type RiotIndex,
+  type TcgdexSet,
+  type TcgdexSetBrief,
+} from '../_shared/alt-images.ts';
 
 const TCGCSV = 'https://tcgcsv.com/tcgplayer';
 const UA = { 'User-Agent': 'slabby-catalog-import/0.1 (+https://github.com/beedog0/slabby)' };
@@ -107,6 +118,15 @@ Deno.serve(async (req) => {
 
 const TCGDEX = 'https://api.tcgdex.net/v2';
 const ALT_BATCH = 300;
+/** Riot's official Riftbound card gallery: every card and its picture in one page. */
+const RIOT_GALLERY = 'https://playriftbound.com/en-us/card-gallery/';
+
+async function riotGallery(): Promise<RiotIndex | null> {
+  const res = await fetch(RIOT_GALLERY, { headers: UA });
+  if (!res.ok) return null;
+  const cards = riotCardsFromPage(await res.text());
+  return cards.length ? riotIndex(cards) : null;
+}
 
 async function tcgdex<T>(path: string): Promise<T | null> {
   const res = await fetch(`${TCGDEX}${path}`, { headers: UA });
@@ -121,7 +141,14 @@ async function fillAltImages(admin: ReturnType<typeof createClient>) {
   const { data: cleared } = await admin.rpc('clear_found_alt_images');
   const { data: claimed, error } = await admin.rpc('claim_alt_image_batch', { n: ALT_BATCH });
   if (error) throw error;
-  const rows = (claimed ?? []) as { product_id: number; game: string; language: string; number: string | null; set_code: string | null }[];
+  const rows = (claimed ?? []) as {
+    product_id: number;
+    game: string;
+    language: string;
+    name: string | null;
+    number: string | null;
+    set_code: string | null;
+  }[];
   if (!rows.length) return { cleared, looked: 0 };
 
   const { data: sib, error: sibErr } = await admin.rpc('sibling_alt_images', { ids: rows.map((r) => r.product_id) });
@@ -163,8 +190,11 @@ async function fillAltImages(admin: ReturnType<typeof createClient>) {
     sets.set(lang, byCode);
   }
 
+  // Riftbound (English): Riot's gallery, fetched only when this batch has Riftbound cards.
+  const riot = rows.some((r) => r.game === 'riftbound' && r.language === 'en') ? await riotGallery().catch(() => null) : null;
+
   const found: { product_id: number; url: string; source: string }[] = [];
-  const by: Record<string, number> = { same_set: 0, tcgdex: 0, other_set: 0 };
+  const by: Record<string, number> = { same_set: 0, tcgdex: 0, riot: 0, riot_base: 0, other_set: 0 };
   for (const r of rows) {
     const s = siblings.get(r.product_id);
     let pick: { url: string; source: string } | null = s?.source === 'same_set' ? { url: s.image_url, source: 'same_set' } : null;
@@ -173,6 +203,7 @@ async function fillAltImages(admin: ReturnType<typeof createClient>) {
       const url = lang ? tcgdexPicture(sets.get(lang) ?? new Map(), r) : null;
       if (url) pick = { url, source: 'tcgdex' };
     }
+    if (!pick && riot && r.game === 'riftbound' && r.language === 'en') pick = riotPicture(riot, r);
     if (!pick && s) pick = { url: s.image_url, source: s.source };
     if (pick) {
       found.push({ product_id: r.product_id, ...pick });

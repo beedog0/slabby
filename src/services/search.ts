@@ -299,6 +299,15 @@ export function cardNumber(n: string | null): string {
   return (n ?? '').split('/')[0].trim();
 }
 
+/**
+ * The number as people read it: "173* /167" → "173". TCGplayer marks Riftbound's signature
+ * printings with a star ("173*" beside the overnumbered "173"); the name already says
+ * "(Signature)", so the star is dropped on screen. cardNumber keeps it for matching.
+ */
+export function shownNumber(n: string | null): string {
+  return cardNumber(n).replace(/\*+$/, '');
+}
+
 /** Params for the Add a slab screen, prefilled from a searched card at the chosen grade. */
 export function addParams(c: CatalogCard, grade: SearchGrade | 'raw'): Record<string, string> {
   if (c.sealedType)

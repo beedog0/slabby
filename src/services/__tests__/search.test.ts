@@ -1,4 +1,4 @@
-import { addParams, buyPrices, cardNumber, displayName, fold, nameAndVariant, nameTier, matches, openPrices, searchCards, terms } from '../search';
+import { addParams, buyPrices, cardNumber, displayName, shownNumber, fold, nameAndVariant, nameTier, matches, openPrices, searchCards, terms } from '../search';
 
 describe('search helpers', () => {
   it('splits numbers out of a search', () => {
@@ -46,6 +46,9 @@ describe('search helpers', () => {
     expect(nameAndVariant('Snorunt')).toEqual({ name: 'Snorunt', variant: null });
     expect(cardNumber('205/165')).toBe('205');
     expect(cardNumber('OP05-119')).toBe('OP05-119');
+    expect(cardNumber('173*/167')).toBe('173*');
+    expect(shownNumber('173*/167')).toBe('173');
+    expect(shownNumber('OP05-119')).toBe('OP05-119');
   });
 });
 

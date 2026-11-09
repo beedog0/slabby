@@ -21,7 +21,7 @@ import { IMAGE_MAX, wishCard } from '../src/profile/shareImage';
 import { useRules } from '../src/store/rules';
 import { useSharing } from '../src/store/sharing';
 import { useVault } from '../src/store/vault';
-import { cardNumber, displayName, searchCards, type CatalogCard } from '../src/services/search';
+import { displayName, searchCards, shownNumber, type CatalogCard } from '../src/services/search';
 import { useWishlist, wishKey, type WishGrade } from '../src/store/wishlist';
 import { radius, size, space, type } from '../src/theme/tokens';
 import { useColors } from '../src/theme/theme';
@@ -97,7 +97,7 @@ export default function SharePick() {
     };
     openMenu({
       title: displayName(c.name),
-      subtitle: [c.setName, c.number ? cardNumber(c.number) : null].filter(Boolean).join(' · '),
+      subtitle: [c.setName, c.number ? shownNumber(c.number) : null].filter(Boolean).join(' · '),
       items: [
         (['psa10', 'psa9', 'psa8'] as WishGrade[]).map((g) => ({ label: `PSA ${g.slice(3)}`, onPress: () => go(g) })),
         [{ label: 'Raw', onPress: () => go('raw') }],
@@ -160,7 +160,7 @@ export default function SharePick() {
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={[type.body, { color: color.ink }]}>{displayName(c.name)}</Text>
                     <Text style={[type.secondary, { color: color.secondary }]}>
-                      {[c.setName, c.number ? cardNumber(c.number) : null].filter(Boolean).join(' · ')}
+                      {[c.setName, c.number ? shownNumber(c.number) : null].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   <Text style={[type.text, { color: color.ink }]}>Add</Text>
