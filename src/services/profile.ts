@@ -42,8 +42,7 @@ export async function publishProfile(p: Profile): Promise<string | null> {
 
 /** Pick a photo from the camera roll, cropped square and shrunk to a small JPEG data URI. */
 export async function pickProfilePhoto(): Promise<string | null> {
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) return null;
+  // The system photo picker needs no library permission: you only hand over the photo you pick.
   const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
   const uri = r.canceled ? null : r.assets?.[0]?.uri;
   if (!uri) return null;

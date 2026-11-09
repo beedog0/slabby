@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '../../src/components/Avatar';
-import { closeMenu, openMenu } from '../../src/components/menu/Menu';
+import { openMenu } from '../../src/components/menu/Menu';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { handleTaken, pickProfilePhoto, publishProfile } from '../../src/services/profile';
 import { useAccount } from '../../src/store/account';
@@ -59,12 +59,11 @@ export default function EditProfile() {
       items: [
         {
           label: 'Choose from photos',
+          // The sheet runs this once it has closed, so the photo picker can open over the page.
           onPress: () =>
-            closeMenu(() =>
-              pickProfilePhoto()
-                .then((p) => p && setPhoto(p))
-                .catch(() => setError('Couldn’t open that photo.')),
-            ),
+            pickProfilePhoto()
+              .then((p) => p && setPhoto(p))
+              .catch(() => setError('Couldn’t open that photo.')),
         },
         ...(photo ? [{ label: 'Remove photo', onPress: () => setPhoto(null) }] : []),
       ],
