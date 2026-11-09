@@ -18,7 +18,7 @@ import { setCards } from '../../services/setCards';
 import { color, space, type } from '../../theme/tokens';
 import type { Card } from '../../types';
 import { Hairline } from '../ui';
-import { buySignal } from '../../pricing/buySignal';
+import { buySignal, shortDay, signalGap, thinRead } from '../../pricing/buySignal';
 import { BuySignalDial } from './BuySignal';
 import { GradeLadder, RangeMeter, SetRow } from './CardInsights';
 
@@ -63,12 +63,16 @@ export function CardAnalyticsView({
   const price = !prices ? null : pick === 'raw' ? prices.raw : prices.grades[pick];
   const live = !!price && !!prices && (pick === 'raw' || !isQuiet(price, prices.fetchedAt));
   const hist = live ? history(price) : null;
-  const sig = hist ? buySignal(price, pick !== 'raw') : null;
+  const graded = pick !== 'raw';
+  const sig = hist ? buySignal(price, graded) : null;
+  // A grade with a price but no recent sale still shows what we know, with its caveat.
+  const quiet = !!price && !!prices && !live;
   return (
     <>
       {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} /> : null}
+      {quiet && price ? <ThinStats price={price} /> : null}
       {hist && price ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
-      {sig ? <BuySignalDial signal={sig} /> : null}
+      {price ? <BuySignalDial signal={sig} gap={sig ? undefined : signalGap(price, graded, quiet)} graded={graded} /> : null}
       {prices ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}
       <SetRow setName={setTitle(setName)} cards={more} onAll={onAll} con={con} />
     </>
@@ -232,6 +236,52 @@ export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPri
             ? 'TCGplayer market. Grading math assumes $25 to grade, $8 shipping, eBay fees, and a PSA 9 when it misses.'
             : 'TCGplayer market price, near mint.'
           : 'eBay sold, 30-day median. Ratios need 5 sales on each side.'}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Key stats for a grade with a price but no sale in 30 days: the last sale, how many days had a
+ * sale in 90, the last 30-day median and the range of those medians. Bryan wants every price to
+ * show where it came from, so a thin price gets its numbers with the caveat, never a bare figure.
+ */
+export function ThinStats({ price }: { price: CardPrice }) {
+  const t = thinRead(price);
+  if (!t) return null;
+  const cells = [
+    { label: 'Last sale', value: t.lastSale ? shortDay(t.lastSale) : null },
+    { label: 'Days with a sale, 90 days', value: String(t.saleDays) },
+    { label: 'Last 30-day price', value: money(price.marketCents) },
+    { label: 'Range, 90 days', value: t.low != null && t.high != null ? `${money(t.low)}–${money(t.high).replace('$', '')}` : null },
+  ].filter((c): c is { label: string; value: string } => !!c.value);
+  const rows: (typeof cells)[] = [];
+  for (let i = 0; i < cells.length; i += 2) rows.push(cells.slice(i, i + 2));
+  return (
+    <View style={{ paddingTop: space.xl }}>
+      <Text style={[type.section, { color: color.ink }]}>Key stats</Text>
+      <Text style={[type.text, { color: color.secondary, paddingTop: space.xs }]}>
+        {t.saleDays <= 1 ? 'Rarely sells' : `Thin · sales on ${t.saleDays} days in 90`} · no sale in the last 30 days
+      </Text>
+      <View style={{ paddingTop: space.m }}>
+        {rows.map((row, i) => (
+          <View key={i}>
+            <Hairline />
+            <View style={styles.statRow}>
+              {row.map((c) => (
+                <View key={c.label} style={styles.stat} accessible accessibilityLabel={`${c.label}, ${c.value}`}>
+                  <Text style={[type.secondary, { color: color.secondary }]}>{c.label}</Text>
+                  <Text style={[type.numberM, { color: color.ink }]}>{c.value}</Text>
+                </View>
+              ))}
+              {row.length === 1 ? <View style={styles.stat} /> : null}
+            </View>
+          </View>
+        ))}
+        <Hairline />
+      </View>
+      <Text style={[type.caption, { color: color.secondary, paddingTop: space.m }]}>
+        eBay sold. The price is the median of the last 30 days that had sales, so it may be out of date.
       </Text>
     </View>
   );

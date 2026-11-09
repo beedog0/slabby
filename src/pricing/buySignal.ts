@@ -4,7 +4,7 @@
 // cards, eBay sales in 30 days. Anything without enough data behind it returns null and is hidden.
 
 import type { CardPrice } from '../services/comps';
-import { history } from './cardStats';
+import { history, MIN_POINTS, MIN_SPAN_DAYS, realPoints, type Priced } from './cardStats';
 
 /** 30-day move that counts as fast, either way. */
 export const FAST_MOVE = 0.08;
@@ -121,4 +121,46 @@ export function buySignal(price: CardPrice | null | undefined, graded: boolean):
   const because = parts.length === 2 ? `${parts[0]} and ${parts[1]}.` : `${parts[0]}, ${parts[1]}, and ${parts[2]}.`;
 
   return { verdict, needle, because, factors };
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "2026-09-28" → "Sep 28". */
+export function shortDay(d: string): string {
+  const [, m, day] = d.slice(0, 10).split('-').map(Number);
+  return m >= 1 && m <= 12 && day ? `${MONTHS[m - 1]} ${day}` : d;
+}
+
+/** The newest day with a real sale (graded) or price (raw), when the server says. */
+export function lastReal(p: Priced | null | undefined): string | null {
+  return p?.lastReal ?? p?.lastSaleDay ?? null;
+}
+
+/**
+ * What we know about a grade that's too thin (or too quiet) for Key stats and a read: the last
+ * sale, how many days had one in 90, and the low and high of those days' prices. Shown with its
+ * caveat, so a lone price is never left bare.
+ */
+export function thinRead(p: Priced | null | undefined): { lastSale: string | null; saleDays: number; low: number | null; high: number | null } | null {
+  if (!p) return null;
+  const n = realPoints(p);
+  const s = p.series90.filter((v) => v > 0);
+  const lo = s.length ? Math.min(...s) : null;
+  const hi = s.length ? Math.max(...s) : null;
+  const ranged = n >= 2 && lo != null && hi != null && hi > lo;
+  return { lastSale: lastReal(p), saleDays: n, low: ranged ? lo : null, high: ranged ? hi : null };
+}
+
+/** Why there's no read, in one line. Only called when buySignal() returned null. */
+export function signalGap(p: Priced | null | undefined, graded: boolean, quiet: boolean): string {
+  if (!p) return graded ? 'No eBay sales for this grade yet.' : 'No price history yet.';
+  const last = lastReal(p);
+  if (graded && (quiet || p.sales30d === 0))
+    return `No sale in the last 30 days${last ? `; the last was ${shortDay(last)}` : ''}. A read needs at least ${MIN_SIGNAL_SALES} sales in 30 days.`;
+  if (graded && p.sales30d < MIN_SIGNAL_SALES)
+    return `Only ${p.sales30d} sale${p.sales30d === 1 ? '' : 's'} in 30 days. A read needs at least ${MIN_SIGNAL_SALES}.`;
+  const n = realPoints(p);
+  if (n < MIN_POINTS)
+    return graded ? `Sales on only ${n} day${n === 1 ? '' : 's'} in the last 90. A read needs ${MIN_POINTS}.` : `Only ${n} price${n === 1 ? '' : 's'} so far. A read needs ${MIN_POINTS}.`;
+  if (p.series90.length < MIN_SPAN_DAYS + 1) return `Prices only go back ${p.series90.length} days. A read needs ${MIN_SPAN_DAYS}.`;
+  return 'The price hasn’t moved enough to read.';
 }

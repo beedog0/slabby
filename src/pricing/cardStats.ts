@@ -18,7 +18,8 @@ export const GRADING_SHIP_CENTS = 800;
 export type Liquidity = 'Liquid' | 'Slow' | 'Stale';
 export type Trend = 'Rising' | 'Flat' | 'Falling';
 
-type Priced = CardPrice & { points?: number; since?: string };
+/** Server extras (withPoints): real data days in 90, the first and the last of them. */
+export type Priced = CardPrice & { points?: number; since?: string; lastReal?: string };
 
 /** Real data points behind a series. Old cached answers lack `points`: a flat line counts as one. */
 export function realPoints(p: Priced | null | undefined): number {

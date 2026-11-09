@@ -1,5 +1,5 @@
 import type { CardPrice } from '../../services/comps';
-import { buySignal, change30, momentumWord } from '../buySignal';
+import { buySignal, change30, momentumWord, shortDay, signalGap, thinRead } from '../buySignal';
 
 /** 91 daily points: falls from `start` to `mid` over 60 days, then moves to `end` over 30. */
 function series(start: number, mid: number, end: number): number[] {
@@ -75,5 +75,24 @@ describe('buy signal', () => {
       'Leveling off',
       'Steady',
     ]);
+  });
+
+  it('a quiet, thin grade (Cosplay Pikachu PSA 10) keeps its numbers and says why there is no read', () => {
+    // Sales on 4 days, the last Sep 28; rolling 30-day medians after each sale, none in the last 30 days.
+    const s = [190000, 190000, 204000, 204000, 210000, 204000];
+    const p = price(s, 0, { points: 4, since: '2026-08-12', lastReal: '2026-09-28', asOf: '2026-10-27' });
+    expect(buySignal(p, true)).toBeNull();
+    expect(thinRead(p)).toEqual({ lastSale: '2026-09-28', saleDays: 4, low: 190000, high: 210000 });
+    expect(signalGap(p, true, true)).toBe('No sale in the last 30 days; the last was Sep 28. A read needs at least 3 sales in 30 days.');
+  });
+
+  it('gap lines', () => {
+    const long = series(162000, 124000, 124000);
+    expect(signalGap(price(long, 2), true, false)).toBe('Only 2 sales in 30 days. A read needs at least 3.');
+    expect(signalGap(price(long, 8, { points: 6 }), true, false)).toBe('Sales on only 6 days in the last 90. A read needs 10.');
+    expect(signalGap(price(long.slice(-20), 8, { points: 20 }), true, false)).toBe('Prices only go back 20 days. A read needs 30.');
+    expect(signalGap(price([5000], 0, { points: 1 }), false, false)).toBe('Only 1 price so far. A read needs 10.');
+    expect(thinRead(price([5000], 0, { points: 1 }))).toEqual({ lastSale: null, saleDays: 1, low: null, high: null });
+    expect(shortDay('2026-11-09')).toBe('Nov 9');
   });
 });

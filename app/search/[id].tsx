@@ -19,6 +19,7 @@ import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
+import { lastReal } from '../../src/pricing/buySignal';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
@@ -270,15 +271,21 @@ export default function SearchedCard() {
           <View style={styles.chart}>
             {prices === undefined ? (
               <Text style={[type.text, { color: color.secondary }]}>Loading prices…</Text>
-            ) : charted && !quiet ? (
-              <PriceChart
-                values={series}
-                paidCents={null}
-                width={width - space.gutter * 2}
-                height={140}
-                tint={trendTint(series)}
-                asOf={price?.asOf}
-              />
+            ) : charted ? (
+              <>
+                <PriceChart
+                  values={series}
+                  paidCents={null}
+                  width={width - space.gutter * 2}
+                  height={140}
+                  tint={trendTint(series)}
+                  asOf={price?.asOf}
+                />
+                {/* A quiet grade keeps its chart of real sales, with the caveat under it. */}
+                {quiet ? (
+                  <Text style={[type.secondary, { color: color.secondary, paddingTop: space.s }]}>{emptyLine(pick, prices, otherGame, price)}</Text>
+                ) : null}
+              </>
             ) : (
               <>
                 <Text style={[type.text, { color: color.secondary }]}>
@@ -379,7 +386,9 @@ function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string 
   if (prices.source === 'catalog') return 'Graded prices aren’t reachable right now.';
   // The price shown in the header for a quiet grade is the last 30-day median before it went quiet.
   if (quiet)
-    return `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
+    return lastReal(quiet)
+      ? `No ${gradeLabel(pick)} sales in 30 days. Last sale ${fmtDay(lastReal(quiet)!)}; ${money(quiet.marketCents)} is the median around it.`
+      : `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
   return `No ${gradeLabel(pick)} sales in the last 90 days.`;
 }
 
