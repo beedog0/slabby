@@ -46,7 +46,6 @@ it('only fixed-light files import the light palette directly', () => {
     'src/components/collection/PinMark.tsx',
     'src/components/profile/ProfileCode.tsx',
     'src/components/scan/ScanPills.tsx',
-    'src/components/share/ProfileImage.tsx',
     'src/components/share/ShareCard.tsx',
     'src/components/share/ShelfImage.tsx',
     'src/services/sellSheet.ts',
