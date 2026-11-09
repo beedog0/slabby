@@ -309,3 +309,34 @@ export function ratingHistory(
   }
   return out;
 }
+
+type PctKey = 'askPct' | 'floorPct' | 'buyTargetPct' | 'buyMaxPct';
+
+/**
+ * Pricing rules that can't contradict each other: ask at or above market, floor at or below ask,
+ * buy max at or below market, target at or below max. A step that would break one stops at the
+ * limit (the other rule is never moved for you).
+ */
+export function pctLimits(r: Pick<PricingRules, PctKey>, key: PctKey): { min: number; max: number } {
+  const far = 100;
+  switch (key) {
+    case 'askPct':
+      return { min: Math.max(0, r.floorPct), max: far };
+    case 'floorPct':
+      return { min: -far, max: r.askPct };
+    case 'buyMaxPct':
+      return { min: r.buyTargetPct, max: 0 };
+    case 'buyTargetPct':
+      return { min: -far, max: r.buyMaxPct };
+  }
+}
+
+export function clampPct(r: Pick<PricingRules, PctKey>, key: PctKey, value: number): number {
+  const { min, max } = pctLimits(r, key);
+  return Math.min(max, Math.max(min, value));
+}
+
+/** "above market" / "below market" / "at market" for a rule's sign. */
+export function pctWord(v: number, of: string): string {
+  return `${v > 0 ? 'above' : v < 0 ? 'below' : 'at'} ${of}`;
+}
