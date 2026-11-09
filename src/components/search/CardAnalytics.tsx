@@ -12,7 +12,8 @@ import { ebayCardListedUrl, ebayCardSoldUrl, type EbayCard } from '../../lib/eba
 import { cardPrice, money, pct } from '../../lib/format';
 import { gradingLine, gradingRead, history, liquidity, ratio, spread, spreadWord, trend } from '../../pricing/cardStats';
 import { catalogFor, choiceFor, type Choice } from '../../services/cardLink';
-import type { CardPrice } from '../../services/comps';
+import { priceFor, type CardPrice } from '../../services/comps';
+import { usePrices } from '../../store/prices';
 import { isQuiet, openPrices, type CatalogCard, type SearchGrade, type SearchPrices } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
 import { setCards } from '../../services/setCards';
@@ -59,6 +60,7 @@ export function CardAnalyticsView({
   trade,
   sealed,
   ebay,
+  own,
 }: {
   pick: Choice;
   prices: SearchPrices | null | undefined;
@@ -73,9 +75,11 @@ export function CardAnalyticsView({
   sealed?: boolean;
   /** The card, for the eBay sold and listed links. */
   ebay?: Omit<EbayCard, 'grade'>;
+  /** The picked grade's price is the card's own (vault) price: quiet means no sale in 30 days. */
+  own?: boolean;
 }) {
   const price = !prices ? null : pick === 'raw' ? prices.raw : prices.grades[pick];
-  const live = !!price && !!prices && (pick === 'raw' || !isQuiet(price, prices.fetchedAt));
+  const live = !!price && !!prices && (pick === 'raw' || (own ? price.sales30d > 0 : !isQuiet(price, prices.fetchedAt)));
   const hist = live ? history(price) : null;
   const graded = pick !== 'raw';
   const sig = hist ? buySignal(price, graded) : null;
@@ -107,6 +111,8 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
   const [more, setMore] = useState<Found[]>([]);
   const [groupId, setGroupId] = useState<number | null>(null);
   const identity = [card.game, card.setCode, card.number, card.language, card.name].join('|');
+  // Re-render when the vault's prices change (pull to refresh, nightly load).
+  usePrices((s) => s.byKey);
 
   useEffect(() => {
     let live = true;
@@ -136,6 +142,11 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity]);
 
+  // The card's own price (the vault store, what the top of its page shows) wins for its grade,
+  // so the page never shows two prices for one grade. Other grades come from the search fetch.
+  const own = card.grader === 'psa' || card.grader === 'raw' ? priceFor(card) : null;
+  const shown = prices && own ? withOwn(prices, pick, own) : prices;
+
   if (!cat) return null;
   const open = (g: Choice) =>
     router.push({ pathname: '/search/[id]', params: { id: String(cat.productId), grade: g, ...(con ? { con: '1' } : {}) } });
@@ -149,7 +160,8 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
       ) : null}
       <CardAnalyticsView
         pick={pick}
-        prices={prices}
+        prices={shown}
+        own={!!own}
         setName={cat.setName}
         more={more}
         onPick={(g) => (g === pick ? undefined : open(g))}
@@ -159,6 +171,11 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
       />
     </View>
   );
+}
+
+/** Search prices with one grade (or raw) replaced by the card's own price. */
+export function withOwn(prices: SearchPrices, pick: Choice, own: CardPrice): SearchPrices {
+  return pick === 'raw' ? { ...prices, raw: own } : { ...prices, grades: { ...prices.grades, [pick]: own } };
 }
 
 /**

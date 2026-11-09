@@ -98,7 +98,7 @@ export default function PricingRulesScreen() {
         {pctRow('buyMaxPct', 'Max', 'walk away above')}
 
         <Section title="Market price" />
-        <ValueRow title="Graded cards" value="eBay sold, 30 days" />
+        <ValueRow title="Graded cards" value="Median of last 5 eBay sales" />
         <ValueRow title="Raw cards" value="TCGplayer market" />
         <ValueRow title="Round to" value={money(rules.roundToCents)} onPress={nextRounding} />
       </ScrollView>
