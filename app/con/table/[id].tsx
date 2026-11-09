@@ -123,13 +123,13 @@ export default function BeforeTheTable() {
   const ticks: Tick[] = selling
     ? [
         ...(card.paidCents ? [{ value: card.paidCents, label: 'Paid', color: color.ink }] : []),
-        { value: row.floor, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 },
+        { value: row.floor, label: 'Floor', color: color.ink, labelColor: color.ink, height: 14 },
         { value: price.marketCents, label: 'Market', color: color.secondary },
         { value: row.ask, label: 'Ask', color: 'transparent', labelColor: color.ink, pin: true },
       ]
     : [
         { value: row.buyTarget, label: 'Target', color: 'transparent', labelColor: color.ink, pin: true },
-        { value: row.buyMax, label: 'Max', color: color.loss, labelColor: color.loss, height: 14 },
+        { value: row.buyMax, label: 'Max', color: color.ink, labelColor: color.ink, height: 14 },
         { value: price.marketCents, label: 'Market', color: color.secondary },
       ];
 
@@ -179,7 +179,7 @@ export default function BeforeTheTable() {
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xl }]}>
             {selling ? 'Walk away under' : 'Walk away over'}
           </Text>
-          <Text style={[type.displayS, { color: color.loss, fontSize: 44 }]}>{money(limit)}</Text>
+          <Text style={[type.displayS, { color: color.ink, fontSize: 44 }]}>{money(limit)}</Text>
         </View>
 
         <View style={styles.gutter}>
@@ -196,7 +196,13 @@ export default function BeforeTheTable() {
             <Text style={[type.text, { color: color.secondary, flex: 1 }]}>
               {selling ? (
                 <>
-                  Ask = {sourceWord(price, raw)} {em(rulePct(rules.askPct))} · {floorWhy}
+                  {row.askRaisedToPaid ? (
+                    <>Raised to what you paid · never sell at a loss</>
+                  ) : (
+                    <>
+                      Ask = {sourceWord(price, raw)} {em(rulePct(rules.askPct))} · {floorWhy}
+                    </>
+                  )}
                 </>
               ) : (
                 <>

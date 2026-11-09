@@ -14,7 +14,7 @@ import { useDeal } from '../../pricing/useDeal';
 import { size, space, type } from '../../theme/tokens';
 import { useColors } from '../../theme/theme';
 import { prefetchArt } from '../ArtImage';
-import { cardPrice, gradeLabel, money, pct, rowTitle } from '../../lib/format';
+import { cardPrice, gradeLabel, money, pct, pctSign, rowTitle } from '../../lib/format';
 import { LangBadge } from '../CardName';
 import { SlabView } from '../SlabView';
 import { CopiesMark, PinMark } from './PinMark';
@@ -323,7 +323,7 @@ function SwipeCaption({ row }: { row: CardRow }) {
         {week ? (
           <Text style={[type.secondary, muted]}>
             {'  '}
-            <Text style={tint(week.cents)}>{pct(week.fraction)}</Text> this week
+            <Text style={pctSign(week.fraction) === 0 ? muted : tint(week.cents)}>{pct(week.fraction)}</Text> this week
           </Text>
         ) : null}
       </Text>

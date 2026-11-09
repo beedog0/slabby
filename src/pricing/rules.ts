@@ -43,10 +43,21 @@ export function roundTo(cents: number, step: number): number {
 
 const applyPct = (cents: number, pct: number) => cents * (1 + pct / 100);
 
-/** What to ask: the override, else market × (1 + ask%). */
+/**
+ * What to ask: the override, else market × (1 + ask%). When "never sell at a loss" is on and
+ * that rule ask is under what you paid, the ask is raised to paid too (so floor = ask = paid,
+ * not a floor quietly clamped back under paid). An ask you set by hand is left alone.
+ */
+export function askWithBasis(i: Inputs): { cents: number; raisedToPaid: boolean } {
+  if (i.overrides?.ask != null) return { cents: i.overrides.ask, raisedToPaid: false };
+  const a = roundTo(applyPct(i.marketCents, i.rules.askPct), i.rules.roundToCents);
+  const paid = i.rules.neverBelowPaid ? (i.paidCents ?? 0) : 0;
+  return paid > a ? { cents: paid, raisedToPaid: true } : { cents: a, raisedToPaid: false };
+}
+
+/** What to ask. See askWithBasis. */
 export function ask(i: Inputs): number {
-  if (i.overrides?.ask != null) return i.overrides.ask;
-  return roundTo(applyPct(i.marketCents, i.rules.askPct), i.rules.roundToCents);
+  return askWithBasis(i).cents;
 }
 
 /** Why the floor is what it is, so screens can explain it. */
@@ -220,7 +231,8 @@ export function ebayNet(priceCents: number, shippingCents = EBAY_SHIP_ESTIMATE_C
 /** All four numbers for a card at once. */
 export function quote(i: Inputs) {
   const f = floorWithBasis(i);
-  return { ask: ask(i), floor: f.cents, floorBasis: f.basis, buyTarget: buyTarget(i), buyMax: buyMax(i) };
+  const a = askWithBasis(i);
+  return { ask: a.cents, askRaisedToPaid: a.raisedToPaid, floor: f.cents, floorBasis: f.basis, buyTarget: buyTarget(i), buyMax: buyMax(i) };
 }
 
 /** An offer more than this many times market is probably a typo. */

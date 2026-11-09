@@ -55,7 +55,7 @@ export function DotStrip({ points, values = points, medianCents, floorCents, wid
           <Rect x={x(medianCents) - 1} y={mid - size.medianTick / 2} width={2} height={size.medianTick} fill={color.ink} />
         ) : null}
         {showFloor ? (
-          <Rect x={x(floorCents!) - 1} y={mid - size.floorTick / 2} width={2} height={size.floorTick} fill={color.loss} />
+          <Rect x={x(floorCents!) - 1} y={mid - size.floorTick / 2} width={2} height={size.floorTick} fill={color.ink} />
         ) : null}
       </Svg>
     </View>

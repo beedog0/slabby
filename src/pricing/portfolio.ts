@@ -22,6 +22,8 @@ export type CardRow = {
   /** 30-day trend, as a fraction. */
   trend30: number;
   ask: number | null;
+  /** The rule ask was under what you paid and "never sell at a loss" raised it. */
+  askRaisedToPaid?: boolean;
   floor: number | null;
   /** Why the floor is what it is. Null without comps. */
   floorBasis: FloorBasis | null;

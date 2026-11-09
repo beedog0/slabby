@@ -295,7 +295,7 @@ export default function SearchedCard() {
                 Open <Text style={{ fontWeight: '600' }}>{money(buy.target)}</Text>
               </Text>
               <Text style={[type.body, styles.label]}>
-                pay up to <Text style={{ color: color.loss, fontWeight: '600' }}>{money(buy.max)}</Text>
+                pay up to <Text style={{ color: color.ink, fontWeight: '600' }}>{money(buy.max)}</Text>
               </Text>
             </View>
           ) : null}

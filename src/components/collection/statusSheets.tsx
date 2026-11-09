@@ -71,10 +71,11 @@ export function openMoveMany(cards: Card[], after?: () => void) {
       : openMenu({ title: MANY_TITLE[kind](n), items: [], body: <MoveManyBody ids={cards.map((c) => c.id)} kind={kind as 'sell' | 'hold'} after={after} /> });
   openMenu({
     title: `Move ${n} ${n === 1 ? 'slab' : 'slabs'}`,
+    // Leave out a destination every picked slab is already in: it would move nothing.
     items: [
-      { label: 'Put up for sale', onPress: () => open('sell') },
-      { label: 'Move to holds', onPress: () => open('hold') },
-      { label: 'Mark sold', onPress: () => open('sold') },
+      ...(cards.every((c) => c.status !== 'sold' && c.plan === 'sell') ? [] : [{ label: 'Put up for sale', onPress: () => open('sell') }]),
+      ...(cards.every((c) => c.status !== 'sold' && c.plan === 'hold') ? [] : [{ label: 'Move to holds', onPress: () => open('hold') }]),
+      ...(cards.every((c) => c.status === 'sold') ? [] : [{ label: 'Mark sold', onPress: () => open('sold') }]),
     ],
   });
 }

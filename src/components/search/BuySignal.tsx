@@ -45,10 +45,10 @@ export function BuySignalDial({ signal: s, gap, graded = true }: { signal: Signa
           <Path d={arc(2 / 3 + GAP, 1)} stroke={tint.hold} strokeWidth={dial.stroke} strokeLinecap="round" fill="none" />
           {tip ? <Line x1={cx} y1={cy} x2={tip.x} y2={tip.y} stroke={color.ink} strokeWidth={3} strokeLinecap="round" /> : null}
           {tip ? <Circle cx={cx} cy={cy} r={7} fill={color.ink} /> : null}
-          <SvgText x={cx - dial.r - dial.stroke / 2} y={dial.h} fontSize={12} fill={color.secondary}>
+          <SvgText x={cx - dial.r - dial.stroke / 2} y={dial.h - 4} fontSize={12} fill={color.secondary}>
             Buy
           </SvgText>
-          <SvgText x={cx + dial.r + dial.stroke / 2} y={dial.h} fontSize={12} fill={color.secondary} textAnchor="end">
+          <SvgText x={cx + dial.r + dial.stroke / 2} y={dial.h - 4} fontSize={12} fill={color.secondary} textAnchor="end">
             Hold off
           </SvgText>
         </Svg>

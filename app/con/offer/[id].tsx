@@ -145,7 +145,7 @@ export default function Offer() {
 
   const ticks: Tick[] = [];
   if (card.paidCents) ticks.push({ value: card.paidCents, label: 'Paid', color: color.ink });
-  if (floor != null) ticks.push({ value: floor, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 });
+  if (floor != null) ticks.push({ value: floor, label: 'Floor', color: color.ink, labelColor: color.ink, height: 14 });
   if (price) ticks.push({ value: price.marketCents, label: 'Market', color: color.secondary });
 
   // "Keeps $25 · beats eBay by $8": what this offer means against holding out for eBay.

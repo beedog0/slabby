@@ -49,13 +49,17 @@ describe('bundle', () => {
     // Card A paid $150 (floor alone would be $150), card B paid $50 (floor $170).
     const a = card(10_000, 9_000, 15_000);
     const b = card(20_000, 18_000, 5_000);
-    expect(floor(a) + floor(b)).toBe(11_000 + 17_000); // A is held at its ask alone
+    expect(floor(a) + floor(b)).toBe(15_000 + 17_000); // A alone: ask and floor raised to paid
     const q = bundle([a, b]);
     expect(q.floorCents).toBe(8_500 + 17_000);
     expect(q.paidCents).toBe(20_000);
     const lossy = bundle([card(10_000, 9_000, 30_000), b]);
-    expect(lossy.floorCents).toBe(lossy.askCents);
-    expect(lossy.floorBasis).toBe('ask');
+    expect(lossy.floorCents).toBe(35_000); // the lot never goes under what it cost
+    expect(lossy.floorBasis).toBe('paid');
+    // A hand-set ask under paid still caps the lot's floor at the ask.
+    const capped = bundle([{ ...card(10_000, 9_000, 30_000), overrides: { ask: 11_000 } }, b]);
+    expect(capped.floorCents).toBe(capped.askCents);
+    expect(capped.floorBasis).toBe('ask');
   });
   it('raises the floor to what the lot cost', () => {
     const q = bundle([card(10_000, 9_000, 14_000), card(20_000, 18_000, 13_000)]);

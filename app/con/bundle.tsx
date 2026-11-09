@@ -288,7 +288,7 @@ export default function Bundle() {
 
   const ticks: Tick[] = [];
   if (q.paidCents) ticks.push({ value: q.paidCents, label: 'Paid', color: color.ink });
-  ticks.push({ value: q.floorCents, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 });
+  ticks.push({ value: q.floorCents, label: 'Floor', color: color.ink, labelColor: color.ink, height: 14 });
   ticks.push({ value: q.marketCents, label: 'Market', color: color.secondary });
 
   const quietText = confirm != null ? `Tap again to sell at a ${money(q.paidCents - confirm)} loss` : quiet?.title;

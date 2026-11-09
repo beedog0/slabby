@@ -32,6 +32,12 @@ export function pct(fraction: number): string {
   return `${n > 0 ? '+' : MINUS}${Math.abs(n)}%`;
 }
 
+/** -1, 0 or 1: the direction pct() shows, so a "0%" is never colored up or down. */
+export function pctSign(fraction: number): -1 | 0 | 1 {
+  const n = Math.round(fraction * 100);
+  return n === 0 ? 0 : n > 0 ? 1 : -1;
+}
+
 /** Rule percent: 10 → "+10%", -5 → "−5%". */
 export function rulePct(n: number): string {
   if (n === 0) return '0%';
@@ -168,4 +174,17 @@ export function savedAgo(iso: string | null, now = Date.now()): string | null {
   if (mins < 60) return `${mins} min ago`;
   if (mins < 24 * 60) return `${Math.floor(mins / 60)} hr ago`;
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** A typed dollar amount, cleaned as you type: digits, one point, at most two cents digits ("12.50"). */
+export function dollarsTyped(t: string, maxDollarDigits = 6): string {
+  const [whole = '', ...rest] = t.replace(/[^0-9.]/g, '').split('.');
+  const w = whole.slice(0, maxDollarDigits);
+  return rest.length ? `${w}.${rest.join('').slice(0, 2)}` : w;
+}
+
+/** Cents from a typed dollar amount ("12.5" → 1250), null when there's no number. */
+export function centsFromTyped(t: string): number | null {
+  const n = Number.parseFloat(t);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
