@@ -32,6 +32,12 @@ export function pct(fraction: number): string {
   return `${n > 0 ? '+' : MINUS}${Math.abs(n)}%`;
 }
 
+/** -1, 0 or 1: the direction pct() shows, so a "0%" is never colored up or down. */
+export function pctSign(fraction: number): -1 | 0 | 1 {
+  const n = Math.round(fraction * 100);
+  return n === 0 ? 0 : n > 0 ? 1 : -1;
+}
+
 /** Rule percent: 10 → "+10%", -5 → "−5%". */
 export function rulePct(n: number): string {
   if (n === 0) return '0%';

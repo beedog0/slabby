@@ -51,7 +51,25 @@ export default function SlabDetail() {
   const refresh = useCardRefresh(row?.card, { auto: true });
   const deal = useDeal(id);
 
-  if (!row) return null;
+  // Opened from a link or history after the slab was removed: say so and give a way out,
+  // never a blank page.
+  if (!row) {
+    return (
+      <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
+        <View style={styles.nav}>
+          <IconButton label="Back" onPress={goBack}>
+            <BackIcon />
+          </IconButton>
+        </View>
+        <View style={{ paddingHorizontal: space.l, paddingTop: space.xl }}>
+          <Text style={[type.title, { color: color.ink }]}>Not in your collection</Text>
+          <Text style={[type.text, { color: color.secondary, paddingTop: space.xs }]}>
+            This slab was removed from your collection.
+          </Text>
+        </View>
+      </View>
+    );
+  }
   const { card, price } = row;
   const days = range === '90' ? 90 : 30;
   const detail = detailFor(row, days);
@@ -120,7 +138,7 @@ export default function SlabDetail() {
         refreshControl={<RefreshControl refreshing={refresh.pulling} onRefresh={refresh.pull} tintColor={color.secondary} />}
       >
         <View style={styles.nav}>
-          <IconButton label="Back" onPress={() => router.back()}>
+          <IconButton label="Back" onPress={goBack}>
             <BackIcon />
           </IconButton>
           <IconButton label="More" onPress={menu}>
@@ -134,7 +152,7 @@ export default function SlabDetail() {
 
         <View style={styles.titleRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <CardName name={rowTitle(card)} language={card.language} numberOfLines={card.sealed ? 3 : 1} large style={[type.title, { color: color.ink }]} />
+            <CardName name={rowTitle(card)} language={card.language} numberOfLines={card.sealed ? 3 : 2} large style={[type.title, { color: color.ink }]} />
             <Text style={[type.text, { color: color.secondary }]}>{subtitle}</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
@@ -309,3 +327,9 @@ const styles = StyleSheet.create({
   compsLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.m },
   compsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.xl },
 });
+
+/** Back, or home when this page was opened with nothing to go back to. */
+function goBack() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/');
+}

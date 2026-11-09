@@ -2,7 +2,7 @@
 
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { cardPrice, gradeLabel, money, pct, promoTag, rowTitle } from '../../lib/format';
+import { cardPrice, gradeLabel, money, pct, pctSign, promoTag, rowTitle } from '../../lib/format';
 import { CardName } from '../CardName';
 import { weekChange, type CardRow } from '../../pricing/portfolio';
 import { useDeal } from '../../pricing/useDeal';
@@ -82,7 +82,7 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
           )
         ) : week ? (
           <>
-            <Text style={{ color: week.cents >= 0 ? color.gain : color.loss }}>{pct(week.fraction)}</Text> this week
+            <Text style={{ color: pctSign(week.fraction) === 0 ? color.secondary : week.cents >= 0 ? color.gain : color.loss }}>{pct(week.fraction)}</Text> this week
           </>
         ) : (
           ' '
