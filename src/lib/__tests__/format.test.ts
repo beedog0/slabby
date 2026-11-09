@@ -1,4 +1,4 @@
-import { cardPrice, pct, pctSign, saleDay, saleLine, salesWord, thinNote } from '../format';
+import { cardPrice, centsFromTyped, dollarsTyped, pct, pctSign, saleDay, saleLine, salesWord, thinNote } from '../format';
 
 const NOW = Date.parse('2026-11-06T12:00:00Z');
 
@@ -50,5 +50,18 @@ describe('pctSign', () => {
     expect(pctSign(0.004)).toBe(0);
     expect(pctSign(0.006)).toBe(1);
     expect(pctSign(-0.02)).toBe(-1);
+  });
+});
+
+describe('typed dollars', () => {
+  it('keeps cents instead of turning 12.50 into 1250 dollars', () => {
+    expect(dollarsTyped('$12.50')).toBe('12.50');
+    expect(dollarsTyped('12.505')).toBe('12.50');
+    expect(dollarsTyped('1.2.3')).toBe('1.23');
+    expect(dollarsTyped('1234567')).toBe('123456');
+    expect(centsFromTyped('12.50')).toBe(1250);
+    expect(centsFromTyped('12.5')).toBe(1250);
+    expect(centsFromTyped('95')).toBe(9500);
+    expect(centsFromTyped('')).toBeNull();
   });
 });

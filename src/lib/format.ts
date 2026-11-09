@@ -175,3 +175,16 @@ export function savedAgo(iso: string | null, now = Date.now()): string | null {
   if (mins < 24 * 60) return `${Math.floor(mins / 60)} hr ago`;
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+
+/** A typed dollar amount, cleaned as you type: digits, one point, at most two cents digits ("12.50"). */
+export function dollarsTyped(t: string, maxDollarDigits = 6): string {
+  const [whole = '', ...rest] = t.replace(/[^0-9.]/g, '').split('.');
+  const w = whole.slice(0, maxDollarDigits);
+  return rest.length ? `${w}.${rest.join('').slice(0, 2)}` : w;
+}
+
+/** Cents from a typed dollar amount ("12.5" → 1250), null when there's no number. */
+export function centsFromTyped(t: string): number | null {
+  const n = Number.parseFloat(t);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}

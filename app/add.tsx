@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Segmented } from '../src/components/Segmented';
 import { SlabView } from '../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton, Stepper } from '../src/components/ui';
-import { money, ordinal } from '../src/lib/format';
+import { centsFromTyped, dollarsTyped, money, ordinal } from '../src/lib/format';
 import { isSealedType, sealedLabel } from '../src/lib/sealed';
 import { uuid } from '../src/services/sync';
 import { cardKey } from '../src/pricing/cardKey';
@@ -99,8 +99,7 @@ function AddSealed({ p }: { p: AddParams & { sealed: SealedType; productId: stri
     createdAt: new Date(0).toISOString(),
   };
   const owned = useVault((s) => s.cards).filter((c) => c.status === 'owned' && c.sealed && c.productId === productId).length;
-  const dollars = parseInt(paid, 10);
-  const paidCents = Number.isFinite(dollars) ? dollars * 100 : null;
+  const paidCents = centsFromTyped(paid);
 
   const save = () => {
     const now = new Date().toISOString();
@@ -142,10 +141,10 @@ function AddSealed({ p }: { p: AddParams & { sealed: SealedType; productId: stri
           <Field label={count > 1 ? 'What you paid each' : 'What you paid'}>
             <TextInput
               value={paid ? `$${paid}` : ''}
-              onChangeText={(t) => setPaid(t.replace(/[^0-9]/g, '').slice(0, 6))}
+              onChangeText={(t) => setPaid(dollarsTyped(t))}
               placeholder="$0"
               placeholderTextColor={color.secondary}
-              keyboardType="number-pad"
+              keyboardType="decimal-pad"
               inputAccessoryViewID={KEYBOARD_DONE}
               style={[type.body, styles.input]}
             />
@@ -255,7 +254,6 @@ function AddCard({ p }: { p: AddParams }) {
 
   const save = () => {
     if (!ready) return;
-    const dollars = parseInt(paid, 10);
     const card = cardFromDetails({
       game,
       cert: cert.trim() || null,
@@ -267,7 +265,7 @@ function AddCard({ p }: { p: AddParams }) {
       // Pokémon numbers are unique per printing; the other games reuse them for parallels.
       variety: game === 'pokemon' ? undefined : variety,
       language,
-      paidCents: Number.isFinite(dollars) ? dollars * 100 : null,
+      paidCents: centsFromTyped(paid),
       plan,
       // The set code only fits while the set is the one search picked.
       setCode: p.setCode && setTitle === p.set ? p.setCode : null,
@@ -415,10 +413,10 @@ function AddCard({ p }: { p: AddParams }) {
           <Field label="What you paid">
             <TextInput
               value={paid ? `$${paid}` : ''}
-              onChangeText={(t) => setPaid(t.replace(/[^0-9]/g, '').slice(0, 6))}
+              onChangeText={(t) => setPaid(dollarsTyped(t))}
               placeholder="$0"
               placeholderTextColor={color.secondary}
-              keyboardType="number-pad"
+              keyboardType="decimal-pad"
               inputAccessoryViewID={KEYBOARD_DONE}
               style={[type.body, styles.input]}
             />

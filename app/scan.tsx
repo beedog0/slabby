@@ -107,6 +107,14 @@ export default function Scan() {
   const [result, setResult] = useState<CertResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState('');
+  // A typed number that can't be a PSA cert (7–10 digits): said under the field, not ignored.
+  const [manualBad, setManualBad] = useState(false);
+  const lookUpTyped = () => {
+    if (!parseCertFromQr(manual)) return setManualBad(true);
+    setManualBad(false);
+    lastCert.current = null;
+    handle(manual);
+  };
   const [cost, setCost] = useState<CostInput>(EMPTY_COST);
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
   const params = useLocalSearchParams<{ con?: string; check?: string }>();
@@ -198,6 +206,11 @@ export default function Scan() {
     if (r.status === 'found') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
 
+  // A cert PSA didn't confirm that's already in the vault (status owned).
+  const ownedCert =
+    result && result.status !== 'found' && result.cert
+      ? (existing.find((c) => c.certNumber === result.cert && c.status === 'owned') ?? null)
+      : null;
   const preview = result?.status === 'found' ? cardFromCert(result.payload, { paidCents: null, plan }) : null;
   const previewKey = preview ? cardKey(preview) : null;
   // Re-render when this card's comps land in the store.
@@ -933,8 +946,11 @@ export default function Scan() {
             ) : null}
             <TextInput
               value={manual}
-              onChangeText={setManual}
-              onSubmitEditing={() => handle(manual)}
+              onChangeText={(t) => {
+                setManual(t);
+                setManualBad(false);
+              }}
+              onSubmitEditing={lookUpTyped}
               placeholder="Or type the cert number"
               placeholderTextColor="rgba(255,255,255,0.5)"
               keyboardType="number-pad"
@@ -942,6 +958,20 @@ export default function Scan() {
               returnKeyType="search"
               style={[type.body, styles.manualInput]}
             />
+            {/* The iOS number pad has no return key, so typing needs its own button. */}
+            {manual.trim().length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={lookUpTyped}
+                style={({ pressed }) => [styles.lightButton, (pressed || busy) && { opacity: 0.8 }]}
+              >
+                <Text style={[type.button, { color: cam.ink }]}>{busy ? 'Looking up…' : 'Look up cert'}</Text>
+              </Pressable>
+            ) : null}
+            {manualBad ? (
+              <Text style={[type.text, { color: 'rgba(255,255,255,0.7)' }]}>That doesn’t look like a cert number. PSA certs are 7 to 10 digits.</Text>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -1060,7 +1090,7 @@ export default function Scan() {
                   </Pressable>
                 </View>
               ) : (
-              <Text style={[type.text, { color: color.gain, fontWeight: '500' }]}>
+              <Text style={[type.text, { color: color.secondary, fontWeight: '500' }]}>
                 {result.source === 'mock'
                   ? `Cert ${result.cert} · sample data`
                   : result.source === 'label'
@@ -1240,6 +1270,19 @@ export default function Scan() {
                   )}
                 </>
               )}
+            </>
+          ) : ownedCert ? (
+            // PSA couldn't confirm it (or had no answer), but this cert is already in the vault:
+            // say so instead of inviting a duplicate by hand.
+            <>
+              <Text style={[type.section, { color: color.ink }]}>Already in your vault</Text>
+              <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
+                Cert {result.cert} is your {rowTitle(ownedCert)}.
+              </Text>
+              <PrimaryButton title="Open it" onPress={() => router.push(`/card/${ownedCert.id}`)} />
+              <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
+                <Text style={[type.text, { color: color.secondary }]}>Scan again</Text>
+              </Pressable>
             </>
           ) : (
             <>
