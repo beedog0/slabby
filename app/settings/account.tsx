@@ -2,12 +2,13 @@
 // first sign-in turns that guest into the account in place (src/services/account.ts), and useSync
 // keeps the account up to date from then on.
 //
-// Three states, one decision each: email (or Apple) → the 6-digit code → saved.
+// Three states, one decision each: email (or Apple) → tap the emailed link (app/auth.tsx), or type
+// its code when the template carries one → saved.
 
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { closeMenu, openMenu } from '../../src/components/menu/Menu';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
@@ -33,7 +34,10 @@ export default function Account() {
   const [code, setCode] = useState('');
   const [sent, setSent] = useState<CodeMode | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ error?: string }>();
+  const [error, setError] = useState<string | null>(params.error ?? null);
+  const [showCode, setShowCode] = useState(false);
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const [, tick] = useState(0);
 
   // Keep "Saved 2 min ago" current while the screen is open.
@@ -57,6 +61,7 @@ export default function Account() {
       if ('error' in r) return r.error;
       setSent(r.mode);
       setCode('');
+      setShowCode(false);
       return null;
     });
 
@@ -91,7 +96,7 @@ export default function Account() {
     offline: 'This build runs on sample data, so there’s no account to save to.',
     email:
       'Sign in so your slabs, raw cards, sealed, wishlist and prices paid are kept if you reinstall or get a new phone. Everything already on this phone comes with you.',
-    code: `Enter the 6-digit code sent to ${email.trim()}.`,
+    code: `Tap the sign-in link in the email we sent to ${email.trim()}. Open it on this phone and Slabby comes back signed in.`,
     saved:
       provider === 'apple' && (!signedEmail || signedEmail.endsWith('privaterelay.appleid.com'))
         ? 'Signed in with Apple. Changes save whenever you have signal; everything still works offline at a con.'
@@ -107,7 +112,7 @@ export default function Account() {
       style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}
     >
       <View style={styles.nav}>
-        <IconButton label="Back" onPress={() => router.back()}>
+        <IconButton label="Back" onPress={back}>
           <BackIcon />
         </IconButton>
         <Text style={[type.body, { color: color.ink }]}>Account</Text>
@@ -142,7 +147,13 @@ export default function Account() {
           </View>
         ) : null}
 
-        {step === 'code' ? (
+        {step === 'code' && !showCode ? (
+          <Pressable accessibilityRole="button" onPress={() => setShowCode(true)} hitSlop={6} style={styles.codeLink}>
+            <Text style={[type.body, { color: color.secondary }]}>Have a code instead?</Text>
+          </Pressable>
+        ) : null}
+
+        {step === 'code' && showCode ? (
           <View style={styles.fields}>
             <Hairline />
             <View style={styles.field}>
@@ -151,7 +162,7 @@ export default function Account() {
                 autoFocus
                 value={code}
                 onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 8))}
-                placeholder="000000"
+                placeholder="Code from the email"
                 placeholderTextColor={color.secondary}
                 keyboardType="number-pad"
                 textContentType="oneTimeCode"
@@ -206,15 +217,19 @@ export default function Account() {
               style={{ height: size.button }}
               onPress={() => run(signInWithApple)}
             />
-            <Quiet label={busy ? 'Sending…' : 'Email me a code instead'} onPress={send} />
+            <Quiet label={busy ? 'Sending…' : 'Use email instead'} onPress={send} />
           </>
         ) : step === 'email' ? (
-          <PrimaryButton title={busy ? 'Sending…' : 'Email me a code'} onPress={send} />
+          <PrimaryButton title={busy ? 'Sending…' : 'Email me a sign-in link'} onPress={send} />
         ) : step === 'code' ? (
           <>
-            <PrimaryButton title={busy ? 'Signing in…' : 'Sign in'} onPress={verify} />
+            {showCode ? (
+              <PrimaryButton title={busy ? 'Signing in…' : 'Sign in'} onPress={verify} />
+            ) : (
+              <PrimaryButton title="Open Mail" onPress={() => Linking.openURL('message://').catch(() => {})} />
+            )}
             <View style={styles.quietRow}>
-              <Quiet label="Send a new code" onPress={send} />
+              <Quiet label={busy ? 'Sending…' : 'Send again'} onPress={send} />
               <Quiet
                 label="Change email"
                 onPress={() => {
@@ -226,7 +241,7 @@ export default function Account() {
           </>
         ) : step === 'saved' ? (
           <>
-            <PrimaryButton title="Done" onPress={() => router.back()} />
+            <PrimaryButton title="Done" onPress={back} />
             <Quiet label="Sign out" onPress={confirmSignOut} />
           </>
         ) : null}
@@ -263,7 +278,8 @@ const useStyles = themed((color) => ({
     gap: space.l,
   },
   input: { flex: 1, textAlign: 'right' as const, color: color.ink, paddingVertical: space.m },
-  code: { letterSpacing: 4 },
+  code: { letterSpacing: 2 },
+  codeLink: { minHeight: size.touch, justifyContent: 'center' as const },
   value: { flexShrink: 1, textAlign: 'right' as const },
   quiet: { minHeight: size.touch, alignItems: 'center' as const, justifyContent: 'center' as const, marginTop: space.s },
   quietRow: { flexDirection: 'row' as const, justifyContent: 'center' as const, gap: space.xxl },

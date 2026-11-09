@@ -6,6 +6,7 @@
 
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { createClient } from '@supabase/supabase-js';
+import * as Linking from 'expo-linking';
 import { supabase } from './supabase';
 
 /** Sign in with Apple needs the capability on the app id and the Apple provider in Supabase. */
@@ -56,24 +57,54 @@ function friendly(e: { message?: string; code?: string; status?: number } | null
 const exists = (e: { code?: string; message?: string } | null) =>
   !!e && (e.code === 'email_exists' || e.code === 'identity_already_exists' || /already (been )?registered|already exists|already linked/i.test(e.message ?? ''));
 
+/** Where the email's sign-in link brings you back (app/auth.tsx). Listed in Supabase URL config. */
+export const authRedirect = () => Linking.createURL('auth');
+
+/**
+ * Finish a sign-in from the email link: slabby://auth#access_token=…&refresh_token=… (or ?code=…).
+ * Resolves to an error message, or null when signed in.
+ */
+export async function finishLink(url: string): Promise<string | null> {
+  if (!supabase) return 'This build has no server.';
+  const params = new URLSearchParams([url.split('#')[1] ?? '', url.split('?')[1]?.split('#')[0] ?? ''].join('&'));
+  const err = params.get('error_description') ?? params.get('error');
+  if (err) return /expired|invalid/i.test(err) ? 'That link has expired. Send a new one.' : err.replace(/\+/g, ' ');
+  const access = params.get('access_token');
+  const refresh = params.get('refresh_token');
+  const code = params.get('code');
+  if (!access && !code) return null; // e.g. the first half of a two-step email change
+  // A guest leaving for an account that already exists: useSync merges and clears it.
+  leaving = await currentGuest();
+  const { error } =
+    access && refresh
+      ? await supabase.auth.setSession({ access_token: access, refresh_token: refresh })
+      : await supabase.auth.exchangeCodeForSession(code!);
+  if (error) {
+    leaving = null;
+    return friendly(error);
+  }
+  await supabase.auth.refreshSession();
+  return null;
+}
+
 /** How the code that was sent gets checked: 'link' keeps the guest's id, 'signin' joins an account. */
 export type CodeMode = 'link' | 'signin';
 
-/** Email a 6-digit sign-in code. */
+/** Email a sign-in link (and a code, once the email templates carry one). */
 export async function sendCode(emailRaw: string): Promise<{ mode: CodeMode } | { error: string }> {
   const email = emailRaw.trim().toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(email)) return { error: 'That email doesn’t look right.' };
   if (!supabase) return { error: 'This build has no server.' };
   const guest = await currentGuest();
   if (guest) {
-    const { error } = await supabase.auth.updateUser({ email });
+    const { error } = await supabase.auth.updateUser({ email }, { emailRedirectTo: authRedirect() });
     if (!error) return { mode: 'link' };
     if (!exists(error)) return { error: friendly(error) };
     // This email already has an account: sign in to it and bring this phone's things along.
-    const r = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    const r = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: authRedirect() } });
     return r.error ? { error: friendly(r.error) } : { mode: 'signin' };
   }
-  const r = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  const r = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: authRedirect() } });
   return r.error ? { error: friendly(r.error) } : { mode: 'signin' };
 }
 
