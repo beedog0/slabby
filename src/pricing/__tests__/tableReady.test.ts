@@ -1,7 +1,7 @@
 import cards from '../../mocks/cards.json';
 import { DEFAULT_RULES, type Card } from '../../types';
 import { rowFor, summarize } from '../portfolio';
-import { tableReady } from '../tableReady';
+import { lastSalesDay, recentSales, tableReady } from '../tableReady';
 
 const rows = (cards as Card[]).map((c) => rowFor(c, DEFAULT_RULES));
 
@@ -19,5 +19,19 @@ describe('tableReady', () => {
   });
   it('is empty-safe', () => {
     expect(tableReady([])).toEqual({ forSale: [], askCents: 0, floorCents: 0, tradeOnly: 0 });
+  });
+});
+
+describe('sales', () => {
+  const base = rows[0].card;
+  const sold = (id: string, soldAt: string, soldCents: number, paidCents: number | null) =>
+    ({ card: { ...base, id, status: 'sold' as const, soldAt, soldCents, paidCents }, price: null }) as unknown as (typeof rows)[number];
+  const r = [sold('a', '2026-11-07T15:00:00Z', 50_000, 40_000), sold('b', '2026-11-07T18:00:00Z', 20_000, null), sold('c', '2026-11-01T10:00:00Z', 9_000, 5_000)];
+  it('sums the last day anything sold', () => {
+    expect(lastSalesDay(r)).toEqual({ day: '2026-11-07', count: 2, soldCents: 70_000, profitCents: 10_000 });
+    expect(lastSalesDay([])).toBeNull();
+  });
+  it('lists sales newest first', () => {
+    expect(recentSales(r, 2).map((x) => x.card.id)).toEqual(['b', 'a']);
   });
 });

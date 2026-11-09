@@ -9,16 +9,13 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '../../src/components/Avatar';
-import { openMenu } from '../../src/components/menu/Menu';
+import { choosePhoto } from '../../src/components/photoChoice';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
-import { handleTaken, pickProfilePhoto, publishProfile } from '../../src/services/profile';
+import { handleTaken, publishProfile } from '../../src/services/profile';
 import { useAccount } from '../../src/store/account';
 import { BIO_MAX, NAME_MAX, cleanHandle, handleProblem, initialOf, useProfile } from '../../src/store/profile';
 import { size, space, type } from '../../src/theme/tokens';
 import { themed, useColors } from '../../src/theme/theme';
-
-/** Long enough for the sheet's native screen to finish closing before the picker opens. */
-const SHEET_GONE_MS = 450;
 
 export default function EditProfile() {
   const color = useColors();
@@ -56,23 +53,15 @@ export default function EditProfile() {
           : 'Friends will find you by this.';
   const hintColor = problem || taken ? color.loss : color.secondary;
 
-  // iOS can't show the photo picker while another screen (our sheet) is still sliding away: it
-  // drops the picker without a word. So with no photo yet, the tap opens the picker straight away;
-  // from the Change / Remove sheet it waits until the sheet is gone.
-  const pick = () =>
-    pickProfilePhoto()
-      .then((p) => p && setPhoto(p))
-      .catch((e: Error) => setError(`Couldn’t open your photos. ${e?.message || 'Try again.'}`));
+  const [picking, setPicking] = useState(false);
   const changePhoto = () =>
-    photo
-      ? openMenu({
-          title: 'Profile photo',
-          items: [
-            { label: 'Choose another photo', onPress: () => setTimeout(pick, SHEET_GONE_MS) },
-            { label: 'Remove photo', onPress: () => setPhoto(null) },
-          ],
-        })
-      : pick();
+    choosePhoto({
+      hasPhoto: !!photo,
+      onBusy: setPicking,
+      onPicked: setPhoto,
+      onRemove: () => setPhoto(null),
+      onError: (m) => setError(`Couldn’t get that photo. ${m}`),
+    });
 
   const save = async () => {
     if (busy || problem || taken) return;
@@ -103,8 +92,8 @@ export default function EditProfile() {
       </View>
 
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Change photo" onPress={changePhoto} style={styles.photo}>
-          <Avatar photo={photo} letter={initialOf(name, handle, email)} px={size.avatarEdit} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Change photo" onPress={changePhoto} disabled={picking} style={styles.photo}>
+          <Avatar photo={photo} letter={initialOf(name, handle, email)} px={size.avatarEdit} busy={picking} />
           <Text style={[type.text, { color: color.ink, marginTop: space.m }]}>{photo ? 'Change photo' : 'Add photo'}</Text>
         </Pressable>
 

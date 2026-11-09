@@ -20,3 +20,34 @@ export function tableReady(rows: CardRow[]): TableReady {
     tradeOnly: owned.filter((r) => r.card.plan === 'trade').length,
   };
 }
+
+export type SalesDay = {
+  /** YYYY-MM-DD of the most recent day anything sold. */
+  day: string;
+  count: number;
+  soldCents: number;
+  /** Sale minus paid where paid is known. */
+  profitCents: number;
+};
+
+/** The last day you sold anything: what con mode's summary would have said that day. */
+export function lastSalesDay(rows: CardRow[]): SalesDay | null {
+  const sold = rows.filter((r) => r.card.status === 'sold' && r.card.soldAt);
+  if (!sold.length) return null;
+  const day = sold.map((r) => r.card.soldAt!.slice(0, 10)).sort().pop()!;
+  const that = sold.filter((r) => r.card.soldAt!.slice(0, 10) === day);
+  let soldCents = 0, profitCents = 0;
+  for (const r of that) {
+    soldCents += r.card.soldCents ?? 0;
+    if (r.card.soldCents != null && r.card.paidCents != null) profitCents += r.card.soldCents - r.card.paidCents;
+  }
+  return { day, count: that.length, soldCents, profitCents };
+}
+
+/** Sold cards, newest sale first. */
+export function recentSales(rows: CardRow[], n = 5): CardRow[] {
+  return rows
+    .filter((r) => r.card.status === 'sold' && r.card.soldAt)
+    .sort((a, b) => b.card.soldAt!.localeCompare(a.card.soldAt!))
+    .slice(0, n);
+}
