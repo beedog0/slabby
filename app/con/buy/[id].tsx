@@ -23,6 +23,7 @@ import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../../src/comp
 import { money } from '../../../src/lib/format';
 import { BUY_RATING_LABEL, SUSPICIOUS_FRACTION, buyRating, looksLikeTypo } from '../../../src/pricing/rules';
 import { estimateLine } from '../../../src/pricing/estimate';
+import { canAutoPrice } from '../../../src/pricing/lastSales';
 import { matchNewCard, refreshPrices } from '../../../src/services/comps';
 import { cardForSearch, useFallbackPrice } from '../../../src/services/estimate';
 import { cardFromDetails } from '../../../src/services/psa';
@@ -97,7 +98,8 @@ export default function TheyreAsking() {
   const estimated = prices !== undefined && !price && !!fallback;
   const market = price?.marketCents ?? (estimated ? fallback!.marketCents : null);
   const marketWord = estimated ? (fallback!.source === 'own' ? 'your price' : 'estimate') : 'market';
-  const buy = buyPrices(market, rules);
+  // A last-sold headline (under 5 sales) never fills in a target or max.
+  const buy = canAutoPrice(price) ? buyPrices(market, rules) : null;
   const ask = (parseInt(digits || '0', 10) || 0) * 100;
   const has = digits.length > 0;
   const rating =

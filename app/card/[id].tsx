@@ -22,6 +22,7 @@ import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
 import { CardAnalytics } from '../../src/components/search/CardAnalytics';
 import { NoPriceSource } from '../../src/components/estimate/NoPriceSource';
+import { SaleLines } from '../../src/components/search/SaleLines';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
 import { gradeLabel, money, promoTag, rowTitle, THIN_SALES } from '../../src/lib/format';
 import { sealedLabel } from '../../src/lib/sealed';
@@ -198,6 +199,8 @@ export default function SlabDetail() {
             <Hairline />
           </View>
         ) : null}
+
+        {raw ? null : <SaleLines price={price} style={styles.gutter} />}
 
         {noSource && !sold ? (
           <View style={styles.gutter}>

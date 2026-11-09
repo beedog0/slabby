@@ -3,6 +3,7 @@
 // without it, mocks are used. `priceFor` is synchronous so lists render instantly from cache.
 
 import catalogJson from '../mocks/catalog.json';
+import { LOOKBACK_DAYS, withHeadline, type Basis, type SaleDay } from '../pricing/lastSales';
 import pricesJson from '../mocks/prices.json';
 import { catalogSummary } from '../../supabase/functions/_shared/catalog-math';
 import { cardKey } from '../pricing/cardKey';
@@ -44,6 +45,15 @@ export type CardPrice = {
   hist?: number[];
   /** Search card page only: the latest day with a graded sale, its average and how many sold. */
   lastSale?: { day: string; cents: number; count: number } | null;
+  // Headline (src/pricing/lastSales.ts). Graded only; missing on answers without sale days.
+  /** Every day with a sale in the server's history (card-prices v3), any order. */
+  saleDays?: SaleDay[];
+  /** How marketCents was set: median of the last 5 sales, or the last sale when there are fewer. */
+  basis?: Basis;
+  /** The sales behind the headline, newest first, one line per day. */
+  recent?: SaleDay[];
+  /** The rolling 30-day median before the headline replaced it. */
+  median30Cents?: number;
 };
 
 const mock = pricesJson as Record<string, CardPrice>;
@@ -149,14 +159,38 @@ export async function refreshPrices(all: Card[]): Promise<void> {
   const fresh = await freshnessFor(keys);
   const grouped = new Map<string, DailyRow[]>();
   for (const r of data as DailyRow[]) grouped.set(r.card_key, [...(grouped.get(r.card_key) ?? []), r]);
+  const lastSales = await lastSalesFor(keys);
+  const today = new Date().toISOString().slice(0, 10);
   const next: Record<string, CardPrice> = {};
   for (const [k, rows] of grouped) {
-    const p = fromDaily(rows);
-    if (!p) continue;
+    const daily = fromDaily(rows);
+    if (!daily) continue;
     const f = fresh?.get(k);
-    next[k] = f ? { ...p, refreshedAt: f.comps_refreshed_at, lastSaleDay: f.last_sale_day } : p;
+    const p = f ? { ...daily, refreshedAt: f.comps_refreshed_at, lastSaleDay: f.last_sale_day } : daily;
+    // Graded keys only have sale days; raw keeps TCGplayer market.
+    next[k] = lastSales ? withHeadline(p, lastSales.get(k), today) : p;
   }
   usePrices.getState().merge(next);
+}
+
+type LastSaleRow = { card_key: string; day: string; sales: number; avg_cents: number };
+
+/**
+ * The last 5 sales per card (0027 last_sale_days, 180 days back) for the headline price. Null on
+ * any error, including a project without 0027, so prices still load on the rolling median.
+ */
+async function lastSalesFor(keys: string[]): Promise<Map<string, SaleDay[]> | null> {
+  if (!supabase) return null;
+  try {
+    const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const { data, error } = await supabase.rpc('last_sale_days', { keys, since });
+    if (error || !data) return null;
+    const out = new Map<string, SaleDay[]>();
+    for (const r of data as LastSaleRow[]) out.set(r.card_key, [...(out.get(r.card_key) ?? []), { day: r.day, cents: r.avg_cents, count: r.sales }]);
+    return out;
+  } catch {
+    return null;
+  }
 }
 
 /**

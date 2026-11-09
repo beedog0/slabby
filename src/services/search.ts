@@ -6,6 +6,7 @@ import catalogJson from '../mocks/catalog.json';
 import pricesJson from '../mocks/prices.json';
 import type { CardPrice } from './comps';
 import { buyMax, buyTarget } from '../pricing/rules';
+import { withHeadline } from '../pricing/lastSales';
 import type { PricingRules, SealedType } from '../types';
 import { isSealedType } from '../lib/sealed';
 import { supabase } from './supabase';
@@ -191,9 +192,17 @@ export async function openPrices(productId: number): Promise<SearchPrices | null
     const { data, error } = await supabase.functions.invoke<SearchPrices>('card-prices', { body: { productId } });
     p = error ? null : data ?? null;
   }
+  if (p) p = headlined(p);
   // Keep only full answers: a capped or fallback one should be asked again on the next open.
   if (p && p.source === 'ppt' && !p.capped) opened.set(productId, p);
   return p;
+}
+
+/** Graded prices with their headline: the median of the last 5 sales, or the last sale. */
+export function headlined(p: SearchPrices, today = new Date().toISOString().slice(0, 10)): SearchPrices {
+  const grades: SearchPrices['grades'] = {};
+  for (const [g, v] of Object.entries(p.grades) as [SearchGrade, CardPrice | null | undefined][]) grades[g] = v ? withHeadline(v, v.saleDays, today) : v;
+  return { ...p, grades };
 }
 
 /** Mocks only (no Supabase): the sample catalog card for a scanned slab, by set code and number. */

@@ -81,6 +81,8 @@ export function buySignal(price: CardPrice | null | undefined, graded: boolean):
   const hist = history(price);
   if (!price || !hist || !(hist.high > hist.low)) return null;
   if (graded && price.sales30d < MIN_SIGNAL_SALES) return null;
+  // Under 5 sales in 6 months the headline is a last sale, not a price to read against.
+  if (price.basis === 'lastSold') return null;
   const m = change30(price.series90);
   if (m == null) return null;
   const m90 = hist.change;
@@ -154,6 +156,12 @@ export function thinRead(p: Priced | null | undefined): { lastSale: string | nul
 export function signalGap(p: Priced | null | undefined, graded: boolean, quiet: boolean): string {
   if (!p) return graded ? 'No eBay sales for this grade yet.' : 'No price history yet.';
   const last = lastReal(p);
+  if (graded && p.basis === 'lastSold' && p.recent?.length) {
+    const total = p.recent.reduce((n, d) => n + d.count, 0);
+    return total >= 5
+      ? `No sale in the last 90 days; the last was ${shortDay(p.recent[0].day)}.`
+      : `Only ${total} sale${total === 1 ? '' : 's'} in 6 months. A read needs at least 5.`;
+  }
   if (graded && (quiet || p.sales30d === 0))
     return `No sale in the last 30 days${last ? `; the last was ${shortDay(last)}` : ''}. A read needs at least ${MIN_SIGNAL_SALES} sales in 30 days.`;
   if (graded && p.sales30d < MIN_SIGNAL_SALES)

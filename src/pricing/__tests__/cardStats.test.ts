@@ -58,12 +58,13 @@ describe('card stats', () => {
     expect(saleRange({ ...base, lastSale: { day: '2026-11-02', cents: 20500, count: 2 } })).toEqual({ low: 11040, high: 20500 });
     expect(history(base)!.high).toBe(20500);
     // With daily sales from the server, those decide.
-    const sales90 = [
+    const saleDays = [
+      { day: '2026-05-01', cents: 50000, count: 1 }, // older than 90 days: left out
       { day: '2026-08-20', cents: 10500, count: 1 },
       { day: '2026-10-01', cents: 21900, count: 1 },
       { day: '2026-11-02', cents: 20500, count: 2 },
     ];
-    expect(saleRange({ ...base, sales90 })).toEqual({ low: 10500, high: 21900 });
+    expect(saleRange({ ...base, saleDays })).toEqual({ low: 10500, high: 21900 });
     // Raw (no sale count) keeps its own daily series.
     expect(saleRange({ ...p(5000, 0, [4000, 5000, 6000]), lowCents: 3000, highCents: 9000 })).toEqual({ low: 4000, high: 6000 });
   });

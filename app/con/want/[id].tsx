@@ -14,6 +14,7 @@ import { PriceChart } from '../../../src/components/PriceChart';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../../src/components/ui';
 import { money } from '../../../src/lib/format';
 import { BUY_RATING_LABEL, buyRating, ratingHistory, type BuyRatingKind } from '../../../src/pricing/rules';
+import { canAutoPrice } from '../../../src/pricing/lastSales';
 import {
   buyPrices,
   catalogCard,
@@ -63,7 +64,8 @@ export default function WishlistPrice() {
 
   const price = prices === undefined ? undefined : grade === 'raw' ? prices?.raw : prices?.grades[grade];
   const market = price?.marketCents ?? null;
-  const buy = buyPrices(market, rules);
+  // A last-sold headline (under 5 sales) never fills in a target or max.
+  const buy = canAutoPrice(price) ? buyPrices(market, rules) : null;
   const typed = (parseInt(digits || '0', 10) || 0) * 100;
   const has = digits.length > 0;
   // Skipping the price fills in your buying max: the top of Good buy.

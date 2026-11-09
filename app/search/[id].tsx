@@ -24,6 +24,8 @@ import { CardName } from '../../src/components/CardName';
 import { chartRanges, history, rangeLabel, rangeSeries, realPoints, type Range } from '../../src/pricing/cardStats';
 import { FindPriceRow } from '../../src/components/estimate/FindPriceRow';
 import { cardForSearch } from '../../src/services/estimate';
+import { canAutoPrice } from '../../src/pricing/lastSales';
+import { headlineLabel, SaleLines } from '../../src/components/search/SaleLines';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
 import type { Found } from '../../src/services/searchFilters';
@@ -181,7 +183,8 @@ export default function SearchedCard() {
   const ranges = chartRanges(price, today);
   const shown = ranges.includes(range) ? range : (ranges.find((r) => r > range) ?? ranges[ranges.length - 1]);
   const ranged = shown ? rangeSeries(price, shown, today) : null;
-  const sold = pick !== 'raw' ? lastSoldLine(price, quiet ? pick : null) : null;
+  // SaleLines carries the last sale once the server sends sale days; until then this line does.
+  const sold = pick !== 'raw' && !(price && headlineLabel(price)) ? lastSoldLine(price, quiet ? pick : null) : null;
   const hist = history(price);
   const change = hist && !quiet ? hist.change : null;
   // A graded price from a handful of sales is a guess; say so under the number.
@@ -193,7 +196,8 @@ export default function SearchedCard() {
   const detail = (sealed ? [sealedLabel(sealed)] : [no && `#${no}`, promoTag(ready, { setShown: true })]).filter(Boolean).join(' · ');
   const openSet = () => openSetPage(ready, groupId, { trade: trading });
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
-  const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
+  // A last-sold headline (under 5 sales) never fills in a buy target or max.
+  const buy = buying && price && !quiet && canAutoPrice(price) ? buyPrices(price.marketCents, rules) : null;
   // The sheet's market wins: for a raw card it's the print you picked.
   const sellMarket = draft ? (draft.marketCents ?? (price && !quiet ? price.marketCents : null)) : null;
   const sellCost = draft?.cost?.kind === 'pulled' ? { kind: 'pulled' as const, packCents: pack?.cents ?? null } : (draft?.cost ?? null);
@@ -247,6 +251,8 @@ export default function SearchedCard() {
             ) : null}
           </View>
         </View>
+
+        {pick !== 'raw' ? <SaleLines price={price} style={styles.gutter} /> : null}
 
         {draft ? (
           <View style={[styles.gutter, { paddingTop: space.xl }]}>
@@ -479,7 +485,7 @@ function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string 
   if (prices.source === 'catalog') return 'Graded prices aren’t reachable right now.';
   // The price shown in the header for a quiet grade is the last 30-day median before it went quiet.
   if (quiet)
-    return (
+    return headlineLabel(quiet) ? `No ${gradeLabel(pick)} sales in 30 days.` : (
       lastSoldLine(quiet, pick) ??
       (lastReal(quiet)
         ? `No ${gradeLabel(pick)} sales in 30 days. Last sale ${fmtDay(lastReal(quiet)!)}; ${money(quiet.marketCents)} is the median around it.`

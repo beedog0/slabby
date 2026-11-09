@@ -25,20 +25,19 @@ export type Priced = CardPrice & {
   lastReal?: string;
   /** Graded, card-prices v2: the latest day with a sale, that day's average and count. */
   lastSale?: { day: string; cents: number; count: number } | null;
-  /** Graded, card-prices v3: every day with a sale in the last 90, that day's average and count. */
-  sales90?: { day: string; cents: number; count: number }[];
 };
 
 /**
  * 90-day low and high of real sale prices. series90 is a rolling 30-day median, which smooths
  * away the highs and lows (Radiant Jirachi PSA 10: median tops out at $180 while it sold for $205),
- * so the range comes from the sales themselves: the daily sale averages when the server sends
- * them, else the median line widened by the 30-day p10/p90 and the last sale. Raw (TCGplayer
+ * so the range comes from the sales themselves: the daily sale averages over 90 days when the
+ * server sends them (saleDays), else the median line widened by the 30-day p10/p90 and the last sale. Raw (TCGplayer
  * market, no sale count) keeps the series, which is already real daily prices.
  */
 export function saleRange(p: Priced): { low: number; high: number } {
   const s = p.series90;
-  const days = (p.sales90 ?? []).filter((d) => d.count > 0 && d.cents > 0).map((d) => d.cents);
+  const from = dayMinus(p.asOf, 89);
+  const days = (p.saleDays ?? []).filter((d) => d.count > 0 && d.cents > 0 && d.day.slice(0, 10) >= from).map((d) => d.cents);
   if (days.length) {
     // The median line can't sit outside the sales it came from, but keep today's price inside.
     return { low: Math.min(...days, p.marketCents), high: Math.max(...days, p.marketCents) };
@@ -170,4 +169,10 @@ export function rangeSeries(p: CardPrice | null | undefined, range: Range, today
 /** Windows worth offering: those with a chart. */
 export function chartRanges(p: CardPrice | null | undefined, today: string): Range[] {
   return RANGES.filter((r) => rangeSeries(p, r, today) != null);
+}
+
+function dayMinus(day: string, n: number): string {
+  const d = new Date(`${day.slice(0, 10)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
 }
