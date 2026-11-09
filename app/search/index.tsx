@@ -467,6 +467,11 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
         <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
           {displayName(card.name)}
         </Text>
+        {card.aka?.length ? (
+          <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+            aka {card.aka[0]}
+          </Text>
+        ) : null}
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {[no && `#${no}`, card.language === 'ja' ? 'JP' : null, card.setName].filter(Boolean).join(' · ')}
         </Text>
@@ -499,6 +504,11 @@ function ResultRow({ card, con, rules, change, days }: { card: Found; con: boole
         <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
           {displayName(card.name)}
         </Text>
+        {card.aka?.length ? (
+          <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+            aka {card.aka[0]}
+          </Text>
+        ) : null}
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {sub}
         </Text>

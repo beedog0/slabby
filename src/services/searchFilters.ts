@@ -98,6 +98,7 @@ type Row = {
   low_cents: number | null;
   change_7d: number | null;
   change_30d: number | null;
+  aka?: string[] | null;
 };
 
 const fromRow = (r: Row): Found => ({
@@ -114,6 +115,7 @@ const fromRow = (r: Row): Found => ({
   lowCents: r.low_cents,
   change7d: r.change_7d ?? null,
   change30d: r.change_30d ?? null,
+  aka: r.aka ?? [],
 });
 
 export async function findCards(f: Query): Promise<Found[]> {
