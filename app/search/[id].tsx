@@ -389,10 +389,10 @@ function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string 
   if (otherGame) return `Graded prices for ${GAME_NAME[otherGame] ?? otherGame} aren’t available yet.`;
   if (prices.capped && prices.source === 'catalog') return 'Graded prices load again tomorrow.';
   if (prices.source === 'catalog') return 'Graded prices aren’t reachable right now.';
-  // The price shown in the header for a quiet grade is the last 30-day median before it went quiet.
+  // The header price for a quiet grade: the last-5 median or last sale, else the last 30-day median.
   if (quiet)
     return lastReal(quiet)
-      ? `No ${gradeLabel(pick)} sales in 30 days. Last sale ${fmtDay(lastReal(quiet)!)}; ${money(quiet.marketCents)} is the median around it.`
+      ? `No ${gradeLabel(pick)} sales in 30 days. Last sale ${fmtDay(lastReal(quiet)!)}; ${money(quiet.marketCents)} is ${quiet.basis === 'median5' ? 'the median of the last 5 sales' : quiet.basis === 'lastSold' ? 'that sale' : 'the median around it'}.`
       : `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
   return `No ${gradeLabel(pick)} sales in the last 90 days.`;
 }

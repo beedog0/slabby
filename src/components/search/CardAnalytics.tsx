@@ -235,7 +235,11 @@ export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPri
           ? grading
             ? 'TCGplayer market. Grading math assumes $25 to grade, $8 shipping, eBay fees, and a PSA 9 when it misses.'
             : 'TCGplayer market price, near mint.'
-          : 'eBay sold, 30-day median. Ratios need 5 sales on each side.'}
+          : price.basis === 'median5'
+            ? 'eBay sold, median of the last 5 sales. Ratios need 5 sales on each side.'
+            : price.basis === 'lastSold'
+              ? 'eBay sold, last sale (too few for a median). Ratios need 5 sales on each side.'
+              : 'eBay sold, 30-day median. Ratios need 5 sales on each side.'}
       </Text>
     </View>
   );
@@ -243,16 +247,21 @@ export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPri
 
 /**
  * Key stats for a grade with a price but no sale in 30 days: the last sale, how many days had a
- * sale in 90, the last 30-day median and the range of those medians. Bryan wants every price to
+ * sale in 90, the headline price and the 90-day range of sales. Bryan wants every price to
  * show where it came from, so a thin price gets its numbers with the caveat, never a bare figure.
  */
+/** What the headline number is, for a stat label. */
+function priceLabel(p: CardPrice): string {
+  return p.basis === 'median5' ? 'Median, last 5 sales' : p.basis === 'lastSold' ? 'Last sold price' : 'Last 30-day price';
+}
+
 export function ThinStats({ price }: { price: CardPrice }) {
   const t = thinRead(price);
   if (!t) return null;
   const cells = [
     { label: 'Last sale', value: t.lastSale ? shortDay(t.lastSale) : null },
     { label: 'Days with a sale, 90 days', value: String(t.saleDays) },
-    { label: 'Last 30-day price', value: money(price.marketCents) },
+    { label: priceLabel(price), value: money(price.marketCents) },
     { label: 'Range, 90 days', value: t.low != null && t.high != null ? `${money(t.low)}–${money(t.high).replace('$', '')}` : null },
   ].filter((c): c is { label: string; value: string } => !!c.value);
   const rows: (typeof cells)[] = [];
@@ -281,7 +290,11 @@ export function ThinStats({ price }: { price: CardPrice }) {
         <Hairline />
       </View>
       <Text style={[type.caption, { color: color.secondary, paddingTop: space.m }]}>
-        eBay sold. The price is the median of the last 30 days that had sales, so it may be out of date.
+        {price.basis === 'median5'
+          ? 'eBay sold. The price is the median of the last 5 sales, however far back they go.'
+          : price.basis === 'lastSold'
+            ? 'eBay sold. Too few sales for a median, so the price is the last sale.'
+            : 'eBay sold. The price is the median of the last 30 days that had sales, so it may be out of date.'}
       </Text>
     </View>
   );
