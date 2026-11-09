@@ -98,7 +98,12 @@ Deno.serve(async (req) => {
         const long = denseHistory(gradedDaily(sales, today, HISTORY_DAYS));
         // A grade with no sale in 90 days but some in 180 still gets its older history.
         const base = s ?? (long ? lastOnly(long) : null);
-        return [g, base ? { ...base, ...long, lastSale: lastSale(sales) } : null];
+        // Every day with a sale in the history (180 days): the app's headline is the median of
+        // the last 5 sales (src/pricing/lastSales.ts) and its 90-day low/high are real sales.
+        const saleDays = Object.entries(sales)
+          .filter(([, v]) => v?.count > 0 && v.average > 0)
+          .map(([d, v]) => ({ day: d.slice(0, 10), cents: Math.round(v.average * 100), count: v.count }));
+        return [g, base ? { ...base, ...long, lastSale: lastSale(sales), saleDays } : null];
       }),
     );
     const answer: Answer = { productId, raw: raw ?? fallback().raw, grades, fetchedAt: new Date().toISOString(), source: 'ppt', v: ANSWER_VERSION };

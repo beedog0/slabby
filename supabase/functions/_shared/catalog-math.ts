@@ -139,6 +139,8 @@ export type Summary = {
   hist?: number[];
   /** The latest day with a sale (graded only): that day's average and how many sold. */
   lastSale?: LastSale | null;
+  /** Graded (v3): every day with a sale in the history, that day's average and count. */
+  saleDays?: LastSale[];
 };
 
 /** Days in the last `days` that have real data, oldest first. */
@@ -191,8 +193,8 @@ export function lastSale(sales: Record<string, { average: number; count: number 
   return { day: best.slice(0, 10), cents: Math.round(s.average * 100), count: s.count };
 }
 
-/** Bump when the card-prices answer gains fields, so cached answers are fetched again once. */
-export const ANSWER_VERSION = 2;
+/** Bump when the card-prices answer gains fields, so cached answers are fetched again once. 3 adds saleDays. */
+export const ANSWER_VERSION = 3;
 
 export function summarize(rows: Daily[]): Summary | null {
   if (!rows.length) return null;
