@@ -1,5 +1,6 @@
 import { gradeOf, moneyCents, parseCsv, parseImport, splitTitle } from '../importCsv';
-import { cardsFor, matchAll, overlap } from '../importMatch';
+import { cardsFor, matchAll, overlap, pick } from '../importMatch';
+import type { CatalogCard } from '../search';
 
 describe('parseCsv', () => {
   it('reads quotes, doubled quotes, newlines in quotes, CRLF and a BOM', () => {
@@ -62,7 +63,7 @@ describe('parseImport', () => {
       paidCents: 145000,
       quantity: 1,
       game: 'pokemon',
-      language: 'en',
+      language: null, // Collectr has no language column
     });
     expect(p.rows[1]).toMatchObject({ grader: 'raw', grade: null, condition: 'near mint', quantity: 3, paidCents: 60000 });
     expect(JSON.stringify(p.rows)).not.toContain('170000');
@@ -123,5 +124,85 @@ describe('matching (mock catalog)', () => {
   it('word overlap', () => {
     expect(overlap('Umbreon VMAX', 'Umbreon VMAX (Alternate Art Secret)')).toBe(1);
     expect(overlap('Pikachu', 'Raichu')).toBe(0);
+  });
+});
+
+// Header and row shapes copied from a real Collectr export (2026-11-09), prices changed.
+const REAL = `Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-11-09),Price Override,Watchlist,Date Added,Notes
+,Pokemon,Paradox Rift,Mantyke,189/182,Illustration Rare,,,,,,30.15,0,true,,
+GRADE THESE,Pokemon,Mega Evolution Promos,N's Zekrom,031,Promo,Holofoil,Ungraded,Near Mint,0,1,5.62,0,false,2026-03-21,
+Main,Pokemon,Yamabuki City Gym Deck,Sabrina's Gengar (JP),094,Rare,Normal,Ungraded,Near Mint,0,1,9.99,0,false,2026-03-21,
+Main,Pokemon,25th Anniversary Promo (JP),Pikachu (JP),003/015,Common,Holofoil,PSA 10.0 GEM - MT,,250,1,999,0,false,2026-03-21,
+Main,Pokemon,Miscellaneous Cards & Products,Ditto (KR),173/SV-P,Promo,,PSA 10.0 GEM - MT,,40,1,99,0,false,2026-03-21,
+Main,Pokemon,Mega Symphonia,Mega Gengar ex,087/063,Mega Attack Rare,Holofoil,Ungraded,Near Mint,0,2,99,0,false,2026-03-21,
+Main,Pokemon,Ascended Heroes,Marill (Friend Ball),083/217,Common,Reverse Holofoil,Ungraded,Near Mint,0,1,1,0,false,2026-03-21,
+selling,Pokemon,Triumphant,Mew (Prime),97,Ultra Rare,Holofoil,PSA 5.0 EX,,,1,99,0,false,2026-03-21,
+Main,Riftbound,Origins,Chaos Rune (R05a),R05a,Common,Foil,Ungraded,Near Mint,0,1,1,0,false,2026-03-21,`;
+
+describe('real Collectr export', () => {
+  const p = parseImport(REAL);
+  const by = (n: string) => p.rows.find((r) => r.name === n)!;
+  it('leaves watchlist cards out', () => {
+    expect(p.watchlist).toBe(1);
+    expect(p.rows.find((r) => r.name === 'Mantyke')).toBeUndefined();
+  });
+  it('reads (JP) and (KR) tags as language and drops them from the name', () => {
+    expect(by("Sabrina's Gengar")).toMatchObject({ language: 'ja', number: '094' });
+    expect(by('Pikachu')).toMatchObject({ language: 'ja', grader: 'psa', grade: 10 });
+    expect(by('Ditto')).toMatchObject({ language: 'ko', grade: 10 });
+  });
+  it('has no language column, so untagged cards are open to either language', () => {
+    expect(by('Mega Gengar ex').language).toBeNull();
+    expect(by("N's Zekrom").language).toBeNull();
+  });
+  it('reads PSA grades with words after them', () => {
+    expect(by('Mew (Prime)')).toMatchObject({ grader: 'psa', grade: 5 });
+  });
+  it('paid 0 is unknown, and Riftbound is its own game', () => {
+    expect(by("N's Zekrom").paidCents).toBeNull();
+    expect(by('Chaos Rune (R05a)').game).toBe('riftbound');
+  });
+  it('reverse holo printing reaches the vault card', () => {
+    expect(cardsFor({ row: by('Marill (Friend Ball)'), card: null }, 'hold')[0].finish).toBe('reverse');
+  });
+});
+
+const cat = (o: Partial<CatalogCard>): CatalogCard => ({
+  productId: Math.floor(Math.random() * 1e9),
+  game: 'pokemon',
+  language: 'en',
+  name: 'x',
+  number: null,
+  rarity: null,
+  setName: 'x',
+  setCode: null,
+  imageUrl: null,
+  marketCents: null,
+  lowCents: null,
+  ...o,
+});
+
+describe('pick', () => {
+  const p = parseImport(REAL);
+  const by = (n: string) => p.rows.find((r) => r.name === n)!;
+  it('takes a Japanese card for an untagged Japanese set', () => {
+    const jp = cat({ language: 'ja', name: 'Mega Gengar ex - 087/063', number: '087/063', setName: 'M1S: Mega Symphonia' });
+    const en = cat({ name: 'Mega Gengar ex - 087/132', number: '087/132', setName: 'ME03: Something Else' });
+    expect(pick(by('Mega Gengar ex'), [en, jp])).toBe(jp);
+  });
+  it('matches a promo whose number carries the set prefix, only inside that set', () => {
+    const promo = cat({ name: "N's Zekrom - MEP031", number: 'MEP031', setName: 'ME: Mega Evolution Promo' });
+    const other = cat({ name: "N's Zekrom - 031/100", number: '031/100', setName: 'Some Other Set' });
+    expect(pick(by("N's Zekrom"), [other, promo])).toBe(promo);
+    expect(pick(by("N's Zekrom"), [other])).toBeNull();
+  });
+  it('picks the Friend Ball print over the plain one with the same number', () => {
+    const plain = cat({ name: 'Marill - 083/217', number: '083/217', setName: 'ASC: Ascended Heroes' });
+    const ball = cat({ name: 'Marill - 083/217 (Friend Ball)', number: '083/217', setName: 'ASC: Ascended Heroes' });
+    expect(pick(by('Marill (Friend Ball)'), [plain, ball])).toBe(ball);
+  });
+  it('keeps a Japanese-tagged card off English prints', () => {
+    const en = cat({ name: "Sabrina's Gengar", number: '094', setName: 'Gym Challenge' });
+    expect(pick(by("Sabrina's Gengar"), [en])).toBeNull();
   });
 });

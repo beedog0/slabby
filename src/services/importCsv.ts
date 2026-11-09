@@ -23,7 +23,10 @@ export type ImportRow = {
   name: string;
   setName: string | null;
   number: string | null;
-  language: string;
+  /** The number as the file wrote it, set size included: "031/100", "031". */
+  printedNumber: string | null;
+  /** Null when the file doesn't say (Collectr has no language column): the set decides. */
+  language: string | null;
   grader: Grader;
   /** Null for raw cards. */
   grade: number | null;
@@ -44,6 +47,8 @@ export type ParsedImport = {
   rows: ImportRow[];
   /** Lines skipped: no card name, or a sealed product. */
   skipped: number;
+  /** Watchlist lines: cards the user wants, not owns. Left out. */
+  watchlist: number;
 };
 
 /** The most copies one row can add; a typo of 1000 shouldn't flood the vault. */
@@ -123,6 +128,7 @@ const COLUMNS = {
   cert: ['cert', 'certnumber', 'certno', 'certificationnumber', 'certificationid', 'certificate', 'psacert', 'psacertnumber', 'serial', 'serialnumber'],
   condition: ['cardcondition', 'condition', 'conditionname'],
   language: ['language', 'lang'],
+  watchlist: ['watchlist', 'wishlist', 'onwatchlist'],
   productId: ['productid', 'tcgplayerid', 'tcgplayerproductid', 'tcgproductid', 'tcgid'],
   printing: ['printing', 'variance', 'variant', 'finish', 'foil', 'printingname'],
   category: ['category', 'game', 'productline', 'categoryname', 'tcg'],
@@ -212,18 +218,32 @@ export function gameOf(s: string): Game | null {
   return null;
 }
 
-/** Language from a Language column, or a hint in the set name ("Japanese", "(JP)", "SV2a"). */
-export function languageOf(langCell: string, setName: string): string {
+/** A language tag apps add to names and sets: "Pikachu (JP)", "Ditto (KR)", "Scarlet & Violet Promo JP". */
+const TAG = /\s*[([]?\b(JP|JPN|Japanese|KR|KOR|Korean|CN|Chinese|ID|Indonesian)\b[)\]]?\s*$/i;
+const TAG_LANG: Record<string, string> = { jp: 'ja', jpn: 'ja', japanese: 'ja', kr: 'ko', kor: 'ko', korean: 'ko', cn: 'zh', chinese: 'zh', id: 'id', indonesian: 'id' };
+
+/** The name without a trailing language tag, and the language it names. */
+export function untag(s: string): { text: string; language: string | null } {
+  const m = s.match(TAG);
+  return m ? { text: s.slice(0, m.index).trim(), language: TAG_LANG[m[1].toLowerCase()] } : { text: s, language: null };
+}
+
+/**
+ * Language from a Language column, else a tag on the name or set ("Pikachu (JP)", "Neo Genesis
+ * (Japanese)"). A file with a Language column means English when the cell is blank; a file
+ * without one (Collectr) gives null, and the catalog set decides.
+ */
+export function languageOf(langCell: string, nameTag: string | null, setName: string, hasColumn: boolean): string | null {
   const l = langCell.trim().toLowerCase();
   if (/^(ja|jp|jpn|japanese)/.test(l)) return 'ja';
   if (/^(ko|kr|kor|korean)/.test(l)) return 'ko';
   if (/^(zh|cn|chinese|tc|sc)/.test(l)) return 'zh';
   if (/^(id|indonesian)/.test(l)) return 'id';
   if (l) return 'en';
-  if (/\bjapanese\b|\(jp\)|\bjpn\b/i.test(setName)) return 'ja';
-  if (/\bkorean\b/i.test(setName)) return 'ko';
-  if (/\bchinese\b/i.test(setName)) return 'zh';
-  return 'en';
+  if (nameTag) return nameTag;
+  const setTag = untag(setName).language ?? (/\bjapanese\b/i.test(setName) ? 'ja' : null);
+  if (setTag) return setTag;
+  return hasColumn ? 'en' : null;
 }
 
 const SEALED = /\b(booster box|booster pack|elite trainer box|etb|blister|collection box|tin|bundle|case|display|starter deck|build & battle|premium collection|sealed)\b/i;
@@ -275,15 +295,21 @@ export function parseImport(text: string): ParsedImport {
 
   const rows: ImportRow[] = [];
   let skipped = 0;
+  let watchlist = 0;
   for (let i = h + 1; i < table.length; i++) {
     const r = table[i];
     const title = at(r, 'name');
     const kind = at(r, 'kind');
+    if (/^(true|yes|1|x)$/i.test(at(r, 'watchlist'))) {
+      watchlist++;
+      continue;
+    }
     if (!title || SEALED.test(kind) || (!at(r, 'number') && SEALED.test(title))) {
       skipped++;
       continue;
     }
-    const split = splitTitle(title);
+    const tagged = untag(title);
+    const split = splitTitle(tagged.text);
     const setName = at(r, 'set') || null;
     const g = gradeOf(at(r, 'grade'), at(r, 'grader'));
     // Collectr puts "PSA 10" in Card Condition for graded cards on some exports.
@@ -295,10 +321,11 @@ export function parseImport(text: string): ParsedImport {
     rows.push({
       line: i + 1,
       game: gameOf(at(r, 'category')) ?? gameOf(setName ?? ''),
-      name: split.name,
+      name: untag(split.name).text,
       setName,
       number: numberOf(at(r, 'number') || split.number),
-      language: languageOf(at(r, 'language'), setName ?? ''),
+      printedNumber: (at(r, 'number') || split.number || '').replace(/^#/, '').trim() || null,
+      language: languageOf(at(r, 'language'), tagged.language ?? untag(split.name).language, setName ?? '', col.language != null),
       grader: grade.grader,
       grade: grade.grade,
       cert: grade.grader === 'raw' ? null : cert,
@@ -310,7 +337,7 @@ export function parseImport(text: string): ParsedImport {
       printing: at(r, 'printing') || null,
     });
   }
-  return { source, rows, skipped };
+  return { source, rows, skipped, watchlist };
 }
 
 export class ImportError extends Error {}

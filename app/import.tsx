@@ -21,7 +21,7 @@ import type { Card } from '../src/types';
 type Step =
   | { kind: 'start'; error?: string }
   | { kind: 'matching'; total: number; done: number }
-  | { kind: 'review'; source: ImportSource; items: Item[]; skipped: number };
+  | { kind: 'review'; source: ImportSource; items: Item[]; skipped: number; watchlist: number };
 
 type Item = Matched & { key: string; preview: Card; owned: boolean };
 
@@ -66,7 +66,7 @@ export default function ImportCollection() {
       return { ...m, key: `${m.row.line}-${i}`, preview, owned: !!m.row.cert && certs.has(m.row.cert) };
     });
     setLeft(new Set(items.filter((x) => x.owned).map((x) => x.key)));
-    setStep({ kind: 'review', source: parsed.source, items, skipped: parsed.skipped });
+    setStep({ kind: 'review', source: parsed.source, items, skipped: parsed.skipped, watchlist: parsed.watchlist });
   };
 
   const review = step.kind === 'review' ? step : null;
@@ -145,7 +145,7 @@ export default function ImportCollection() {
                 <Text style={[type.title, { color: color.ink }]}>
                   {counts.cards} {counts.cards === 1 ? 'card' : 'cards'}
                 </Text>
-                <Text style={[type.text, styles.lead]}>{summary(step.source, counts, step.skipped)}</Text>
+                <Text style={[type.text, styles.lead]}>{summary(step.source, counts, step.skipped, step.watchlist)}</Text>
                 <Segmented<'hold' | 'sell'>
                   style={{ width: 220, marginTop: space.l }}
                   value={plan}
@@ -173,7 +173,7 @@ export default function ImportCollection() {
   );
 }
 
-function summary(source: ImportSource, c: { matched: number; unmatched: number }, skipped: number): string {
+function summary(source: ImportSource, c: { matched: number; unmatched: number }, skipped: number, watchlist: number): string {
   const from = source === 'spreadsheet' ? 'From your spreadsheet.' : `From ${SOURCE_NAME[source]}.`;
   const parts = [from];
   if (c.unmatched === 0) parts.push('Every card matched our catalog.');
@@ -182,6 +182,7 @@ function summary(source: ImportSource, c: { matched: number; unmatched: number }
       `${c.matched} matched our catalog. ${c.unmatched} we couldn’t place come in as written and get a price if we find them later.`,
     );
   if (skipped) parts.push(`${skipped} sealed or blank ${skipped === 1 ? 'line' : 'lines'} left out.`);
+  if (watchlist) parts.push(`${watchlist} watchlist ${watchlist === 1 ? 'card' : 'cards'} left out.`);
   parts.push('Tap a card to leave it out.');
   return parts.join(' ');
 }
