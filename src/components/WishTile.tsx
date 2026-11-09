@@ -1,5 +1,6 @@
 // A wishlist card as a tile: picture, name, grade, market price with its 7-day move, and your
-// price under it (green when the market is at or under it). Opens the card's wishlist price page.
+// price under it (green when the market is at or under it). Opens the full card page at that grade,
+// where "On your wishlist at $X" edits your price.
 // Used on the Search landing and Profile.
 
 import { router } from 'expo-router';
@@ -21,7 +22,7 @@ export function WishTile({ item: w, width }: { item: WishItem; width: number }) 
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${displayName(w.name)}, ${gradeLabel(w.grade)}`}
-      onPress={() => router.push({ pathname: '/con/want/[id]', params: { id: String(w.productId), grade: w.grade } })}
+      onPress={() => router.push({ pathname: '/search/[id]', params: { id: String(w.productId), grade: w.grade } })}
       style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}
     >
       <View style={[styles.art, { width, height: cardH(width) }]}>

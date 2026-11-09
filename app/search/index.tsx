@@ -45,6 +45,8 @@ import { useRecent } from '../../src/store/recent';
 import { SearchLanding } from '../../src/components/search/SearchLanding';
 import { useRules } from '../../src/store/rules';
 import { radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { useWishlist } from '../../src/store/wishlist';
+import Svg, { Path } from 'react-native-svg';
 import { themed, useColors } from '../../src/theme/theme';
 import type { PricingRules } from '../../src/types';
 import { ART_TYPES, ART_TYPES_BY_GAME, artLabel, type ArtType } from '../../src/lib/artType';
@@ -61,6 +63,7 @@ export default function Search() {
   const params = useLocalSearchParams<{ con?: string; q?: string; trade?: string; want?: string }>();
   // From the Wishlist's "Add a card": search, then the card page, where you add it at a grade.
   const want = params.want === '1';
+  const wishCount = useWishlist((s) => s.items.length);
   const con = params.con === '1';
   const trade = params.trade === '1';
   const asTab = useSegments()[0] === '(tabs)';
@@ -189,6 +192,8 @@ export default function Search() {
           <View style={styles.gutter}>
             {/* The tab bar already says Search; the tab keeps its header slim. */}
             {asTab ? null : <Text style={[type.title, { color: color.ink, paddingBottom: space.m }]}>{con ? 'Search to buy' : want ? 'Add to wishlist' : 'Search'}</Text>}
+            <View style={styles.tabRow}>
+            <View style={{ flex: 1, minWidth: 0 }}>
             <GameTabs
               value={f.game ?? 'all'}
               onChange={(g) =>
@@ -209,6 +214,22 @@ export default function Search() {
                 { value: 'riftbound', label: 'Riftbound' },
               ]}
             />
+            </View>
+            {/* Wishlist: one small button top right, opening its own sheet (Bryan: give the
+                landing its room back). */}
+            {asTab && wishCount ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Wishlist, ${wishCount} ${wishCount === 1 ? 'card' : 'cards'}`}
+                onPress={() => router.push('/wishlist')}
+                hitSlop={8}
+                style={({ pressed }) => [styles.wishButton, pressed && { opacity: 0.6 }]}
+              >
+                <HeartIcon />
+                <Text style={[type.secondary, { color: color.ink, fontWeight: '600' }]}>{wishCount}</Text>
+              </Pressable>
+            ) : null}
+            </View>
           </View>
         </View>
         {/* The field sits just above the control row so a mid-list scroll up brings both back. */}
@@ -712,6 +733,16 @@ function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
 
 const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
+  tabRow: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  wishButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    height: size.chip,
+    paddingHorizontal: space.m,
+    borderRadius: radius.chip,
+    backgroundColor: color.well,
+  },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   field: {
     height: size.touch,
@@ -793,3 +824,13 @@ const useStyles = themed((color) => StyleSheet.create({
   tileSealed: { borderRadius: radius.thumb * 2, overflow: 'hidden' },
   thumbSealed: { width: size.thumbW, height: size.thumbH },
 }));
+
+/** Wishlist button's heart: an outline, in ink. */
+function HeartIcon() {
+  const color = useColors();
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={2} strokeLinejoin="round">
+      <Path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" />
+    </Svg>
+  );
+}

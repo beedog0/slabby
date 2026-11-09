@@ -35,6 +35,9 @@ type DisplayState = {
   /** Con mode's Selling list: rows or two slabs across. */
   conLayout: SearchLayout;
   setConLayout: (l: SearchLayout) => void;
+  /** Wishlist sheet: card grid (default) or rows. */
+  wishLayout: SearchLayout;
+  setWishLayout: (l: SearchLayout) => void;
 };
 
 export const useDisplay = create<DisplayState>()(
@@ -57,6 +60,8 @@ export const useDisplay = create<DisplayState>()(
       searchLayout: 'grid',
       setSearchLayout: (searchLayout) => set({ searchLayout }),
       conLayout: 'grid',
+      wishLayout: 'grid',
+      setWishLayout: (wishLayout) => set({ wishLayout }),
       setConLayout: (conLayout) => set({ conLayout }),
     }),
     // New fields fall back to the defaults above when an older saved state is loaded.

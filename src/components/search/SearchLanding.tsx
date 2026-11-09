@@ -1,6 +1,6 @@
 // What Search shows before you type, so the tab opens onto something to look at (Bryan: the empty
 // tab felt "claustrophobic, trapped"; then "spice up that page"). Top to bottom:
-//   Wishlist (one row, opens the Wishlist page) · Recent or popular searches (chips) ·
+//   Recent or popular searches (chips) · (Wishlist is a button on the game-tab row above) ·
 //   Top movers (Up / Down, big 2-across grid) · New sealed (3-across) · Sealed pick of the day ·
 //   Sets moving (or Newest sets) · Recently viewed.
 // The local parts (wishlist, searches, recently viewed) show at once and offline; the discovery
@@ -10,13 +10,11 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { cardPrice, money } from '../../lib/format';
-import { wishView } from '../../pricing/wishlistView';
+import { cardPrice } from '../../lib/format';
 import { cachedLanding, EMPTY_LANDING, fetchLanding, type HotSet, type Landing } from '../../services/landing';
 import { displayName } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
 import { useRecent } from '../../store/recent';
-import { useWishlist } from '../../store/wishlist';
 import type { Game } from '../../types';
 import { radius, size, space, type } from '../../theme/tokens';
 import { themed, useColors } from '../../theme/theme';
@@ -54,9 +52,6 @@ export function SearchLanding({
   const { width } = useWindowDimensions();
   const { queries, viewed: allViewed, clearQueries } = useRecent();
   const viewed = useMemo(() => (game ? allViewed.filter((c) => c.game === game) : allViewed), [allViewed, game]);
-  const allWished = useWishlist((s) => s.items);
-  const wished = useMemo(() => (game ? allWished.filter((w) => w.game === game) : allWished), [allWished, game]);
-  const wish = useMemo(() => wishView(wished), [wished]);
   const feed = useLanding(game);
   const [dir, setDir] = useState<'up' | 'down'>('up');
   const openList = (kind: 'up' | 'down' | 'sealed') => router.push({ pathname: '/movers', params: { kind, game: game ?? 'all' } });
@@ -79,30 +74,6 @@ export function SearchLanding({
 
   return (
     <View style={{ paddingTop: space.l }}>
-      {/* Wishlist: one compact button into its own sheet (Bryan: the rail took too much room). */}
-      {wished.length ? (
-        <View style={[styles.gutter, { paddingBottom: space.xl }]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Wishlist, ${wish.count} ${wish.count === 1 ? 'card' : 'cards'}`}
-            onPress={() => router.push('/wishlist')}
-            style={({ pressed }) => [styles.wishPill, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={[type.text, { color: color.ink, fontWeight: '600' }]}>Wishlist</Text>
-            <Text style={[type.text, { color: color.secondary }]}>
-              {wish.count}
-              {wish.below.length ? (
-                <>
-                  {' · '}
-                  <Text style={{ color: color.gain }}>{wish.below.length}</Text> at or under your price
-                </>
-              ) : null}
-            </Text>
-            <Text style={[type.text, { color: color.secondary }]}>›</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
       <Section
         title={queries.length ? 'Recent searches' : 'Popular searches'}
         action={queries.length ? { label: 'Clear', onPress: clearQueries } : undefined}
@@ -150,7 +121,7 @@ export function SearchLanding({
       ) : null}
 
       {!movers.length && waitDay ? (
-        <Section title="Top movers" sub={`Starts ${waitDay}, once there’s a full week of TCGplayer prices to compare.`}>
+        <Section title="Top movers" sub={`Starts ${waitDay}, once there’s a full week of TCGplayer prices to compare.`} compact>
           {null}
         </Section>
       ) : null}
@@ -227,6 +198,7 @@ function Section({
   action,
   right,
   first,
+  compact,
   children,
 }: {
   title: string;
@@ -234,6 +206,8 @@ function Section({
   action?: { label: string; onPress: () => void };
   right?: ReactNode;
   first?: boolean;
+  /** Header only (no content under it): no space left for content. */
+  compact?: boolean;
   children: ReactNode;
 }) {
   const color = useColors();
@@ -245,7 +219,7 @@ function Section({
           <Hairline />
         </View>
       )}
-      <View style={styles.sectionHead}>
+      <View style={[styles.sectionHead, compact && { paddingBottom: 0 }]}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[type.section, { color: color.ink }]}>{title}</Text>
           {sub ? <Text style={[type.secondary, { color: color.secondary, paddingTop: 2 }]}>{sub}</Text> : null}
@@ -336,16 +310,6 @@ const useStyles = themed((color) =>
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: space.gutter },
     more: { alignSelf: 'center', minHeight: size.touch, justifyContent: 'center', paddingTop: space.m },
     rail: { paddingHorizontal: space.gutter, gap: space.m },
-    wishPill: {
-      alignSelf: 'flex-start',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: space.s,
-      minHeight: size.touch,
-      paddingHorizontal: space.l,
-      borderRadius: size.touch / 2,
-      backgroundColor: color.well,
-    },
     setRow: { minHeight: size.rowVault, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingVertical: space.s },
     thumb: { width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, overflow: 'hidden', backgroundColor: color.well },
   }),

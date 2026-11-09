@@ -2,14 +2,18 @@
 // Search, Profile or the Con tab (Bryan: it was "weird" sitting at the bottom of Search).
 //
 // Cards at or under your price come first, under their own heading, with how far under in green;
-// the rest are "Watching", newest first. Tap a card to change your price or remove it. One
+// the rest are "Watching", newest first. Cards show as a grid (default) or rows, switched like the
+// Collection tab. Tap a card for its full page, where you change your price or remove it. One
 // button: Add a card. Share wishlist lives in the … menu.
 
 import { router } from 'expo-router';
 import { useMemo, useRef, type ComponentRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../src/components/ArtImage';
+import { WishTile } from '../src/components/WishTile';
+import { SEARCH_MODES, ViewSwitch } from '../src/components/collection/ViewSwitch';
+import { useDisplay } from '../src/store/display';
 import { ChangeText } from '../src/components/search/CatalogTile';
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { Hairline, IconButton, MoreIcon, PrimaryButton } from '../src/components/ui';
@@ -30,6 +34,8 @@ export default function Wishlist() {
   const items = useWishlist((s) => s.items);
   const view = useMemo(() => wishView(items), [items]);
   const moreRef = useRef<ComponentRef<typeof View>>(null);
+  // Grid of cards by default, rows as the other choice, remembered like the Collection tab's view.
+  const { wishLayout: layout, setWishLayout: setLayout } = useDisplay();
 
   const add = () => router.push('/search?want=1');
   const more = () =>
@@ -52,10 +58,13 @@ export default function Wishlist() {
             <Text style={[type.text, { color: color.ink }]}>Done</Text>
           </Pressable>
           {items.length ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+            <ViewSwitch value={layout} onChange={setLayout} modes={SEARCH_MODES} />
             <View ref={moreRef} collapsable={false}>
               <IconButton label="More" onPress={more}>
                 <MoreIcon />
               </IconButton>
+            </View>
             </View>
           ) : null}
         </View>
@@ -85,8 +94,8 @@ export default function Wishlist() {
           </View>
         ) : (
           <>
-            {view.below.length ? <Group title="At or under your price" items={view.below} /> : null}
-            {view.watching.length ? <Group title={view.below.length ? 'Watching' : 'Cards'} items={view.watching} /> : null}
+            {view.below.length ? <Group title="At or under your price" items={view.below} layout={layout} /> : null}
+            {view.watching.length ? <Group title={view.below.length ? 'Watching' : 'Cards'} items={view.watching} layout={layout} /> : null}
             <View style={[styles.gutter, { paddingTop: space.xxl }]}>
               <PrimaryButton title="Add a card" onPress={add} />
             </View>
@@ -97,9 +106,22 @@ export default function Wishlist() {
   );
 }
 
-function Group({ title, items }: { title: string; items: WishItem[] }) {
+function Group({ title, items, layout }: { title: string; items: WishItem[]; layout: 'grid' | 'list' }) {
   const color = useColors();
   const styles = useStyles();
+  const { width } = useWindowDimensions();
+  const half = Math.floor((width - space.gutter * 2 - space.l) / 2);
+  if (layout === 'grid')
+    return (
+      <View style={{ paddingTop: space.xxl }}>
+        <Text style={[type.section, styles.gutter, { color: color.ink, paddingBottom: space.l }]}>{title}</Text>
+        <View style={styles.grid}>
+          {items.map((w) => (
+            <WishTile key={w.key} item={w} width={half} />
+          ))}
+        </View>
+      </View>
+    );
   return (
     <View style={{ paddingTop: space.xxl }}>
       <Text style={[type.section, styles.gutter, { color: color.ink, paddingBottom: space.s }]}>{title}</Text>
@@ -197,6 +219,7 @@ const useStyles = themed((color) =>
       gap: space.m,
       paddingVertical: space.m,
     },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.l, rowGap: space.xl, paddingHorizontal: space.gutter },
     art: {
       width: ART_W,
       height: ART_H,
