@@ -88,7 +88,7 @@ describe('collection', () => {
   });
 });
 
-import { collectionSeries, trendOf } from '../portfolio';
+import { chartNote, collectionSeries, trendOf } from '../portfolio';
 
 describe('collection value line', () => {
   const row = (series90: number[], status = 'owned') =>
@@ -199,5 +199,25 @@ describe('weekChange', () => {
     expect(weekChange(row([100000, 103000]))).toBeNull();
     expect(weekChange(row(Array(8).fill(100000)))).toBeNull();
     expect(weekChange(row([100000, 0, 0, 0, 0, 0, 0, 105000], { ...mew, status: 'sold' }))).toBeNull();
+  });
+});
+
+describe('chartNote', () => {
+  const base = { cards: 4, sold: false, loading: false, empty: 'Your holds’ value shows here.' };
+  it('says loading only while a refresh runs', () => {
+    expect(chartNote({ ...base, loading: true })).toBe('Prices are loading.');
+  });
+  it('never claims loading once done, even with no history (Riftbound, raw-only)', () => {
+    expect(chartNote(base)).toBe('Chart starts once we have a few days of prices.');
+  });
+  it('shows the filter’s own line with no cards', () => {
+    expect(chartNote({ ...base, cards: 0, loading: true })).toBe(base.empty);
+  });
+  it('keeps the sold line when nothing sold in 30 days, loading or not', () => {
+    expect(chartNote({ ...base, sold: true })).toBe(base.empty);
+    expect(chartNote({ ...base, sold: true, loading: true })).toBe(base.empty);
+  });
+  it('shows nothing for a game pick with no line of its own', () => {
+    expect(chartNote({ ...base, cards: 0, empty: '' })).toBe('');
   });
 });

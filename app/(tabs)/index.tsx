@@ -40,6 +40,7 @@ import { IconButton, PrimaryButton } from '../../src/components/ui';
 import { useHideTabBar } from '../../src/components/TabBar';
 import { changeText, money, rowTitle } from '../../src/lib/format';
 import {
+  chartNote,
   collection,
   collectionSeries,
   filterStats,
@@ -125,8 +126,19 @@ export default function Home() {
   // "Base Set" or "One Piece": what the header and empty state call the pick.
   const pickName = picked.set ?? (picked.game === 'all' ? null : GAMES[picked.game].name);
 
+  // True only while the price reload is really running; the chart placeholder says so from this.
+  const [pricesBusy, setPricesBusy] = useState(true);
   useEffect(() => {
-    refreshPrices(cards);
+    let current = true;
+    setPricesBusy(true);
+    refreshPrices(cards)
+      .catch(() => {})
+      .finally(() => {
+        if (current) setPricesBusy(false);
+      });
+    return () => {
+      current = false;
+    };
   }, [cards]);
 
   const all = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
@@ -399,7 +411,7 @@ export default function Home() {
                     onScrub={setScrubbed}
                   />
                 ) : (
-                  <ChartPlaceholder text={total ? 'Prices are loading.' : empty.chart} />
+                  <ChartPlaceholder text={chartNote({ cards: total, sold: filter === 'sold', loading: pricesBusy, empty: empty.chart })} />
                 )}
               </View>
             </View>
