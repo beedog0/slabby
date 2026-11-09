@@ -1,5 +1,5 @@
 import type { CardPrice } from '../../services/comps';
-import { chartable, gradingLine, gradingRead, history, liquidity, ratio, realPoints, spread, spreadWord, trend } from '../cardStats';
+import { saleRange, chartable, gradingLine, gradingRead, history, liquidity, ratio, realPoints, spread, spreadWord, trend } from '../cardStats';
 
 const p = (marketCents: number, sales30d: number, series90: number[] = [marketCents], extra: object = {}): CardPrice & { points?: number } => ({
   marketCents,
@@ -22,7 +22,8 @@ describe('card stats', () => {
 
   it('gives 90-day stats only with enough points over enough days', () => {
     const s = Array.from({ length: 91 }, (_, i) => 1000 + i * 2);
-    expect(history(p(1180, 20, s, { points: 40 }))).toEqual({ high: 1180, low: 1000, change: expect.closeTo(0.18, 6), days: 90 });
+    // High takes the 30-day p90 of real sales (1298), which the smoothed median line never reaches.
+    expect(history(p(1180, 20, s, { points: 40 }))).toEqual({ high: 1298, low: 1000, change: expect.closeTo(0.18, 6), days: 90 });
     expect(history(p(1180, 20, s, { points: 4 }))).toBeNull();
     expect(history(p(1180, 20, s.slice(-20), { points: 20 }))).toBeNull();
   });
@@ -48,5 +49,22 @@ describe('card stats', () => {
     expect(gradingRead(p(5000, 0), p(30000, 12), p(15000, 15))).toEqual({ kind: 'pays-at-9' });
     expect(gradingRead(p(50000, 0), p(40000, 12), p(20000, 15))).toEqual({ kind: 'never' });
     expect(gradingRead(p(5000, 0), p(20000, 2), p(6000, 15))).toBeNull();
+  });
+
+  it('90-day range comes from real sales, not the rolling median (Radiant Jirachi PSA 10)', () => {
+    const median = Array.from({ length: 91 }, (_, i) => Math.round(11040 + ((18000 - 11040) * i) / 90));
+    const base = { ...p(18000, 6, median, { points: 20 }), lowCents: 14624, highCents: 20500 };
+    // Old answers: median line widened by the 30-day p10/p90 and the last sale.
+    expect(saleRange({ ...base, lastSale: { day: '2026-11-02', cents: 20500, count: 2 } })).toEqual({ low: 11040, high: 20500 });
+    expect(history(base)!.high).toBe(20500);
+    // With daily sales from the server, those decide.
+    const sales90 = [
+      { day: '2026-08-20', cents: 10500, count: 1 },
+      { day: '2026-10-01', cents: 21900, count: 1 },
+      { day: '2026-11-02', cents: 20500, count: 2 },
+    ];
+    expect(saleRange({ ...base, sales90 })).toEqual({ low: 10500, high: 21900 });
+    // Raw (no sale count) keeps its own daily series.
+    expect(saleRange({ ...p(5000, 0, [4000, 5000, 6000]), lowCents: 3000, highCents: 9000 })).toEqual({ low: 4000, high: 6000 });
   });
 });

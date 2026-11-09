@@ -19,7 +19,42 @@ export type Liquidity = 'Liquid' | 'Slow' | 'Stale';
 export type Trend = 'Rising' | 'Flat' | 'Falling';
 
 /** Server extras (withPoints): real data days in 90, the first and the last of them. */
-export type Priced = CardPrice & { points?: number; since?: string; lastReal?: string };
+export type Priced = CardPrice & {
+  points?: number;
+  since?: string;
+  lastReal?: string;
+  /** Graded, card-prices v2: the latest day with a sale, that day's average and count. */
+  lastSale?: { day: string; cents: number; count: number } | null;
+  /** Graded, card-prices v3: every day with a sale in the last 90, that day's average and count. */
+  sales90?: { day: string; cents: number; count: number }[];
+};
+
+/**
+ * 90-day low and high of real sale prices. series90 is a rolling 30-day median, which smooths
+ * away the highs and lows (Radiant Jirachi PSA 10: median tops out at $180 while it sold for $205),
+ * so the range comes from the sales themselves: the daily sale averages when the server sends
+ * them, else the median line widened by the 30-day p10/p90 and the last sale. Raw (TCGplayer
+ * market, no sale count) keeps the series, which is already real daily prices.
+ */
+export function saleRange(p: Priced): { low: number; high: number } {
+  const s = p.series90;
+  const days = (p.sales90 ?? []).filter((d) => d.count > 0 && d.cents > 0).map((d) => d.cents);
+  if (days.length) {
+    // The median line can't sit outside the sales it came from, but keep today's price inside.
+    return { low: Math.min(...days, p.marketCents), high: Math.max(...days, p.marketCents) };
+  }
+  let low = Math.min(...s);
+  let high = Math.max(...s);
+  if (p.sales30d >= 2 && p.lowCents > 0 && p.highCents > 0) {
+    low = Math.min(low, p.lowCents);
+    high = Math.max(high, p.highCents);
+  }
+  if (p.lastSale && p.lastSale.cents > 0 && p.sales30d > 0) {
+    low = Math.min(low, p.lastSale.cents);
+    high = Math.max(high, p.lastSale.cents);
+  }
+  return { low, high };
+}
 
 /** Real data points behind a series. Old cached answers lack `points`: a flat line counts as one. */
 export function realPoints(p: Priced | null | undefined): number {
@@ -34,11 +69,12 @@ export function chartable(p: Priced | null | undefined): boolean {
   return !!p && p.series90.length > 1 && realPoints(p) >= 3;
 }
 
-/** 90-day high, low and change, or null when the history is too thin to say. */
+/** 90-day high and low (of real sales, see saleRange), change, or null when the history is too thin to say. */
 export function history(p: Priced | null | undefined): { high: number; low: number; change: number; days: number } | null {
   if (!p || realPoints(p) < MIN_POINTS || p.series90.length < MIN_SPAN_DAYS + 1) return null;
   const s = p.series90;
-  return { high: Math.max(...s), low: Math.min(...s), change: s[s.length - 1] / s[0] - 1, days: Math.min(90, s.length) };
+  const { low, high } = saleRange(p);
+  return { high, low, change: s[s.length - 1] / s[0] - 1, days: Math.min(90, s.length) };
 }
 
 export function liquidity(sales30d: number): Liquidity {
