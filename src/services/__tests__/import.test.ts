@@ -206,3 +206,17 @@ describe('pick', () => {
     expect(pick(by("Sabrina's Gengar"), [en])).toBeNull();
   });
 });
+
+describe('candidates (mock catalog)', () => {
+  const { candidates } = require('../importMatch');
+  it('offers same-name cards, the row’s own printing first', async () => {
+    const [row] = parseImport('Name,Set,Number\nUmbreon,Prismatic Evolutions,161').rows;
+    const list = await candidates(row);
+    expect(list[0].productId).toBe(9000003);
+    expect(list.map((c: CatalogCard) => c.productId)).toEqual(expect.arrayContaining([9000001, 9000002]));
+  });
+  it('offers nothing for Korean cards', async () => {
+    const [row] = parseImport('Name,Number\nUmbreon ex (KR),161').rows;
+    expect(await candidates(row)).toEqual([]);
+  });
+});

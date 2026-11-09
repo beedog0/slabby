@@ -134,6 +134,29 @@ export async function matchRow(row: ImportRow): Promise<CatalogCard | null> {
   return pick(row, await search(`${bareSet(row.setName)} ${row.number}`), false);
 }
 
+/**
+ * Cards to offer when the user picks a row's card by hand: same name (any set), plus the row's set
+ * and number, in the row's language when known. Best guesses first. Korean, Chinese and
+ * Indonesian rows get none: the catalog has no printing of theirs to price them by.
+ */
+export async function candidates(row: ImportRow, limit = 12): Promise<CatalogCard[]> {
+  if (row.language != null && row.language !== 'en' && row.language !== 'ja') return [];
+  const name = core(row.name);
+  const search = (q: string) => (q.trim() ? searchCards(q, row.game).catch(() => [] as CatalogCard[]) : Promise.resolve([] as CatalogCard[]));
+  const lists = await Promise.all([
+    search(name),
+    row.number ? search(`${name} ${row.number}`) : Promise.resolve([] as CatalogCard[]),
+    row.number && row.setName ? search(`${bareSet(row.setName)} ${row.number}`) : Promise.resolve([] as CatalogCard[]),
+  ]);
+  const seen = new Set<number>();
+  const all = lists.flat().filter((c) => !seen.has(c.productId) && seen.add(c.productId) && langOk(row, c) && (!row.game || c.game === row.game));
+  const score = (c: CatalogCard) =>
+    setScore(row.setName, c) +
+    (row.number && sameNumber(row.number, c.number) ? 2 : row.number && looseNumber(row.number, c.number) ? 1 : 0) +
+    overlap(core(row.name), core(c.name));
+  return all.sort((a, b) => score(b) - score(a)).slice(0, limit);
+}
+
 /** Match every row, a few at a time, reporting progress for the sheet's "Matching 40 of 120". */
 export async function matchAll(rows: ImportRow[], onProgress?: (done: number) => void, width = 4): Promise<Matched[]> {
   const out: Matched[] = new Array(rows.length);

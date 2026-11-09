@@ -8,12 +8,15 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CardThumb } from '../src/components/CardThumb';
+import { PickCard } from '../src/components/import/PickCard';
+import { openMenu } from '../src/components/menu/Menu';
 import { Segmented } from '../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../src/components/ui';
 import { cardLabel, cardPrice } from '../src/lib/format';
 import { matchNewCard, refreshPrices } from '../src/services/comps';
 import { ImportError, parseImport, SOURCE_NAME, type ImportSource } from '../src/services/importCsv';
 import { cardsFor, matchAll, type Matched } from '../src/services/importMatch';
+import type { CatalogCard } from '../src/services/search';
 import { useVault } from '../src/store/vault';
 import { color, size, space, type } from '../src/theme/tokens';
 import type { Card } from '../src/types';
@@ -23,7 +26,7 @@ type Step =
   | { kind: 'matching'; total: number; done: number }
   | { kind: 'review'; source: ImportSource; items: Item[]; skipped: number; watchlist: number };
 
-type Item = Matched & { key: string; preview: Card; owned: boolean };
+type Item = Matched & { key: string; preview: Card; owned: boolean; picked?: boolean };
 
 /** File text from the picker's uri. fetch reads file:// on iOS; web gets a blob url. */
 async function readText(uri: string): Promise<string> {
@@ -85,6 +88,34 @@ export default function ImportCollection() {
       else n.add(k);
       return n;
     });
+
+  /** Use a card picked by hand for a row (or none: as written). */
+  const setCard = (k: string, card: CatalogCard | null) => {
+    setStep((s) =>
+      s.kind === 'review'
+        ? { ...s, items: s.items.map((x) => (x.key === k ? { ...x, card, picked: true, preview: cardsFor({ row: x.row, card }, 'hold')[0] } : x)) }
+        : s,
+    );
+    setLeft((s) => {
+      const n = new Set(s);
+      n.delete(k);
+      return n;
+    });
+  };
+
+  // A row's sheet: pick the right card from the catalog, keep it as written, or leave it out.
+  const openRow = (x: Item) => {
+    const out = left.has(x.key);
+    openMenu({
+      title: x.preview.name,
+      subtitle: [x.row.setName, x.row.printedNumber ? `#${x.row.printedNumber}` : null].filter(Boolean).join(' · '),
+      body: <PickCard row={x.row} current={x.card?.productId ?? null} onPick={(c) => setCard(x.key, c)} />,
+      items: [
+        ...(x.card ? [{ label: 'Keep as written instead', onPress: () => setCard(x.key, null) }] : []),
+        { label: out ? 'Put back in' : 'Leave out', onPress: () => toggle(x.key) },
+      ],
+    });
+  };
 
   const save = () => {
     if (!review || !counts.cards) return;
@@ -157,7 +188,7 @@ export default function ImportCollection() {
                 />
               </View>
             }
-            renderItem={({ item }) => <ImportRowView item={item} out={left.has(item.key)} onPress={() => toggle(item.key)} />}
+            renderItem={({ item }) => <ImportRowView item={item} out={left.has(item.key)} onPress={() => openRow(item)} />}
             contentContainerStyle={{ paddingBottom: space.xxl }}
           />
           <View style={[styles.gutter, { paddingTop: space.m, paddingBottom: insets.bottom + space.l }]}>
@@ -183,7 +214,7 @@ function summary(source: ImportSource, c: { matched: number; unmatched: number }
     );
   if (skipped) parts.push(`${skipped} sealed or blank ${skipped === 1 ? 'line' : 'lines'} left out.`);
   if (watchlist) parts.push(`${watchlist} watchlist ${watchlist === 1 ? 'card' : 'cards'} left out.`);
-  parts.push('Tap a card to leave it out.');
+  parts.push(c.unmatched ? 'Tap a card to pick the right one or leave it out.' : 'Tap a card to change it or leave it out.');
   return parts.join(' ');
 }
 
@@ -200,8 +231,12 @@ function ImportRowView({ item, out, onPress }: { item: Item; out: boolean; onPre
     ? `Cert ${row.cert} is already in your vault`
     : out
       ? 'Left out'
-      : !card
-        ? 'Not matched, kept as written'
+      : !card && row.language && row.language !== 'en' && row.language !== 'ja'
+        ? 'Comes in as written, no price yet'
+        : !card
+        ? item.picked
+          ? 'Kept as written'
+          : 'Not matched. Tap to pick the card'
         : row.cert
           ? `Cert ${row.cert}`
           : null;
