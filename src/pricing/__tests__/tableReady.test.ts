@@ -39,9 +39,14 @@ describe('sales', () => {
 describe('recentBuys', () => {
   const base = rows[0].card;
   const bought = (id: string, paidAt: string | null, createdAt: string, paidCents: number | null) =>
-    ({ card: { ...base, id, paidAt, createdAt, paidCents }, price: null }) as unknown as (typeof rows)[number];
+    ({ card: { ...base, id, paidAt, createdAt, paidCents, boughtConId: undefined }, price: null }) as unknown as (typeof rows)[number];
   it('lists cards with a price paid, newest first, falling back to when they were added', () => {
     const r = [bought('a', '2026-11-01', '2026-11-01', 100), bought('b', null, '2026-11-08', 200), bought('c', '2026-11-05', '2026-10-01', null)];
     expect(recentBuys(r).map((x) => x.card.id)).toEqual(['b', 'a']);
+  });
+  it('leaves out pulled or gifted cards ($0 paid) unless bought in con mode', () => {
+    const pulled = bought('p', '2026-11-09', '2026-11-09', 0);
+    const conFree = { ...bought('f', '2026-11-08', '2026-11-08', 0), card: { ...bought('f', '2026-11-08', '2026-11-08', 0).card, boughtConId: 'con1' } };
+    expect(recentBuys([pulled, conFree, bought('a', '2026-11-01', '2026-11-01', 100)]).map((x) => x.card.id)).toEqual(['f', 'a']);
   });
 });
