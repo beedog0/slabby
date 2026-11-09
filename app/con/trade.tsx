@@ -24,6 +24,7 @@ import { useTrade, type TheirCard } from '../../src/store/trade';
 import { useVault } from '../../src/store/vault';
 import { size, space, type } from '../../src/theme/tokens';
 import { themed, useColors } from '../../src/theme/theme';
+import { choiceFor, sameCard } from '../../src/services/cardLink';
 
 export default function Trade() {
   const color = useColors();
@@ -46,9 +47,23 @@ export default function Trade() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards, rules, prices]);
   const mineRows = mine.map((id) => owned.find((r) => r.card.id === id)).filter((r): r is CardRow => !!r);
+  // Their card counts at your vault price when you own the same card at that grade, so one card
+  // never has two values in the same trade. Trades saved before setCode keep their saved price.
+  const theirValue = (c: TheirCard) => {
+    const same =
+      c.setCode !== undefined &&
+      owned.find(
+        (r) =>
+          r.price &&
+          (r.card.grader === 'psa' || r.card.grader === 'raw') &&
+          choiceFor(r.card) === c.grade &&
+          sameCard({ number: c.number ?? '', setCode: c.setCode ?? null, language: c.language }, r.card),
+      );
+    return same ? same.price!.marketCents : c.marketCents;
+  };
   const t = trade(
     mineRows.map((r) => r.price?.marketCents ?? 0),
-    theirs.map((c) => c.marketCents),
+    theirs.map(theirValue),
   );
   const unpriced = mineRows.filter((r) => !r.price).length;
   const empty = !mineRows.length && !theirs.length;
@@ -166,6 +181,7 @@ export default function Trade() {
             <View key={c.key}>
               {i ? <Hairline inset={size.thumbW + space.m} /> : null}
               <TheirRow
+                value={theirValue(c)}
                 c={c}
                 onPress={() => openMenu({ title: c.name, items: [{ label: 'Take off the trade', onPress: () => removeTheirs(c.key) }] })}
               />
@@ -197,7 +213,7 @@ function Side({ title, addLabel, onAdd, children }: { title: string; addLabel: s
   );
 }
 
-function TheirRow({ c, onPress }: { c: TheirCard; onPress: () => void }) {
+function TheirRow({ c, value, onPress }: { c: TheirCard; value: number; onPress: () => void }) {
   const color = useColors();
   const styles = useStyles();
   // Name on one line; variant, set (without its "SWSH07:" code) and grade on the next.
@@ -210,7 +226,7 @@ function TheirRow({ c, onPress }: { c: TheirCard; onPress: () => void }) {
         <Text style={[type.body, { color: color.ink }]}>{name}</Text>
         <Text style={[type.secondary, { color: color.secondary }]}>{detail}</Text>
       </View>
-      <Text style={[type.numberM, { color: color.ink }]}>{money(c.marketCents)}</Text>
+      <Text style={[type.numberM, { color: color.ink }]}>{money(value)}</Text>
     </Pressable>
   );
 }

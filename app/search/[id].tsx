@@ -369,6 +369,7 @@ export default function SearchedCard() {
                   name: displayName(ready.name),
                   setName: ready.setName,
                   number: ready.number,
+                  setCode: ready.setCode,
                   imageUrl: ready.imageUrl,
                   game: ready.game,
                   language: ready.language,
