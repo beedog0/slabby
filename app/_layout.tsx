@@ -26,6 +26,8 @@ export default function RootLayout() {
         />
         <Stack.Screen name="con/buy/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="con/want/[id]" options={{ presentation: 'modal' }} />
+        {/* Wishlist: a sheet over Search, Profile or Con, swipe down to close. */}
+        <Stack.Screen name="wishlist" options={{ presentation: 'modal' }} />
       </Stack>
       <ShareCardHost />
       <MenuHost />

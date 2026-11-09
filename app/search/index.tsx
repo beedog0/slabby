@@ -42,8 +42,6 @@ import {
 } from '../../src/services/searchFilters';
 import { useDisplay } from '../../src/store/display';
 import { useRecent } from '../../src/store/recent';
-import { useVault } from '../../src/store/vault';
-import { rowFor } from '../../src/pricing/portfolio';
 import { SearchLanding } from '../../src/components/search/SearchLanding';
 import { useRules } from '../../src/store/rules';
 import { radius, shadow, size, space, type } from '../../src/theme/tokens';
@@ -64,9 +62,7 @@ export default function Search() {
   const con = params.con === '1';
   const trade = params.trade === '1';
   const asTab = useSegments()[0] === '(tabs)';
-  const vaultCards = useVault((st) => st.cards);
   const rules = useRules((s) => s.rules);
-  const vaultRows = useMemo(() => vaultCards.map((c) => rowFor(c, rules)), [vaultCards, rules]);
   const { searchLayout: layout, setSearchLayout } = useDisplay();
   const { width } = useWindowDimensions();
   const cellW = Math.floor((width - space.gutter * 2 - GRID_GAP) / 2);
@@ -306,7 +302,7 @@ export default function Search() {
               <SearchLanding
                 onQuery={(q) => set({ q })}
                 onOpen={(c) => openCard(c, false)}
-                vault={vaultRows}
+                game={f.game}
                 note={loading ? `The catalog is still loading (${progress!.done} of ${progress!.total} sets), so some cards aren’t in yet.` : null}
               />
             ) : hint ? (

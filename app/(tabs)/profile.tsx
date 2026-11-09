@@ -1,10 +1,11 @@
-// The Profile tab: the page you'd show someone. Who you are, what the collection is worth, the
-// slabs you're proudest of, and a few numbers worth bragging about. One button: Share profile.
+// The Profile tab: the page you'd show someone, and the one that changes as you collect.
 //
-// Top to bottom: your photo (tap it to change it), name, @handle and bio, centered; Value · Slabs ·
-// Sold; your most valuable slab posed on its own with the next six under it; collection stats
-// (gain on what you paid, best buy, grades, sets, added this month, sales); Share profile.
-// Settings (Edit profile, Account, Pricing rules, Appearance) live in the … menu at the top.
+// Top to bottom: you (photo, name, @handle, friends, how long you've collected); what the
+// collection is worth with its 30-day line; the slab doing best for you (biggest gain on what you
+// paid, else the most valuable); your grade mix as one bar; recent activity (added and sold);
+// your wishlist; a few numbers; Share profile, the one button. Settings live in the … menu.
+// (Bryan: the old page felt "stale and blank": setup chores up top, a slab grid that repeated
+// the Collection tab, and nothing that changed day to day.)
 
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
@@ -15,10 +16,13 @@ import { Avatar } from '../../src/components/Avatar';
 import { SlabView } from '../../src/components/SlabView';
 import { openDropdown } from '../../src/components/menu/Dropdown';
 import { APPEARANCE_LABEL, openAppearance } from '../../src/components/menu/appearanceMenu';
-import { IconButton, PrimaryButton } from '../../src/components/ui';
-import { changeText, money } from '../../src/lib/format';
-import { rowFor } from '../../src/pricing/portfolio';
-import { profileStats, showcase } from '../../src/pricing/profileStats';
+import { Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
+import { MiniChart } from '../../src/components/MiniChart';
+import { Fan } from '../../src/components/Fan';
+import { cardLabel, changeText, money, saleDay } from '../../src/lib/format';
+import { collectionSeries, rowFor } from '../../src/pricing/portfolio';
+import { gradeMix, profileStats, recentActivity, spotlight } from '../../src/pricing/profileStats';
+import { wishView } from '../../src/pricing/wishlistView';
 import { fetchFriends, publishShowcase } from '../../src/services/friends';
 import { publishProfile } from '../../src/services/profile';
 import { choosePhoto } from '../../src/components/photoChoice';
@@ -28,11 +32,12 @@ import { usePrices } from '../../src/store/prices';
 import { initialOf, useProfile } from '../../src/store/profile';
 import { useRules } from '../../src/store/rules';
 import { useVault } from '../../src/store/vault';
-import { size, space, type } from '../../src/theme/tokens';
+import { useWishlist } from '../../src/store/wishlist';
+import { radius, size, space, type } from '../../src/theme/tokens';
 import { themed, useColors } from '../../src/theme/theme';
 
-const COLS = 3;
-const GAP = space.m;
+/** Ink tones for the grade bar: PSA 10 darkest, raw lightest. */
+const BAND_OPACITY = { '10': 1, '9': 0.62, lower: 0.36, raw: 0.16 } as const;
 
 export default function ProfileTab() {
   const color = useColors();
@@ -63,8 +68,16 @@ export default function ProfileTab() {
 
   const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   const stats = useMemo(() => profileStats(rows), [rows]);
-  const shelf = useMemo(() => showcase(rows, 1 + COLS * 2), [rows]);
-  const [hero, ...rest] = shelf;
+  const spot = useMemo(() => spotlight(stats), [stats]);
+  const mix = useMemo(() => gradeMix(rows), [rows]);
+  const activity = useMemo(() => recentActivity(rows), [rows]);
+  const series = useMemo(() => collectionSeries(rows, 30), [rows]);
+  const since = useMemo(() => {
+    const t = Math.min(...cards.map((c) => Date.parse(c.createdAt)).filter((n) => !Number.isNaN(n)));
+    return Number.isFinite(t) ? new Date(t).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
+  }, [cards]);
+  const wished = useWishlist((s) => s.items);
+  const wish = useMemo(() => wishView(wished), [wished]);
 
   const edit = () => router.push('/settings/profile');
   const [picking, setPicking] = useState(false);
@@ -99,16 +112,16 @@ export default function ProfileTab() {
       ],
     ]);
 
-  const cellW = Math.floor((width - space.gutter * 2 - GAP * (COLS - 1)) / COLS);
   const month = changeText(stats.monthDeltaCents, stats.valueCents);
   const gainPct = stats.paidCents ? Math.round((stats.gainCents / stats.paidCents) * 100) : null;
   const signed = (c: number) => `${c >= 0 ? '+' : '−'}${money(Math.abs(c))}`;
   const upDown = (c: number) => (c >= 0 ? color.gain : color.loss);
+  const spotW = Math.round(width * 0.36);
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: color.canvas }}
-      contentContainerStyle={{ paddingTop: insets.top + space.s, paddingBottom: insets.bottom + space.xxl }}
+      contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom + space.xxl }}
     >
       <View style={styles.header}>
         <View ref={moreRef} collapsable={false}>
@@ -118,10 +131,10 @@ export default function ProfileTab() {
         </View>
       </View>
 
-      {/* Who you are. Tap the photo to change it, the name to edit the rest. */}
+      {/* You. Tap the photo to change it, the name to edit the rest. */}
       <View style={styles.who}>
         <Pressable accessibilityRole="button" accessibilityLabel={profile.photo ? 'Change photo' : 'Add a photo'} onPress={changePhoto} disabled={picking}>
-          <Avatar photo={profile.photo} letter={initialOf(profile.name, profile.handle, email)} px={size.avatarEdit} busy={picking} />
+          <Avatar photo={profile.photo} letter={initialOf(profile.name, profile.handle, email)} px={size.avatar} busy={picking} />
           {!profile.photo ? (
             <View style={styles.camera}>
               <CameraIcon />
@@ -129,117 +142,166 @@ export default function ProfileTab() {
           ) : null}
         </Pressable>
         <Pressable accessibilityRole="button" onPress={edit} style={styles.names}>
-          {profile.name ? (
-            <Text style={[type.title, styles.center, { color: color.ink }]}>{profile.name}</Text>
-          ) : (
-            <Text style={[type.body, styles.center, { color: color.ink }]}>Add your name ›</Text>
-          )}
-          <Text style={[type.text, styles.center, { color: color.secondary }]}>
-            {profile.handle ? `@${profile.handle}` : 'Pick a handle so friends can find you'}
+          <Text numberOfLines={2} style={[type.title, { color: profile.name ? color.ink : color.secondary }]}>
+            {profile.name || 'Add your name'}
           </Text>
-          {profile.bio ? <Text style={[type.text, styles.center, { color: color.ink, paddingTop: space.s }]}>{profile.bio}</Text> : null}
+          <Text style={[type.text, { color: color.secondary }]}>{profile.handle ? `@${profile.handle}` : 'Pick a handle ›'}</Text>
         </Pressable>
-        <Pressable accessibilityRole="link" onPress={() => router.push('/friends')} hitSlop={8}>
+      </View>
+      {profile.bio ? <Text style={[type.text, styles.gutter, { color: color.ink, paddingTop: space.m }]}>{profile.bio}</Text> : null}
+      <View style={[styles.gutter, styles.metaRow]}>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/friends')} style={styles.metaLink}>
           <Text style={[type.text, { color: color.ink }]}>
             {friendCount ? `${friendCount} ${friendCount === 1 ? 'friend' : 'friends'}` : 'Find friends'}
-            <Text style={{ color: color.secondary }}> ›</Text>
           </Text>
         </Pressable>
-        {guest ? (
-          <Pressable accessibilityRole="link" onPress={() => router.push('/settings/account')} hitSlop={8}>
-            <Text style={[type.secondary, { color: color.secondary }]}>
-              Not saved to an account · <Text style={{ color: color.ink }}>Sign in</Text>
-            </Text>
-          </Pressable>
-        ) : null}
+        {since ? <Text style={[type.text, { color: color.secondary }]}>· Collecting since {since}</Text> : null}
       </View>
-
-      <View style={styles.stats}>
-        <Stat value={money(stats.valueCents)} label="Value" />
-        <View style={styles.divider} />
-        <Stat value={String(stats.owned)} label={stats.owned === 1 ? 'Slab' : 'Slabs'} />
-        <View style={styles.divider} />
-        <Stat value={String(stats.sold)} label="Sold" />
-      </View>
-      {month ? (
-        <Text style={[type.secondary, styles.center, { color: color.secondary, paddingTop: space.s }]}>
-          <Text style={{ color: upDown(stats.monthDeltaCents) }}>{month}</Text> this month
-        </Text>
+      {guest ? (
+        <Pressable accessibilityRole="link" onPress={() => router.push('/settings/account')} style={[styles.gutter, styles.metaLink]}>
+          <Text style={[type.secondary, { color: color.secondary }]}>
+            Not saved to an account · <Text style={{ color: color.ink }}>Sign in</Text>
+          </Text>
+        </Pressable>
       ) : null}
 
-      {/* The showcase: the most valuable slab on its own, the next six under it. */}
-      {hero ? (
-        <>
-          <Pressable accessibilityRole="button" onPress={() => router.push(`/card/${hero.card.id}`)} style={styles.hero}>
-            <SlabView card={hero.card} width={size.carouselSlabW} />
-            <Text style={[type.body, styles.center, { color: color.ink, paddingTop: space.xl }]}>{hero.card.name}</Text>
-            <Text style={[type.numberM, styles.center, { color: color.ink }]}>{money(hero.price!.marketCents)}</Text>
-          </Pressable>
-          {rest.length ? (
-            <View style={styles.grid}>
-              {rest.map((r) => (
-                <Pressable key={r.card.id} accessibilityRole="button" onPress={() => router.push(`/card/${r.card.id}`)}>
-                  <SlabView card={r.card} width={cellW} posed={false} />
-                </Pressable>
-              ))}
+      {/* What it's worth, and where it's been this month. */}
+      {stats.owned ? (
+        <View style={[styles.gutter, { paddingTop: space.xxl }]}>
+          <Text style={[type.secondary, { color: color.secondary }]}>Collection value</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={[type.displayS, { color: color.ink }]}>
+            {money(stats.valueCents)}
+          </Text>
+          <Text style={[type.text, { color: color.secondary }]}>
+            {month ? <Text style={{ color: upDown(stats.monthDeltaCents) }}>{month}</Text> : null}
+            {month ? ' this month · ' : ''}
+            {stats.owned} {stats.owned === 1 ? 'slab' : 'slabs'} · {stats.sets} {stats.sets === 1 ? 'set' : 'sets'}
+          </Text>
+          {series.length >= 2 ? (
+            <View style={{ paddingTop: space.l }}>
+              <MiniChart values={series} width={width - space.gutter * 2} height={size.homeChart - space.xl} />
             </View>
           ) : null}
-          <Pressable accessibilityRole="link" onPress={() => router.navigate('/')} style={styles.seeAll} hitSlop={8}>
-            <Text style={[type.text, { color: color.secondary }]}>See collection ›</Text>
-          </Pressable>
-        </>
+        </View>
+      ) : null}
+
+      {/* The slab doing best for you, posed, with why it's here. */}
+      {spot ? (
+        <Pressable accessibilityRole="button" onPress={() => router.push(`/card/${spot.row.card.id}`)} style={styles.spot}>
+          <SlabView card={spot.row.card} width={spotW} />
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <Text style={[type.secondary, { color: color.secondary }]}>{spot.gainCents != null ? 'Best buy' : 'Top slab'}</Text>
+            <Text style={[type.body, { color: color.ink }]}>{spot.row.card.name}</Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>{cardLabel(spot.row.card)}</Text>
+            <Text style={[type.rowPrice, { color: color.ink, paddingTop: space.s }]}>{money(spot.row.price!.marketCents)}</Text>
+            {spot.gainCents != null ? (
+              <Text style={[type.secondary, { color: color.secondary }]}>
+                <Text style={{ color: color.gain }}>{signed(spot.gainCents)}</Text> on what you paid
+              </Text>
+            ) : null}
+          </View>
+        </Pressable>
       ) : (
-        <View style={styles.hero}>
-          <View style={[styles.ghost, { width: size.carouselSlabW * 0.6, height: (size.carouselSlabW * 0.6 * size.heroH) / size.heroW }]} />
-          <Text style={[type.body, styles.center, { color: color.ink, paddingTop: space.xl }]}>Your best slabs show here</Text>
-          <Text style={[type.text, styles.center, { color: color.secondary }]}>Scan your first slab to start the showcase.</Text>
+        <View style={styles.emptyHero}>
+          <View style={[styles.ghost, { width: spotW, height: (spotW * size.heroH) / size.heroW }]} />
+          <Text style={[type.body, styles.center, { color: color.ink, paddingTop: space.xl }]}>Your best slab shows here</Text>
+          <Text style={[type.text, styles.center, { color: color.secondary }]}>Scan your first slab to start.</Text>
         </View>
       )}
 
-      {/* Numbers worth showing off. Pairs, so nothing crowds. */}
-      {stats.owned ? (
-        <View style={styles.section}>
-          <Text style={[type.section, { color: color.ink, paddingBottom: space.l }]}>Collection stats</Text>
-          <View style={styles.pairs}>
-            {stats.paidCents ? (
-              <Fact label="Gain on what you paid">
-                <Text style={{ color: upDown(stats.gainCents) }}>{signed(stats.gainCents)}</Text>
-                <Fact.Sub>{`${gainPct != null ? `${gainPct >= 0 ? '+' : '−'}${Math.abs(gainPct)}% on ` : 'on '}${money(stats.paidCents)} paid`}</Fact.Sub>
-              </Fact>
-            ) : null}
-            {stats.bestBuy ? (
-              <Fact label="Best buy">
-                <Text style={{ color: color.gain }}>{signed(stats.bestBuy.gainCents)}</Text>
-                <Fact.Sub>{stats.bestBuy.row.card.name}</Fact.Sub>
-              </Fact>
-            ) : null}
-            {stats.grades.length ? (
-              <Fact label="Grades">
-                {stats.grades
-                  .slice(0, 3)
-                  .map(([g, n]) => `${n}× ${g}`)
-                  .join('  ')}
-                <Fact.Sub>{stats.raw ? `${stats.graded} graded · ${stats.raw} raw` : `${stats.graded} graded`}</Fact.Sub>
-              </Fact>
-            ) : null}
-            <Fact label="Sets">
-              {String(stats.sets)}
-              <Fact.Sub>{stats.addedMonth ? `${stats.addedMonth} added this month` : 'Nothing added this month'}</Fact.Sub>
-            </Fact>
-            {stats.sold ? (
-              <Fact label="Sold">
-                {money(stats.soldCents)}
-                <Fact.Sub>
-                  <Text style={{ color: upDown(stats.profitCents) }}>{signed(stats.profitCents)}</Text> profit
-                </Fact.Sub>
-              </Fact>
-            ) : null}
+      {/* Grade mix: one bar in ink tones, no color. */}
+      {mix.length ? (
+        <Block title="Grades">
+          <View style={styles.bar}>
+            {mix.map((b, i) => (
+              <View key={b.key} style={{ flex: b.share, backgroundColor: color.ink, opacity: BAND_OPACITY[b.key], marginLeft: i ? space.xs / 2 : 0 }} />
+            ))}
           </View>
-        </View>
+          <View style={styles.legend}>
+            {mix.map((b) => (
+              <View key={b.key} style={styles.legendItem}>
+                <View style={[styles.swatch, { backgroundColor: color.ink, opacity: BAND_OPACITY[b.key] }]} />
+                <Text style={[type.secondary, { color: color.ink }]}>
+                  {b.key === 'raw' || b.key === 'lower' ? b.label : `PSA ${b.label}`}
+                  <Text style={{ color: color.secondary }}>{`  ${b.n}`}</Text>
+                </Text>
+              </View>
+            ))}
+          </View>
+        </Block>
+      ) : null}
+
+      {/* Recent activity: what came in and what went out. */}
+      {activity.length ? (
+        <Block title="Recent activity">
+          {activity.map((a, i) => {
+            const c = a.row.card;
+            const profit = a.kind === 'sold' && c.soldCents != null && c.paidCents != null ? c.soldCents - c.paidCents : null;
+            const price = a.kind === 'sold' ? c.soldCents : a.row.price?.marketCents ?? null;
+            return (
+              <View key={`${a.kind}:${c.id}`}>
+                {i ? <Hairline inset={size.thumbW + space.m} /> : null}
+                <Pressable accessibilityRole="button" onPress={() => router.push(`/card/${c.id}`)} style={({ pressed }) => [styles.activity, pressed && { opacity: 0.6 }]}>
+                  <SlabView card={c} width={size.thumbW} posed={false} shadow={false} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>{c.name}</Text>
+                    <Text style={[type.secondary, { color: color.secondary }]}>
+                      {a.kind === 'sold' ? 'Sold' : 'Added'} {saleDay(a.at)} · {cardLabel(c)}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[type.numberM, { color: color.ink }]}>{price != null ? money(price) : '—'}</Text>
+                    {profit != null ? <Text style={[type.caption, { color: upDown(profit) }]}>{signed(profit)}</Text> : null}
+                  </View>
+                </Pressable>
+              </View>
+            );
+          })}
+        </Block>
+      ) : null}
+
+      {/* Wishlist: one row into its own page. */}
+      <View style={[styles.gutter, { paddingTop: space.xxl }]}>
+        <Hairline />
+        <Pressable accessibilityRole="button" onPress={() => router.push('/wishlist')} style={({ pressed }) => [styles.wishRow, pressed && { opacity: 0.6 }]}>
+          {wished.length ? <Fan images={wished.slice(0, 3).map((w) => ({ key: w.key, uri: w.imageUrl, label: w.name }))} /> : null}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[type.body, { color: color.ink }]}>Wishlist</Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>
+              {wished.length ? (
+                <>
+                  {wish.count} {wish.count === 1 ? 'card' : 'cards'}
+                  {wish.below.length ? <Text style={{ color: color.gain }}>{` · ${wish.below.length} at or under your price`}</Text> : ` · ${money(wish.totalCents)} at your prices`}
+                </>
+              ) : (
+                'Cards you’re hunting and what you’d pay'
+              )}
+            </Text>
+          </View>
+          <Text style={[type.text, { color: color.secondary }]}>›</Text>
+        </Pressable>
+        <Hairline />
+      </View>
+
+      {/* A few numbers worth showing off. */}
+      {stats.paidCents || stats.sold ? (
+        <Block title="Numbers">
+          {stats.paidCents ? (
+            <Line label="Gain on what you paid" sub={`${gainPct != null ? `${gainPct >= 0 ? '+' : '−'}${Math.abs(gainPct)}% on ` : 'on '}${money(stats.paidCents)} paid`}>
+              <Text style={{ color: upDown(stats.gainCents) }}>{signed(stats.gainCents)}</Text>
+            </Line>
+          ) : null}
+          {stats.paidCents && stats.sold ? <Hairline /> : null}
+          {stats.sold ? (
+            <Line label={`Sold ${stats.sold} ${stats.sold === 1 ? 'card' : 'cards'}`} sub={`${signed(stats.profitCents)} profit`} subColor={upDown(stats.profitCents)}>
+              {money(stats.soldCents)}
+            </Line>
+          ) : null}
+        </Block>
       ) : null}
 
       <View style={styles.share}>
-        {hero ? (
+        {spot ? (
           <PrimaryButton title="Share profile" onPress={() => router.push('/share-profile')} />
         ) : (
           <PrimaryButton title="Scan a slab" onPress={() => router.push('/scan')} />
@@ -249,38 +311,31 @@ export default function ProfileTab() {
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function Block({ title, children }: { title: string; children: ReactNode }) {
   const color = useColors();
+  const styles = useStyles();
   return (
-    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
-      <Text numberOfLines={1} adjustsFontSizeToFit style={[type.rowPrice, { color: color.ink }]}>
-        {value}
-      </Text>
-      <Text style={[type.secondary, { color: color.secondary }]}>{label}</Text>
+    <View style={[styles.gutter, { paddingTop: space.xxl }]}>
+      <Text style={[type.section, { color: color.ink, paddingBottom: space.m }]}>{title}</Text>
+      {children}
     </View>
   );
 }
 
-/** One stat in the two-column list: a quiet label, the number, and a line about it. */
-function Fact({ label, children }: { label: string; children: ReactNode }) {
+/** A stat line: label and a quiet line under it on the left, the number on the right. */
+function Line({ label, sub, subColor, children }: { label: string; sub?: string; subColor?: string; children: ReactNode }) {
   const color = useColors();
   const styles = useStyles();
-  const kids = Array.isArray(children) ? children : [children];
-  const sub = kids.filter((k) => (k as { type?: unknown })?.type === FactSub);
-  const main = kids.filter((k) => (k as { type?: unknown })?.type !== FactSub);
   return (
-    <View style={styles.fact}>
-      <Text style={[type.secondary, { color: color.secondary }]}>{label}</Text>
-      <Text style={[type.numberM, { color: color.ink }]}>{main}</Text>
-      {sub}
+    <View style={styles.line}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[type.text, { color: color.ink }]}>{label}</Text>
+        {sub ? <Text style={[type.secondary, { color: subColor ?? color.secondary }]}>{sub}</Text> : null}
+      </View>
+      <Text style={[type.numberM, { color: color.ink }]}>{children}</Text>
     </View>
   );
 }
-function FactSub({ children }: { children: ReactNode }) {
-  const color = useColors();
-  return <Text style={[type.secondary, { color: color.secondary }]}>{children}</Text>;
-}
-Fact.Sub = FactSub;
 
 function MoreIcon() {
   const color = useColors();
@@ -305,32 +360,36 @@ function CameraIcon() {
 
 const useStyles = themed((color) =>
   StyleSheet.create({
-    header: { height: size.touch, flexDirection: 'row', justifyContent: 'flex-end', paddingRight: space.gutter - 10 },
-    who: { alignItems: 'center', paddingHorizontal: space.gutter, gap: space.l },
+    gutter: { paddingHorizontal: space.gutter },
+    header: { height: size.touch, flexDirection: 'row', justifyContent: 'flex-end', paddingRight: space.gutter - space.m },
+    who: { flexDirection: 'row', alignItems: 'center', gap: space.l, paddingHorizontal: space.gutter },
     camera: {
       position: 'absolute',
-      right: 0,
-      bottom: 0,
-      width: 30,
-      height: 30,
-      borderRadius: 15,
+      right: -space.xs,
+      bottom: -space.xs,
+      width: size.stepper - space.xs,
+      height: size.stepper - space.xs,
+      borderRadius: size.stepper,
       backgroundColor: color.ink,
-      borderWidth: 3,
+      borderWidth: space.xs / 2 + 1,
       borderColor: color.canvas,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    names: { alignItems: 'center', gap: 2 },
+    names: { flex: 1, minWidth: 0, gap: 2 },
+    metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.xs, paddingTop: space.s },
+    metaLink: { minHeight: size.touch, justifyContent: 'center' },
     center: { textAlign: 'center' },
-    stats: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, paddingTop: space.xxl },
-    divider: { width: StyleSheet.hairlineWidth * 2, height: 28, backgroundColor: color.hairline },
-    hero: { alignItems: 'center', paddingHorizontal: space.gutter, paddingTop: space.xxxl },
-    ghost: { borderRadius: 12, borderWidth: 2, borderColor: color.ghost, borderStyle: 'dashed' },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, paddingHorizontal: space.gutter, paddingTop: space.xxl },
-    seeAll: { alignSelf: 'center', paddingTop: space.xl, minHeight: size.touch, justifyContent: 'center' },
-    section: { paddingHorizontal: space.gutter, paddingTop: space.xxl },
-    pairs: { flexDirection: 'row', flexWrap: 'wrap', rowGap: space.xl },
-    fact: { width: '50%', paddingRight: space.l, gap: 2 },
+    spot: { flexDirection: 'row', alignItems: 'center', gap: space.xl, paddingHorizontal: space.gutter, paddingTop: space.xxl },
+    emptyHero: { alignItems: 'center', paddingHorizontal: space.gutter, paddingTop: space.xxl },
+    ghost: { borderRadius: radius.slab, borderWidth: 2, borderColor: color.ghost, borderStyle: 'dashed' },
+    bar: { flexDirection: 'row', height: space.s, borderRadius: space.xs, overflow: 'hidden' },
+    legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.l, rowGap: space.s, paddingTop: space.m },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+    swatch: { width: space.s + 2, height: space.s + 2, borderRadius: 2 },
+    activity: { minHeight: size.rowCon, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingVertical: space.s },
+    wishRow: { minHeight: size.rowCon, flexDirection: 'row', alignItems: 'center', gap: space.m },
+    line: { minHeight: size.rowVault, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingVertical: space.s },
     share: { paddingHorizontal: space.gutter, paddingTop: space.xxxl },
   }),
 );
