@@ -19,6 +19,9 @@ import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
+import { lastReal } from '../../src/pricing/buySignal';
+import { canAutoPrice } from '../../src/pricing/lastSales';
+import { priceCaption } from '../../src/components/search/SaleLines';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
@@ -169,7 +172,8 @@ export default function SearchedCard() {
   const detail = [no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
   const openSet = () => openSetPage(ready, groupId);
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
-  const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
+  // A last-sold headline (under 5 sales) never fills in a buy target or max.
+  const buy = buying && price && !quiet && canAutoPrice(price) ? buyPrices(price.marketCents, rules) : null;
   // The sheet's market wins: for a raw card it's the print you picked.
   const sellMarket = draft ? (draft.marketCents ?? (price && !quiet ? price.marketCents : null)) : null;
   const sellCost = draft?.cost?.kind === 'pulled' ? { kind: 'pulled' as const, packCents: pack?.cents ?? null } : (draft?.cost ?? null);
@@ -217,6 +221,9 @@ export default function SearchedCard() {
               <Text style={[type.text, { color: color.secondary }]}>
                 <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{pct(change)}</Text> {hist!.days}d
               </Text>
+            ) : null}
+            {priceCaption(price, pick === 'raw') ? (
+              <Text style={[type.secondary, { color: color.secondary, textAlign: 'right' }]}>{priceCaption(price, pick === 'raw')}</Text>
             ) : null}
           </View>
         </View>
@@ -270,15 +277,21 @@ export default function SearchedCard() {
           <View style={styles.chart}>
             {prices === undefined ? (
               <Text style={[type.text, { color: color.secondary }]}>Loading prices…</Text>
-            ) : charted && !quiet ? (
-              <PriceChart
-                values={series}
-                paidCents={null}
-                width={width - space.gutter * 2}
-                height={140}
-                tint={trendTint(series)}
-                asOf={price?.asOf}
-              />
+            ) : charted ? (
+              <>
+                <PriceChart
+                  values={series}
+                  paidCents={null}
+                  width={width - space.gutter * 2}
+                  height={140}
+                  tint={trendTint(series)}
+                  asOf={price?.asOf}
+                />
+                {/* A quiet grade keeps its chart of real sales, with the caveat under it. */}
+                {quiet ? (
+                  <Text style={[type.secondary, { color: color.secondary, paddingTop: space.s }]}>{emptyLine(pick, prices, otherGame, price)}</Text>
+                ) : null}
+              </>
             ) : (
               <>
                 <Text style={[type.text, { color: color.secondary }]}>
@@ -377,9 +390,11 @@ function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string 
   if (otherGame) return `Graded prices for ${GAME_NAME[otherGame] ?? otherGame} aren’t available yet.`;
   if (prices.capped && prices.source === 'catalog') return 'Graded prices load again tomorrow.';
   if (prices.source === 'catalog') return 'Graded prices aren’t reachable right now.';
-  // The price shown in the header for a quiet grade is the last 30-day median before it went quiet.
+  // The header price for a quiet grade: the last-5 median or last sale, else the last 30-day median.
   if (quiet)
-    return `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
+    return lastReal(quiet)
+      ? `No ${gradeLabel(pick)} sales in 30 days. Last sale ${fmtDay(lastReal(quiet)!)}; ${money(quiet.marketCents)} is ${quiet.basis === 'median5' ? 'the median of the last 5 sales' : quiet.basis === 'lastSold' ? 'that sale' : 'the median around it'}.`
+      : `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
   return `No ${gradeLabel(pick)} sales in the last 90 days.`;
 }
 

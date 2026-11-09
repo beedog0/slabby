@@ -80,6 +80,7 @@ export function Stepper({
   onPlus,
   label,
   minusDisabled,
+  plusDisabled,
 }: {
   value: string;
   onMinus: () => void;
@@ -87,12 +88,14 @@ export function Stepper({
   label: string;
   /** At the lowest allowed value: the − glyph goes secondary and does nothing. */
   minusDisabled?: boolean;
+  /** At the highest allowed value, the same for +. */
+  plusDisabled?: boolean;
 }) {
   return (
     <View style={styles.stepper}>
       <StepButton glyph={'−'} onPress={onMinus} label={`Decrease ${label}`} disabled={minusDisabled} />
       <Text style={[type.rowPrice, styles.stepValue]}>{value}</Text>
-      <StepButton glyph="+" onPress={onPlus} label={`Increase ${label}`} />
+      <StepButton glyph="+" onPress={onPlus} label={`Increase ${label}`} disabled={plusDisabled} />
     </View>
   );
 }

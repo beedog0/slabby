@@ -11,13 +11,17 @@ import { StyleSheet, Text, View } from 'react-native';
 import { money, pct } from '../../lib/format';
 import { gradingLine, gradingRead, history, liquidity, ratio, spread, spreadWord, trend } from '../../pricing/cardStats';
 import { catalogFor, choiceFor, type Choice } from '../../services/cardLink';
-import type { CardPrice } from '../../services/comps';
+import { priceFor, type CardPrice } from '../../services/comps';
+import { usePrices } from '../../store/prices';
 import { isQuiet, openPrices, type CatalogCard, type SearchGrade, type SearchPrices } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
 import { setCards } from '../../services/setCards';
 import { color, space, type } from '../../theme/tokens';
 import type { Card } from '../../types';
 import { Hairline } from '../ui';
+import { buySignal, shortDay, signalGap, thinRead } from '../../pricing/buySignal';
+import { BuySignalDial } from './BuySignal';
+import { SaleList } from './SaleLines';
 import { GradeLadder, RangeMeter, SetRow } from './CardInsights';
 
 export type { Choice };
@@ -49,6 +53,7 @@ export function CardAnalyticsView({
   onPick,
   onAll,
   con,
+  own,
 }: {
   pick: Choice;
   prices: SearchPrices | null | undefined;
@@ -57,14 +62,23 @@ export function CardAnalyticsView({
   onPick: (c: Choice) => void;
   onAll?: () => void;
   con?: boolean;
+  /** The picked grade's price is the card's own (vault) price: quiet means no sale in 30 days. */
+  own?: boolean;
 }) {
   const price = !prices ? null : pick === 'raw' ? prices.raw : prices.grades[pick];
-  const live = !!price && !!prices && (pick === 'raw' || !isQuiet(price, prices.fetchedAt));
+  const live = !!price && !!prices && (pick === 'raw' || (own ? price.sales30d > 0 : !isQuiet(price, prices.fetchedAt)));
   const hist = live ? history(price) : null;
+  const graded = pick !== 'raw';
+  const sig = hist ? buySignal(price, graded) : null;
+  // A grade with a price but no recent sale still shows what we know, with its caveat.
+  const quiet = !!price && !!prices && !live;
   return (
     <>
       {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} /> : null}
+      {quiet && price ? <ThinStats price={price} /> : null}
+      {graded && price ? <SaleList price={price} /> : null}
       {hist && price ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
+      {price ? <BuySignalDial signal={sig} gap={sig ? undefined : signalGap(price, graded, quiet)} graded={graded} /> : null}
       {prices ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}
       <SetRow setName={setTitle(setName)} cards={more} onAll={onAll} con={con} />
     </>
@@ -83,6 +97,8 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
   const [more, setMore] = useState<Found[]>([]);
   const [groupId, setGroupId] = useState<number | null>(null);
   const identity = [card.game, card.setCode, card.number, card.language, card.name].join('|');
+  // Re-render when the vault's prices change (pull to refresh, nightly load).
+  usePrices((s) => s.byKey);
 
   useEffect(() => {
     let live = true;
@@ -112,6 +128,11 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity]);
 
+  // The card's own price (the vault store, what the top of its page shows) wins for its grade,
+  // so the page never shows two prices for one grade. Other grades come from the search fetch.
+  const own = card.grader === 'psa' || card.grader === 'raw' ? priceFor(card) : null;
+  const shown = prices && own ? withOwn(prices, pick, own) : prices;
+
   if (!cat) return null;
   const open = (g: Choice) =>
     router.push({ pathname: '/search/[id]', params: { id: String(cat.productId), grade: g, ...(con ? { con: '1' } : {}) } });
@@ -125,7 +146,8 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
       ) : null}
       <CardAnalyticsView
         pick={pick}
-        prices={prices}
+        prices={shown}
+        own={!!own}
         setName={cat.setName}
         more={more}
         onPick={(g) => (g === pick ? undefined : open(g))}
@@ -134,6 +156,11 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
       />
     </View>
   );
+}
+
+/** Search prices with one grade (or raw) replaced by the card's own price. */
+export function withOwn(prices: SearchPrices, pick: Choice, own: CardPrice): SearchPrices {
+  return pick === 'raw' ? { ...prices, raw: own } : { ...prices, grades: { ...prices.grades, [pick]: own } };
 }
 
 /**
@@ -227,7 +254,66 @@ export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPri
           ? grading
             ? 'TCGplayer market. Grading math assumes $25 to grade, $8 shipping, eBay fees, and a PSA 9 when it misses.'
             : 'TCGplayer market price, near mint.'
-          : 'eBay sold, 30-day median. Ratios need 5 sales on each side.'}
+          : price.basis === 'median5'
+            ? 'eBay sold, median of the last 5 sales. Ratios need 5 sales on each side.'
+            : price.basis === 'lastSold'
+              ? 'eBay sold, last sale (too few for a median). Ratios need 5 sales on each side.'
+              : 'eBay sold, 30-day median. Ratios need 5 sales on each side.'}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Key stats for a grade with a price but no sale in 30 days: the last sale, how many days had a
+ * sale in 90, the headline price and the 90-day range of sales. Bryan wants every price to
+ * show where it came from, so a thin price gets its numbers with the caveat, never a bare figure.
+ */
+/** What the headline number is, for a stat label. */
+function priceLabel(p: CardPrice): string {
+  return p.basis === 'median5' ? 'Median, last 5 sales' : p.basis === 'lastSold' ? 'Last sold price' : 'Last 30-day price';
+}
+
+export function ThinStats({ price }: { price: CardPrice }) {
+  const t = thinRead(price);
+  if (!t) return null;
+  const cells = [
+    { label: 'Last sale', value: t.lastSale ? shortDay(t.lastSale) : null },
+    { label: 'Days with a sale, 90 days', value: String(t.saleDays) },
+    { label: priceLabel(price), value: money(price.marketCents) },
+    { label: 'Range, 90 days', value: t.low != null && t.high != null ? `${money(t.low)}–${money(t.high).replace('$', '')}` : null },
+  ].filter((c): c is { label: string; value: string } => !!c.value);
+  const rows: (typeof cells)[] = [];
+  for (let i = 0; i < cells.length; i += 2) rows.push(cells.slice(i, i + 2));
+  return (
+    <View style={{ paddingTop: space.xl }}>
+      <Text style={[type.section, { color: color.ink }]}>Key stats</Text>
+      <Text style={[type.text, { color: color.secondary, paddingTop: space.xs }]}>
+        {t.saleDays <= 1 ? 'Rarely sells' : `Thin · sales on ${t.saleDays} days in 90`} · no sale in the last 30 days
+      </Text>
+      <View style={{ paddingTop: space.m }}>
+        {rows.map((row, i) => (
+          <View key={i}>
+            <Hairline />
+            <View style={styles.statRow}>
+              {row.map((c) => (
+                <View key={c.label} style={styles.stat} accessible accessibilityLabel={`${c.label}, ${c.value}`}>
+                  <Text style={[type.secondary, { color: color.secondary }]}>{c.label}</Text>
+                  <Text style={[type.numberM, { color: color.ink }]}>{c.value}</Text>
+                </View>
+              ))}
+              {row.length === 1 ? <View style={styles.stat} /> : null}
+            </View>
+          </View>
+        ))}
+        <Hairline />
+      </View>
+      <Text style={[type.caption, { color: color.secondary, paddingTop: space.m }]}>
+        {price.basis === 'median5'
+          ? 'eBay sold. The price is the median of the last 5 sales, however far back they go.'
+          : price.basis === 'lastSold'
+            ? 'eBay sold. Too few sales for a median, so the price is the last sale.'
+            : 'eBay sold. The price is the median of the last 30 days that had sales, so it may be out of date.'}
       </Text>
     </View>
   );

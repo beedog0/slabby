@@ -179,3 +179,15 @@ export const slabPose = {
 /** Sparkline color thresholds: ±3% over 30 days. */
 export const trendThreshold = 0.03;
 
+
+/**
+ * Buy-signal dial (card page): three calm, flat tints, Buy · Fair · Hold off. Pale on purpose so
+ * the needle and the words stay the loudest thing; green/red stay reserved for up/down numbers.
+ * The dark set is for the dark-mode palette (useColors) once that lands on main.
+ */
+export const signal = {
+  light: { buy: '#CFE8DA', fair: '#E5E5EA', hold: '#F1DCC4' },
+  dark: { buy: '#1F3D2E', fair: '#2A2A2C', hold: '#45331F' },
+} as const;
+
+export const dial = { w: 240, h: 132, r: 96, stroke: 14 } as const;

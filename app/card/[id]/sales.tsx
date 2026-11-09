@@ -63,7 +63,12 @@ export default function SalesScreen() {
   // cached price stands in, worded like Slab detail, so the header never disappears or jumps.
   let big: string | null = null;
   let line: string | null = null;
-  if (summary) {
+  if (win === '30' && price && card.grader !== 'raw' && price.sales30d > 0 && !stale) {
+    // 30 days: the same numbers as Slab detail's comps row (one source), not a second summary of
+    // the same sales that rounds or windows slightly differently.
+    big = money(price.median30Cents ?? price.marketCents);
+    line = `median of ${salesWord(price.sales30d)} · ${range(price.lowCents, price.highCents)}`;
+  } else if (summary) {
     big = money(summary.medianCents);
     line = stale ?? `median of ${salesWord(summary.count)} · ${range(summary.lowCents, summary.highCents)}`;
   } else if (price) {
