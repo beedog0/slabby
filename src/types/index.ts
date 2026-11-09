@@ -14,7 +14,8 @@ export type SealedType =
   | 'tin'
   | 'collection'
   | 'deck'
-  | 'case';
+  | 'case'
+  | 'display';
 
 export type Card = {
   id: string;

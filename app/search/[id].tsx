@@ -270,7 +270,8 @@ export default function SearchedCard() {
             </View>
           ) : null}
 
-          <View style={styles.chart}>
+          {/* Room for the chart only when there's a chart (or one loading); a note alone is one line. */}
+          <View style={prices === undefined || (charted && !quiet) ? styles.chart : styles.chartNote}>
             {prices === undefined ? (
               <Text style={[type.text, { color: color.secondary }]}>Loading prices…</Text>
             ) : charted && !quiet ? (
@@ -457,6 +458,7 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.m, paddingHorizontal: space.gutter },
   chart: { minHeight: 172, justifyContent: 'center', paddingTop: space.xl, paddingBottom: space.m },
+  chartNote: { paddingTop: space.xl, paddingBottom: space.m },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.l },
   buyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: space.l },
   label: { color: color.ink, fontWeight: '400' },

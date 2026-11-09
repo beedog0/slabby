@@ -60,6 +60,7 @@ export const SEALED_TYPES = [
   'collection',
   'deck',
   'case',
+  'display',
 ] as const;
 export type SealedType = (typeof SEALED_TYPES)[number];
 
@@ -77,6 +78,8 @@ export function sealedType(name: string): SealedType | null {
   if (NOT_SEALED.test(n)) return null;
   if (/\bcase\b/.test(n)) return 'case';
   if (/elite trainer box|\betb\b/.test(n)) return 'etb';
+  // A display of tins or blisters ("Mini Tin Display") is not a booster box.
+  if (/\bdisplay\b/.test(n) && /\btins?\b|blister|checklane/.test(n)) return 'display';
   if (/booster box|booster display|display box|\bdisplay\b/.test(n)) return 'booster_box';
   if (/booster bundle/.test(n)) return 'booster_bundle';
   if (/blister|checklane|check lane/.test(n)) return 'blister';

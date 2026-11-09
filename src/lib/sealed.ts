@@ -15,6 +15,7 @@ export const SEALED_TYPES: SealedType[] = [
   'collection',
   'deck',
   'case',
+  'display',
 ];
 
 const LABEL: Record<SealedType, string> = {
@@ -27,6 +28,7 @@ const LABEL: Record<SealedType, string> = {
   collection: 'Collection box',
   deck: 'Deck',
   case: 'Case',
+  display: 'Display',
 };
 
 /** "Booster box"; "Sealed" for a kind this build doesn't know yet. */

@@ -126,6 +126,10 @@ describe('sealedType', () => {
     ['Surging Sparks Pin Collection', 'collection'],
     ['League Battle Deck [Miraidon ex]', 'deck'],
     ['Booster Display Box (24 Packs)', 'booster_box'],
+    ['Prismatic Evolutions Mini Tin Display', 'display'],
+    ['Paldean Fates Mini Tin Display', 'display'],
+    ['Surging Sparks 3 Pack Blister Display', 'display'],
+    ['Pokemon GO Elite Trainer Box', 'etb'],
   ])('%s → %s', (name, kind) => expect(sealedType(name)).toBe(kind));
   it.each(['Surging Sparks Code Card', 'Card Sleeves [Pikachu]', 'Jumbo Card Pikachu', 'Deck Box', 'Playmat', 'Binder', 'Random Thing'])(
     'drops %s',
