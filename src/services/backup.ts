@@ -15,6 +15,7 @@ import { useCorrections } from '../store/corrections';
 import { useDisplay } from '../store/display';
 import { useProfile } from '../store/profile';
 import { useRules } from '../store/rules';
+import { useSharing } from '../store/sharing';
 import { useVault } from '../store/vault';
 import { useWishlist } from '../store/wishlist';
 import { supabase } from './supabase';
@@ -42,6 +43,7 @@ export const BACKED_UP: { key: string; store: PersistedStore }[] = [
   { key: 'slabby.display', store: useDisplay },
   { key: 'slabby-appearance', store: useAppearance },
   { key: 'slabby.profile', store: useProfile },
+  { key: 'slabby.sharing', store: useSharing },
 ];
 
 /** Resolves once these stores have loaded from the phone, so nothing merges over a blank copy. */
