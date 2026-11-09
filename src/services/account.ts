@@ -6,7 +6,6 @@
 
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { createClient } from '@supabase/supabase-js';
-import * as Linking from 'expo-linking';
 import { supabase } from './supabase';
 
 /** Sign in with Apple needs the capability on the app id and the Apple provider in Supabase. */
@@ -58,7 +57,8 @@ const exists = (e: { code?: string; message?: string } | null) =>
   !!e && (e.code === 'email_exists' || e.code === 'identity_already_exists' || /already (been )?registered|already exists|already linked/i.test(e.message ?? ''));
 
 /** Where the email's sign-in link brings you back (app/auth.tsx). Listed in Supabase URL config. */
-export const authRedirect = () => Linking.createURL('auth');
+// Exactly this string is allowed in Supabase (Auth > URL Configuration > Redirect URLs).
+export const authRedirect = () => 'slabby://auth';
 
 /**
  * Finish a sign-in from the email link: slabby://auth#access_token=…&refresh_token=… (or ?code=…).
