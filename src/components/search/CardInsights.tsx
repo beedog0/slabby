@@ -51,7 +51,7 @@ export function GradeLadder({ prices, pick, onPick }: { prices: SearchPrices; pi
   const top = Math.max(...rows.map((r) => r.p.marketCents));
 
   return (
-    <Section title="Prices by grade" note="30-day median · sales in 30 days">
+    <Section title="Prices by grade" note={`${Object.values(prices.grades).some((g) => g?.basis) ? 'Median of last 5 sales, or last sale' : '30-day median'} · sales in 30 days`}>
       {rows.map(({ key, p, quiet }) => {
         const on = key === pick;
         const ink = quiet ? color.secondary : color.ink;
