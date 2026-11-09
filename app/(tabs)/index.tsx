@@ -1,5 +1,7 @@
 // Home is the collection: what you own, shown on a shelf, one at a time, or as a grid.
-// Con mode starts from the … menu. Supersedes the 01-vault.png layout at Bryan's request (collection-first).
+// The Collection tab. Search, Scan, Con and Profile live in the bottom bar (src/components/TabBar);
+// the … menu only holds things you do to the collection. Supersedes the 01-vault.png layout at
+// Bryan's request (collection-first).
 
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
@@ -14,29 +16,28 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
-import { ValueChart } from '../src/components/MiniChart';
-import { ArrangeShelf, type PageScroll } from '../src/components/collection/ArrangeShelf';
-import { EmptyFilter, EmptyVault } from '../src/components/collection/EmptyVault';
-import { FilterTabs } from '../src/components/collection/FilterTabs';
-import { GridView } from '../src/components/collection/GridView';
-import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
-import { SearchSort } from '../src/components/collection/SearchSort';
-import { effectivePick, filterMenu, GAMES, inPick, type CardPick } from '../src/lib/games';
-import type { SlabActions } from '../src/components/collection/actions';
-import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/collection/statusSheets';
-import { openDropdown } from '../src/components/menu/Dropdown';
-import { openAppearance, APPEARANCE_LABEL } from '../src/components/menu/appearanceMenu';
-import { useAppearance } from '../src/store/appearance';
-import { openSlabMenu } from '../src/components/menu/Menu';
-import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
-import { arrange, stackCopies } from '../src/pricing/arrange';
-import { shareSellSheet } from '../src/services/sellSheet';
-import { DEFAULT_CON_NAME } from '../src/store/con';
-import { ShelfView } from '../src/components/collection/ShelfView';
-import { Segmented } from '../src/components/Segmented';
-import { ViewSwitch } from '../src/components/collection/ViewSwitch';
-import { IconButton, PrimaryButton, ScanIcon, SearchIcon } from '../src/components/ui';
-import { changeText, money, rowTitle } from '../src/lib/format';
+import { ValueChart } from '../../src/components/MiniChart';
+import { ArrangeShelf, type PageScroll } from '../../src/components/collection/ArrangeShelf';
+import { EmptyFilter, EmptyVault } from '../../src/components/collection/EmptyVault';
+import { FilterTabs } from '../../src/components/collection/FilterTabs';
+import { GridView } from '../../src/components/collection/GridView';
+import { ScrollDisplay } from '../../src/components/collection/ScrollDisplay';
+import { SearchSort } from '../../src/components/collection/SearchSort';
+import { effectivePick, filterMenu, GAMES, inPick, type CardPick } from '../../src/lib/games';
+import type { SlabActions } from '../../src/components/collection/actions';
+import { confirmRemoveMany, openMoveMany, statusItems } from '../../src/components/collection/statusSheets';
+import { openDropdown } from '../../src/components/menu/Dropdown';
+import { openSlabMenu } from '../../src/components/menu/Menu';
+import { MAX_SHARE, shareSlab, shareSlabs } from '../../src/components/share/ShareCard';
+import { arrange, stackCopies } from '../../src/pricing/arrange';
+import { shareSellSheet } from '../../src/services/sellSheet';
+import { DEFAULT_CON_NAME } from '../../src/store/con';
+import { ShelfView } from '../../src/components/collection/ShelfView';
+import { Segmented } from '../../src/components/Segmented';
+import { ViewSwitch } from '../../src/components/collection/ViewSwitch';
+import { IconButton, PrimaryButton } from '../../src/components/ui';
+import { useHideTabBar } from '../../src/components/TabBar';
+import { changeText, money, rowTitle } from '../../src/lib/format';
 import {
   collection,
   collectionSeries,
@@ -45,14 +46,14 @@ import {
   soldSeries,
   type CardRow,
   type CollectionFilter,
-} from '../src/pricing/portfolio';
-import { refreshPrices } from '../src/services/comps';
-import { useDisplay } from '../src/store/display';
-import { usePrices } from '../src/store/prices';
-import { useRules } from '../src/store/rules';
-import { useVault } from '../src/store/vault';
-import { size, space, type } from '../src/theme/tokens';
-import { themed, useColors } from '../src/theme/theme';
+} from '../../src/pricing/portfolio';
+import { refreshPrices } from '../../src/services/comps';
+import { useDisplay } from '../../src/store/display';
+import { usePrices } from '../../src/store/prices';
+import { useRules } from '../../src/store/rules';
+import { useVault } from '../../src/store/vault';
+import { size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 
 // Every filter fills the same header lines (value, one line, chart slot) so the tabs never move.
 const EMPTY: Record<CollectionFilter, { title: string; hint: string; chart: string }> = {
@@ -135,6 +136,8 @@ export default function Home() {
   const [scrubbed, setScrubbed] = useState<{ cents: number; date?: string } | null>(null);
   // Arranging: hold a slab, drag it to its spot. Saves as "My order".
   const [arranging, setArranging] = useState(false);
+  // Selecting and arranging bring their own bottom bar (Done, Share), so the tabs step aside.
+  useHideTabBar(selecting || arranging);
   const [dragging, setDragging] = useState(false);
   // The page's scroll, so a slab held near the screen edge can scroll it while arranging.
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -218,28 +221,22 @@ export default function Home() {
       return next;
     });
 
-  // Grouped by when you'd reach for it: at the con, around the shelf, then settings.
-  const appearance = useAppearance((st) => st.mode);
+  // Only things you do to the collection. Con mode, search, scan and settings moved to the tab bar
+  // (Bryan: the … menu had grown too long); Price check lives in con mode's Buying.
   const moreRef = useRef<ComponentRef<typeof View>>(null);
   const more = () =>
     openDropdown(moreRef, [
-      [
-        { label: 'Con mode', onPress: () => router.push('/con') },
-        {
-          label: 'Sell sheet',
-          onPress: () =>
-            shareSellSheet(all, DEFAULT_CON_NAME).catch(() => Alert.alert('Couldn’t make the sell sheet')),
-        },
-      ],
       [
         { label: 'Select', onPress: () => startSelecting() },
         { label: 'Arrange shelf', onPress: startArranging },
         { label: 'Add by hand', onPress: () => router.push('/add') },
       ],
       [
-        { label: 'Pricing rules', onPress: () => router.push('/settings/pricing') },
-        { label: 'Account', onPress: () => router.push('/settings/account') },
-        { label: 'Appearance', detail: APPEARANCE_LABEL[appearance], onPress: openAppearance },
+        {
+          label: 'Sell sheet',
+          onPress: () =>
+            shareSellSheet(all, DEFAULT_CON_NAME).catch(() => Alert.alert('Couldn’t make the sell sheet')),
+        },
       ],
     ]);
 
@@ -364,12 +361,6 @@ export default function Home() {
               <View style={{ height: size.touch }} />
             ) : (
               <>
-                <IconButton label="Search cards" onPress={() => router.push('/search')}>
-                  <SearchIcon />
-                </IconButton>
-                <IconButton label="Scan a slab" onPress={() => router.push('/scan')}>
-                  <ScanIcon />
-                </IconButton>
                 <View ref={moreRef} collapsable={false}>
                   <IconButton label="More" onPress={more}>
                     <MoreIcon />
