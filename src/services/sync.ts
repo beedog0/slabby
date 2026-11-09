@@ -150,10 +150,21 @@ async function userId(): Promise<string | null> {
   return data.session?.user.id ?? null;
 }
 
-export async function pushCards(cards: Card[]): Promise<void> {
+/** Save cards to the slabs table. Resolves to how many couldn't be saved. */
+export async function pushCards(cards: Card[]): Promise<number> {
   const uid = await userId();
-  if (!supabase || !uid || !cards.length) return;
-  await supabase.from('slabs').upsert(cards.filter((c) => isUuid(c.id)).map((c) => toRow(c, uid)));
+  if (!supabase || !uid || !cards.length) return 0;
+  const rows = cards.filter((c) => isUuid(c.id)).map((c) => toRow(c, uid));
+  if (!rows.length) return 0;
+  const { error } = await supabase.from('slabs').upsert(rows);
+  if (!error) return 0;
+  // One bad row fails the whole batch, so save the rest one at a time.
+  let failed = 0;
+  for (const row of rows) {
+    const { error: e } = await supabase.from('slabs').upsert(row);
+    if (e) failed++;
+  }
+  return failed;
 }
 
 /** Delete slabs on the server. Returns the ids it confirmed, so failed ones are retried later. */
@@ -205,11 +216,11 @@ export function mergeVault(
   const remote = remoteAll.filter((c) => !removed.has(c.id));
   const remoteIds = new Set(remote.map((c) => c.id));
   const toPush = local.filter((c) => isUuid(c.id) && !remoteIds.has(c.id));
-  // Con buys are phone-only notes (not columns yet): keep them on the server's copy.
+  // The server's columns win, but fields it has no column for (con buys and the like) stay.
   const localById = new Map(local.map((c) => [c.id, c]));
   const kept = remote.map((r) => {
     const l = localById.get(r.id);
-    return l?.boughtConId ? { ...r, boughtConId: l.boughtConId, boughtMarketCents: l.boughtMarketCents ?? null } : r;
+    return l ? { ...l, ...r } : r;
   });
   return { merged: [...toPush, ...kept], toPush };
 }

@@ -241,7 +241,7 @@ export default function Home() {
       ],
       [
         { label: 'Pricing rules', onPress: () => router.push('/settings/pricing') },
-        { label: 'Back up', onPress: () => router.push('/settings/account') },
+        { label: 'Account', onPress: () => router.push('/settings/account') },
         { label: 'Appearance', detail: APPEARANCE_LABEL[appearance], onPress: openAppearance },
       ],
     ]);

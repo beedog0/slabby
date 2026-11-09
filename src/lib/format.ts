@@ -159,3 +159,13 @@ export function ordinal(n: number): string {
   const s = t >= 11 && t <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
   return `${n}${s}`;
 }
+
+/** "just now", "4 min ago", "2 hr ago", "Nov 8". */
+export function savedAgo(iso: string | null, now = Date.now()): string | null {
+  if (!iso) return null;
+  const mins = Math.floor((now - Date.parse(iso)) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 24 * 60) return `${Math.floor(mins / 60)} hr ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
