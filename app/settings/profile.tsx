@@ -17,6 +17,9 @@ import { BIO_MAX, NAME_MAX, cleanHandle, handleProblem, initialOf, useProfile } 
 import { size, space, type } from '../../src/theme/tokens';
 import { themed, useColors } from '../../src/theme/theme';
 
+/** Long enough for the sheet's native screen to finish closing before the picker opens. */
+const SHEET_GONE_MS = 450;
+
 export default function EditProfile() {
   const color = useColors();
   const styles = useStyles();
@@ -53,21 +56,23 @@ export default function EditProfile() {
           : 'Friends will find you by this.';
   const hintColor = problem || taken ? color.loss : color.secondary;
 
+  // iOS can't show the photo picker while another screen (our sheet) is still sliding away: it
+  // drops the picker without a word. So with no photo yet, the tap opens the picker straight away;
+  // from the Change / Remove sheet it waits until the sheet is gone.
+  const pick = () =>
+    pickProfilePhoto()
+      .then((p) => p && setPhoto(p))
+      .catch(() => setError('Couldn’t open your photos. Try again.'));
   const changePhoto = () =>
-    openMenu({
-      title: 'Profile photo',
-      items: [
-        {
-          label: 'Choose from photos',
-          // The sheet runs this once it has closed, so the photo picker can open over the page.
-          onPress: () =>
-            pickProfilePhoto()
-              .then((p) => p && setPhoto(p))
-              .catch(() => setError('Couldn’t open that photo.')),
-        },
-        ...(photo ? [{ label: 'Remove photo', onPress: () => setPhoto(null) }] : []),
-      ],
-    });
+    photo
+      ? openMenu({
+          title: 'Profile photo',
+          items: [
+            { label: 'Choose another photo', onPress: () => setTimeout(pick, SHEET_GONE_MS) },
+            { label: 'Remove photo', onPress: () => setPhoto(null) },
+          ],
+        })
+      : pick();
 
   const save = async () => {
     if (busy || problem || taken) return;
