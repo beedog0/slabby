@@ -9,7 +9,7 @@ import { BackIcon, Hairline, IconButton, Stepper, Toggle } from '../../src/compo
 import { money, rulePct } from '../../src/lib/format';
 import { useRules } from '../../src/store/rules';
 import { color, size, space, type } from '../../src/theme/tokens';
-import type { PricingRules } from '../../src/types';
+import { clampPct, pctLimits, pctWord } from '../../src/pricing/rules';
 
 const STEP = 1; // percentage points per tap
 const ROUNDING = [100, 500, 1000, 2500]; // $1, $5, $10, $25
@@ -20,20 +20,28 @@ export default function PricingRulesScreen() {
   const set = useRules((s) => s.set);
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
-  const pctRow = (key: keyof PricingRules, title: string, sub: string) => {
-    const v = rules[key] as number;
+  // Steps stop where a rule would contradict another (ask under market, floor over ask, max over
+  // market, target over max); the line under each says above/below/at from the value's sign.
+  const pctRow = (key: 'askPct' | 'floorPct' | 'buyTargetPct' | 'buyMaxPct', title: string, of: string, note?: string) => {
+    const v = rules[key];
+    const { min, max } = pctLimits(rules, key);
     return (
       <>
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={[type.body, { color: color.ink }]}>{title}</Text>
-            <Text style={[type.secondary, { color: color.secondary }]}>{sub}</Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>
+              {pctWord(v, of)}
+              {note ? ` · ${note}` : ''}
+            </Text>
           </View>
           <Stepper
             label={title}
             value={rulePct(v)}
-            onMinus={() => set({ [key]: v - STEP })}
-            onPlus={() => set({ [key]: v + STEP })}
+            minusDisabled={v <= min}
+            plusDisabled={v >= max}
+            onMinus={() => set({ [key]: clampPct(rules, key, v - STEP) })}
+            onPlus={() => set({ [key]: clampPct(rules, key, v + STEP) })}
           />
         </View>
         <Hairline />
@@ -64,8 +72,8 @@ export default function PricingRulesScreen() {
         </Text>
 
         <Section title="Selling" />
-        {pctRow('askPct', 'Ask', 'above market')}
-        {pctRow('floorPct', 'Floor', 'below 30-day low sale')}
+        {pctRow('askPct', 'Ask', 'market')}
+        {pctRow('floorPct', 'Floor', '30-day low sale', rules.floorPct >= rules.askPct ? 'can’t go over the ask' : undefined)}
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={[type.body, { color: color.ink }]}>Never sell at a loss</Text>
@@ -76,8 +84,8 @@ export default function PricingRulesScreen() {
         <Hairline />
 
         <Section title="Buying" />
-        {pctRow('buyTargetPct', 'Target', 'below market')}
-        {pctRow('buyMaxPct', 'Max', 'walk away above')}
+        {pctRow('buyTargetPct', 'Target', 'market', rules.buyTargetPct >= rules.buyMaxPct ? 'can’t go over your max' : undefined)}
+        {pctRow('buyMaxPct', 'Max', 'market', 'walk away above')}
 
         <Section title="Market price" />
         <ValueRow title="Graded cards" value="Median of last 5 eBay sales" />
