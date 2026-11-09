@@ -16,6 +16,8 @@ export type TheirCard = {
   name: string;
   setName: string;
   number: string | null;
+  /** Set code, to find the same card in your vault (missing on trades saved before it). */
+  setCode?: string | null;
   imageUrl: string | null;
   game: Game;
   language: string;

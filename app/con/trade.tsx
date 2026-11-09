@@ -15,6 +15,7 @@ import { BackIcon, Hairline, IconButton, PlusIcon, PrimaryButton } from '../../s
 import { cardLabel, money, rowTitle } from '../../src/lib/format';
 import { rowFor, type CardRow } from '../../src/pricing/portfolio';
 import { TRADE_LABEL, trade } from '../../src/pricing/rules';
+import { choiceFor, sameCard } from '../../src/services/cardLink';
 import { gradeLabel, nameAndVariant, type SearchGrade } from '../../src/services/search';
 import { setTitle } from '../../src/components/search/CardAnalytics';
 import { openMenu } from '../../src/components/menu/Menu';
@@ -43,9 +44,23 @@ export default function Trade() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards, rules, prices]);
   const mineRows = mine.map((id) => owned.find((r) => r.card.id === id)).filter((r): r is CardRow => !!r);
+  // One price per card and grade: when their card is one you also own at that grade, it's valued
+  // at your vault price (what your side uses), not the search snapshot taken when it was added.
+  const theirValue = (c: TheirCard) => {
+    const same =
+      c.setCode !== undefined &&
+      owned.find(
+        (r) =>
+          r.price &&
+          (r.card.grader === 'psa' || r.card.grader === 'raw') &&
+          choiceFor(r.card) === c.grade &&
+          sameCard({ number: c.number ?? '', setCode: c.setCode ?? null, language: c.language }, r.card),
+      );
+    return same ? same.price!.marketCents : c.marketCents;
+  };
   const t = trade(
     mineRows.map((r) => r.price?.marketCents ?? 0),
-    theirs.map((c) => c.marketCents),
+    theirs.map(theirValue),
   );
   const unpriced = mineRows.filter((r) => !r.price).length;
   const empty = !mineRows.length && !theirs.length;
@@ -164,6 +179,7 @@ export default function Trade() {
               {i ? <Hairline inset={size.thumbW + space.m} /> : null}
               <TheirRow
                 c={c}
+                value={theirValue(c)}
                 onPress={() => openMenu({ title: c.name, items: [{ label: 'Take off the trade', onPress: () => removeTheirs(c.key) }] })}
               />
             </View>
@@ -192,7 +208,7 @@ function Side({ title, addLabel, onAdd, children }: { title: string; addLabel: s
   );
 }
 
-function TheirRow({ c, onPress }: { c: TheirCard; onPress: () => void }) {
+function TheirRow({ c, value, onPress }: { c: TheirCard; value: number; onPress: () => void }) {
   // Name on one line; variant, set (without its "SWSH07:" code) and grade on the next.
   const { name, variant } = nameAndVariant(c.name);
   const detail = [variant, setTitle(c.setName), gradeLabel(c.grade as SearchGrade | 'raw')].filter(Boolean).join(' · ');
@@ -203,7 +219,7 @@ function TheirRow({ c, onPress }: { c: TheirCard; onPress: () => void }) {
         <Text style={[type.body, { color: color.ink }]}>{name}</Text>
         <Text style={[type.secondary, { color: color.secondary }]}>{detail}</Text>
       </View>
-      <Text style={[type.numberM, { color: color.ink }]}>{money(c.marketCents)}</Text>
+      <Text style={[type.numberM, { color: color.ink }]}>{money(value)}</Text>
     </Pressable>
   );
 }
