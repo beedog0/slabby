@@ -1,7 +1,7 @@
 import cards from '../../mocks/cards.json';
 import { DEFAULT_RULES, type Card } from '../../types';
 import { rowFor, summarize } from '../portfolio';
-import { lastSalesDay, recentSales, tableReady } from '../tableReady';
+import { lastSalesDay, recentBuys, recentSales, tableReady } from '../tableReady';
 
 const rows = (cards as Card[]).map((c) => rowFor(c, DEFAULT_RULES));
 
@@ -33,5 +33,15 @@ describe('sales', () => {
   });
   it('lists sales newest first', () => {
     expect(recentSales(r, 2).map((x) => x.card.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('recentBuys', () => {
+  const base = rows[0].card;
+  const bought = (id: string, paidAt: string | null, createdAt: string, paidCents: number | null) =>
+    ({ card: { ...base, id, paidAt, createdAt, paidCents }, price: null }) as unknown as (typeof rows)[number];
+  it('lists cards with a price paid, newest first, falling back to when they were added', () => {
+    const r = [bought('a', '2026-11-01', '2026-11-01', 100), bought('b', null, '2026-11-08', 200), bought('c', '2026-11-05', '2026-10-01', null)];
+    expect(recentBuys(r).map((x) => x.card.id)).toEqual(['b', 'a']);
   });
 });

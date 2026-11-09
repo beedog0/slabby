@@ -1,21 +1,24 @@
 // The Con tab: the stop before con mode, so the tab behaves like the others instead of throwing
 // you into a running con (Bryan: that "feels a little off"), and a page worth opening between cons.
 //
-// Top to bottom: the con (live clock while one runs) with its one button, Start or Open con mode;
-// your last day of sales (or today's, live); Selling / Buying with what you're bringing (slabs
-// with ask and floor, or the wishlist with what you'll pay); recent sales; then quiet tools.
+// Top to bottom: the con (live clock while one runs) with its one button, Start or Open con mode,
+// and a … for tools; today's numbers (live) or your last sales day; Selling / Buying with what
+// you're bringing; then recent sales, or recent buys on Buying. Every row of numbers sits between
+// hairlines with dividers between columns, so nothing floats (Bryan).
 
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
-import { Hairline, PrimaryButton } from '../../src/components/ui';
-import { elapsed, money, rulePct, saleDay } from '../../src/lib/format';
-import { conSummary, rowFor } from '../../src/pricing/portfolio';
-import { lastSalesDay, recentSales, tableReady } from '../../src/pricing/tableReady';
+import { Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
+import { openDropdown } from '../../src/components/menu/Dropdown';
+import Svg, { Circle } from 'react-native-svg';
+import { elapsed, money, saleDay } from '../../src/lib/format';
+import { conSummary, rowFor, type CardRow } from '../../src/pricing/portfolio';
+import { lastSalesDay, recentBuys, recentSales, tableReady } from '../../src/pricing/tableReady';
 import { displayName } from '../../src/services/search';
 import { DEFAULT_CON_NAME, useCon, type ConMode } from '../../src/store/con';
 import { usePrices } from '../../src/store/prices';
@@ -52,10 +55,18 @@ export default function ConTab() {
   const table = useMemo(() => tableReady(rows), [rows]);
   const lastDay = useMemo(() => lastSalesDay(rows), [rows]);
   const sales = useMemo(() => recentSales(rows, 5), [rows]);
+  const buys = useMemo(() => recentBuys(rows, 5), [rows]);
   const today = session ? conSummary(rows, session.startedAt) : null;
   const cellW = Math.floor((width - space.gutter * 2 - space.m * (COLS - 1)) / COLS);
   const artH = Math.round((cellW * 88) / 63);
   const signed = (c: number) => `${c >= 0 ? '+' : '−'}${money(Math.abs(c))}`;
+
+  const toolsRef = useRef<ComponentRef<typeof View>>(null);
+  const tools = () =>
+    openDropdown(toolsRef, [
+      [{ label: 'Search a card to buy', onPress: () => router.push('/search?con=1') }],
+      [{ label: 'Pricing rules', onPress: () => router.push('/settings/pricing') }],
+    ]);
 
   const go = () => {
     if (!session) useCon.getState().start(DEFAULT_CON_NAME);
@@ -77,7 +88,14 @@ export default function ConTab() {
             <Text style={[type.secondary, { color: color.conText, fontWeight: '500' }]}>Live · {elapsed(session.startedAt)}</Text>
           </View>
         ) : null}
-        <Text style={[type.title, { color: color.ink }]}>{session ? session.name : 'Con'}</Text>
+        <View style={styles.titleRow}>
+          <Text style={[type.title, { color: color.ink, flex: 1 }]}>{session ? session.name : 'Con'}</Text>
+          <View ref={toolsRef} collapsable={false}>
+            <IconButton label="Con tools" onPress={tools}>
+              <MoreIcon />
+            </IconButton>
+          </View>
+        </View>
         <Text style={[type.text, { color: color.secondary, paddingTop: space.xs }]}>
           {session ? 'Your table is open. Prices and offers are in con mode.' : 'Your prices, ready before you walk up to a table.'}
         </Text>
@@ -86,22 +104,24 @@ export default function ConTab() {
 
       {/* Today's numbers while a con runs; otherwise how your last selling day went. */}
       {session && today ? (
-        <View style={styles.figures}>
-          <Figure value={money(today.soldCents)} label="Sold today" />
-          <Figure value={String(today.soldCount)} label={today.soldCount === 1 ? 'Card' : 'Cards'} />
-          <Figure value={money(today.floorTotalCents)} label="Left at floor" />
-        </View>
+        <Section title="Today">
+          <Strip
+            items={[
+              { value: money(today.soldCents), label: 'Sold' },
+              { value: String(today.soldCount), label: today.soldCount === 1 ? 'Card' : 'Cards' },
+              { value: money(today.floorTotalCents), label: 'Left at floor' },
+            ]}
+          />
+        </Section>
       ) : lastDay ? (
         <Section title="Last sales day" detail={saleDay(lastDay.day)}>
-          <View style={styles.figuresInline}>
-            <Figure value={money(lastDay.soldCents)} label="Sold" />
-            <Figure value={String(lastDay.count)} label={lastDay.count === 1 ? 'Card' : 'Cards'} />
-            <Figure
-              value={signed(lastDay.profitCents)}
-              tint={lastDay.profitCents >= 0 ? color.gain : color.loss}
-              label="Profit"
-            />
-          </View>
+          <Strip
+            items={[
+              { value: money(lastDay.soldCents), label: 'Sold' },
+              { value: String(lastDay.count), label: lastDay.count === 1 ? 'Card' : 'Cards' },
+              { value: signed(lastDay.profitCents), label: 'Profit', tint: lastDay.profitCents >= 0 ? color.gain : color.loss },
+            ]}
+          />
         </Section>
       ) : null}
 
@@ -120,22 +140,20 @@ export default function ConTab() {
 
         {mode === 'sell' ? (
           <>
-            <View style={styles.figuresInline}>
-              <Figure value={String(table.forSale.length)} label="For sale" />
-              <Figure value={money(table.askCents)} label="Asking" />
-              <Figure value={money(table.floorCents)} label="Floor" />
-            </View>
+            <Strip
+              items={[
+                { value: String(table.forSale.length), label: 'For sale' },
+                { value: money(table.askCents), label: 'Asking' },
+                { value: money(table.floorCents), label: 'Floor' },
+              ]}
+            />
             {table.forSale.length ? (
               <View style={styles.grid}>
                 {table.forSale.slice(0, SHOWN).map((r) => (
                   <Pressable key={r.card.id} accessibilityRole="button" onPress={() => router.push(`/card/${r.card.id}`)} style={{ width: cellW }}>
-                    <SlabView card={r.card} width={cellW} posed={false} />
-                    <Text numberOfLines={1} style={[type.secondary, { color: color.ink, paddingTop: space.s }]}>
-                      Ask {r.ask != null ? money(r.ask) : '—'}
-                    </Text>
-                    <Text numberOfLines={1} style={[type.caption, { color: color.secondary }]}>
-                      floor {r.floor != null ? money(r.floor) : '—'}
-                    </Text>
+                    <SlabView card={r.card} width={cellW} posed={false} anchor="bottom" />
+                    <Text style={[type.secondary, { color: color.ink, paddingTop: space.s }]}>Ask {r.ask != null ? money(r.ask) : '—'}</Text>
+                    <Text style={[type.caption, { color: color.secondary }]}>floor {r.floor != null ? money(r.floor) : '—'}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -154,11 +172,12 @@ export default function ConTab() {
           </>
         ) : (
           <>
-            <View style={styles.figuresInline}>
-              <Figure value={String(wished.length)} label="Wanted" />
-              <Figure value={money(wished.reduce((t, w) => t + w.targetCents, 0))} label="Paying" />
-              <View style={{ flex: 1 }} />
-            </View>
+            <Strip
+              items={[
+                { value: String(wished.length), label: 'Wanted' },
+                { value: money(wished.reduce((t, w) => t + w.targetCents, 0)), label: 'Paying' },
+              ]}
+            />
             {wished.length ? (
               <View style={styles.grid}>
                 {wished.slice(0, SHOWN).map((w) => (
@@ -184,46 +203,49 @@ export default function ConTab() {
         )}
       </Section>
 
-      {sales.length ? (
+      {/* What moved lately on this side of the table. */}
+      {mode === 'sell' && sales.length ? (
         <Section title="Recent sales">
           <View style={styles.gutter}>
-            {sales.map((r, i) => {
-              const c = r.card;
-              const profit = c.soldCents != null && c.paidCents != null ? c.soldCents - c.paidCents : null;
-              return (
-                <View key={c.id}>
-                  {i ? <Hairline inset={THUMB_W + space.m} /> : null}
-                  <Pressable accessibilityRole="button" onPress={() => router.push(`/card/${c.id}`)} style={({ pressed }) => [styles.sale, pressed && { opacity: 0.6 }]}>
-                    <SlabView card={c} width={THUMB_W} posed={false} shadow={false} />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[type.body, { color: color.ink }]}>{c.name}</Text>
-                      <Text style={[type.secondary, { color: color.secondary }]}>Sold {saleDay(c.soldAt!)}</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[type.numberM, { color: color.ink }]}>{c.soldCents != null ? money(c.soldCents) : '—'}</Text>
-                      {profit != null ? (
-                        <Text style={[type.caption, { color: profit >= 0 ? color.gain : color.loss }]}>{signed(profit)}</Text>
-                      ) : null}
-                    </View>
-                  </Pressable>
-                </View>
-              );
-            })}
+            {sales.map((r, i) => (
+              <Deal
+                key={r.card.id}
+                row={r}
+                first={i === 0}
+                line={`Sold ${saleDay(r.card.soldAt!)}`}
+                cents={r.card.soldCents}
+                delta={r.card.soldCents != null && r.card.paidCents != null ? r.card.soldCents - r.card.paidCents : null}
+              />
+            ))}
+            <Hairline />
+          </View>
+        </Section>
+      ) : mode === 'buy' && buys.length ? (
+        <Section title="Recent buys">
+          <View style={styles.gutter}>
+            {buys.map((r, i) => (
+              <Deal
+                key={r.card.id}
+                row={r}
+                first={i === 0}
+                line={`Paid ${saleDay(r.card.paidAt ?? r.card.createdAt)}`}
+                cents={r.card.paidCents}
+                // How the buy is doing now: market minus paid (sold ones: what they went for).
+                delta={
+                  r.card.paidCents == null
+                    ? null
+                    : r.card.status === 'sold'
+                      ? (r.card.soldCents ?? r.card.paidCents) - r.card.paidCents
+                      : r.price
+                        ? r.price.marketCents - r.card.paidCents
+                        : null
+                }
+              />
+            ))}
+            <Hairline />
           </View>
         </Section>
       ) : null}
-
-      <Section title="Tools">
-        <View style={styles.gutter}>
-          <Tool label="Search a card to buy" onPress={() => router.push('/search?con=1')} />
-          <Hairline />
-          <Tool
-            label="Pricing rules"
-            detail={`Ask ${rulePct(rules.askPct)} · floor ${rulePct(rules.floorPct)}`}
-            onPress={() => router.push('/settings/pricing')}
-          />
-        </View>
-      </Section>
     </ScrollView>
   );
 }
@@ -242,28 +264,57 @@ function Section({ title, detail, children }: { title: string; detail?: string; 
   );
 }
 
-function Figure({ value, label, tint }: { value: string; label: string; tint?: string }) {
+/** A row of numbers between hairlines, a divider between columns: label on top, number under it. */
+function Strip({ items }: { items: { value: string; label: string; tint?: string }[] }) {
   const color = useColors();
+  const styles = useStyles();
   return (
-    <View style={{ flex: 1, gap: 2 }}>
-      <Text numberOfLines={1} adjustsFontSizeToFit style={[type.rowPrice, { color: tint ?? color.ink }]}>
-        {value}
-      </Text>
-      <Text style={[type.secondary, { color: color.secondary }]}>{label}</Text>
+    <View style={styles.strip}>
+      {items.map((it, i) => (
+        <View key={it.label} style={[styles.cell, i > 0 && styles.cellDivider]}>
+          <Text style={[type.secondary, { color: color.secondary }]}>{it.label}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={[type.rowPrice, { color: it.tint ?? color.ink }]}>
+            {it.value}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
 
-function Tool({ label, detail, onPress }: { label: string; detail?: string; onPress: () => void }) {
+/** One sale or buy: the slab, name and day, then the price and how it did. */
+function Deal({ row, first, line, cents, delta }: { row: CardRow; first: boolean; line: string; cents: number | null; delta: number | null }) {
   const color = useColors();
   const styles = useStyles();
+  const c = row.card;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.tool, pressed && { opacity: 0.6 }]}>
-      <Text style={[type.body, { color: color.ink, flex: 1 }]}>{label}</Text>
-      <Text style={[type.text, { color: color.secondary }]}>
-        {detail ? `${detail}  ` : ''}›
-      </Text>
-    </Pressable>
+    <View>
+      <Hairline />
+      <Pressable accessibilityRole="button" onPress={() => router.push(`/card/${c.id}`)} style={({ pressed }) => [styles.deal, pressed && { opacity: 0.6 }]}>
+        <SlabView card={c} width={THUMB_W} posed={false} shadow={false} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[type.body, { color: color.ink }]}>{c.name}</Text>
+          <Text style={[type.secondary, { color: color.secondary }]}>{line}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[type.numberM, { color: color.ink }]}>{cents != null ? money(cents) : '—'}</Text>
+          {delta != null ? (
+            <Text style={[type.caption, { color: delta >= 0 ? color.gain : color.loss }]}>{`${delta >= 0 ? '+' : '−'}${money(Math.abs(delta))}`}</Text>
+          ) : null}
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+function MoreIcon() {
+  const color = useColors();
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color.ink}>
+      <Circle cx={5.5} cy={12} r={1.6} />
+      <Circle cx={12} cy={12} r={1.6} />
+      <Circle cx={18.5} cy={12} r={1.6} />
+    </Svg>
   );
 }
 
@@ -279,12 +330,21 @@ const useStyles = themed((color) =>
       paddingHorizontal: space.gutter,
       paddingBottom: space.m,
     },
-    figures: { flexDirection: 'row', gap: space.l, paddingHorizontal: space.gutter, paddingTop: space.xxl },
-    figuresInline: { flexDirection: 'row', gap: space.l, paddingHorizontal: space.gutter, paddingTop: space.l, paddingBottom: space.l },
+    titleRow: { flexDirection: 'row', alignItems: 'center', marginRight: -10 },
+    strip: {
+      flexDirection: 'row',
+      marginHorizontal: space.gutter,
+      marginTop: space.m,
+      marginBottom: space.l,
+      borderTopWidth: StyleSheet.hairlineWidth * 2,
+      borderBottomWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: color.hairline,
+    },
+    cell: { flex: 1, gap: 2, paddingVertical: space.m, paddingLeft: space.m },
+    cellDivider: { borderLeftWidth: StyleSheet.hairlineWidth * 2, borderLeftColor: color.hairline },
     grid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.m, rowGap: space.xl, paddingHorizontal: space.gutter, paddingTop: space.s },
     art: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
     note: { paddingHorizontal: space.gutter },
-    sale: { minHeight: size.rowCon, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingVertical: space.s },
-    tool: { minHeight: size.menuRow, flexDirection: 'row', alignItems: 'center' },
+    deal: { minHeight: size.rowCon, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingVertical: space.s },
   }),
 );
