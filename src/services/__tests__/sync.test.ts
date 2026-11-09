@@ -36,6 +36,12 @@ describe('mergeVault', () => {
     expect(toPush).toEqual([localOnly]);
     expect(merged.map((c) => c.id)).toEqual([localOnly.id, mew.id]);
   });
+  it('keeps phone-only fields (con buys) on the server copy, with the server columns winning', () => {
+    const local = { ...mew, name: 'Old name', boughtConId: 'con-1', boughtMarketCents: 1000 };
+    const remote = { ...mew, name: 'Fixed name' };
+    const { merged } = mergeVault([local], [remote]);
+    expect(merged[0]).toMatchObject({ name: 'Fixed name', boughtConId: 'con-1', boughtMarketCents: 1000 });
+  });
   it('keeps slabs removed on this phone out, even while the server still has them', () => {
     const other = { ...mew, id: uuid() };
     const { merged, toPush } = mergeVault([], [mew, other], [mew.id]);
