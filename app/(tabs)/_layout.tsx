@@ -1,5 +1,5 @@
-// The three tabs under the bottom bar: Collection (home), Search and Profile. Scan and Con are
-// buttons in the same bar that open full screen over the tabs (src/components/TabBar.tsx).
+// The tabs under the bottom bar: Collection (home), Search, Con and Profile. Scan is a button in
+// the same bar that opens the camera full screen over the tabs (src/components/TabBar.tsx).
 //
 // The bar floats over the page, so each tab screen sees it as part of its bottom safe-area inset:
 // every bottom dock, scroll padding and fit-to-screen measure already built on that inset keeps
@@ -32,6 +32,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" />
       <Tabs.Screen name="find" />
+      <Tabs.Screen name="cons" />
       <Tabs.Screen name="profile" />
     </Tabs>
   );

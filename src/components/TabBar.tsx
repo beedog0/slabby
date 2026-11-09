@@ -1,6 +1,6 @@
-// The bottom bar: Collection · Search · Scan · Con · Profile. Collection, Search and Profile are
-// tabs (app/(tabs)); Scan and Con open full screen over them, so the camera and the table get the
-// whole phone, and closing them lands back on the tab you were on.
+// The bottom bar: Collection · Search · Scan · Con · Profile. All but Scan are tabs (app/(tabs));
+// Scan opens the camera full screen over them. The Con tab is the stop before con mode, which also
+// opens full screen so the table gets the whole phone.
 //
 // Flat canvas with a hairline on top, outline icons, the picked tab in ink and the rest in
 // secondary. Scan is the one filled thing: a black key in the middle, like the primary button.
@@ -32,6 +32,7 @@ type Icon = (p: { tint: string; on: boolean }) => React.ReactElement;
 const TABS: Record<string, { label: string; Icon: Icon }> = {
   index: { label: 'Collection', Icon: ShelfIcon },
   find: { label: 'Search', Icon: FindIcon },
+  cons: { label: 'Con', Icon: TagIcon },
   profile: { label: 'Profile', Icon: PersonIcon },
 };
 
@@ -86,12 +87,7 @@ export function TabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
           </View>
         )}
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Con mode" onPress={() => router.push('/con')} style={styles.item}>
-        <TagIcon tint={color.secondary} on={false} />
-        <Text numberOfLines={1} style={[type.tabLabel, { color: color.secondary }]}>
-          Con
-        </Text>
-      </Pressable>
+      {tab('cons')}
       {tab('profile')}
     </View>
   );

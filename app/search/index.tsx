@@ -15,7 +15,6 @@ import { sheetTop } from '../../src/lib/sheetTop';
 import { ArtImage } from '../../src/components/ArtImage';
 import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/sheet/useSheetDrag';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
-import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
 import { cardPrice, money, pct, promoTag } from '../../src/lib/format';
 import { CardName } from '../../src/components/CardName';
@@ -42,6 +41,10 @@ import {
   type Sort,
 } from '../../src/services/searchFilters';
 import { useDisplay } from '../../src/store/display';
+import { useRecent } from '../../src/store/recent';
+import { useVault } from '../../src/store/vault';
+import { rowFor } from '../../src/pricing/portfolio';
+import { SearchLanding } from '../../src/components/search/SearchLanding';
 import { useRules } from '../../src/store/rules';
 import { radius, shadow, size, space, type } from '../../src/theme/tokens';
 import { themed, useColors } from '../../src/theme/theme';
@@ -61,7 +64,9 @@ export default function Search() {
   const con = params.con === '1';
   const trade = params.trade === '1';
   const asTab = useSegments()[0] === '(tabs)';
+  const vaultCards = useVault((st) => st.cards);
   const rules = useRules((s) => s.rules);
+  const vaultRows = useMemo(() => vaultCards.map((c) => rowFor(c, rules)), [vaultCards, rules]);
   const { searchLayout: layout, setSearchLayout } = useDisplay();
   const { width } = useWindowDimensions();
   const cellW = Math.floor((width - space.gutter * 2 - GRID_GAP) / 2);
@@ -135,6 +140,14 @@ export default function Search() {
     return () => clearTimeout(t);
   }, [f]);
 
+  // A search that found something and was left standing for a moment counts as a recent search.
+  useEffect(() => {
+    const q = f.q.trim();
+    if (state !== 'done' || !results.length || q.length < 2) return;
+    const t = setTimeout(() => useRecent.getState().addQuery(q), 1500);
+    return () => clearTimeout(t);
+  }, [state, results, f.q]);
+
   const loading = progress != null && progress.total > 0 && progress.done < progress.total;
   const loadingLine = loading ? ` The catalog is still loading (${progress!.done} of ${progress!.total} sets), so some cards aren’t in yet.` : '';
   const nFilters = filterCount(f);
@@ -172,9 +185,9 @@ export default function Search() {
             </View>
           )}
           <View style={styles.gutter}>
-            <Text style={[type.title, { color: color.ink, paddingBottom: space.m }]}>{con ? 'Search to buy' : 'Search'}</Text>
-            <Segmented<GameFilter>
-              style={{ marginBottom: space.m }}
+            {/* The tab bar already says Search; the tab keeps its header slim. */}
+            {asTab ? null : <Text style={[type.title, { color: color.ink, paddingBottom: space.m }]}>{con ? 'Search to buy' : 'Search'}</Text>}
+            <GameTabs
               value={f.game ?? 'all'}
               onChange={(g) =>
                 // Sets and rarities belong to one game; Japanese only exists for Pokémon.
@@ -203,12 +216,12 @@ export default function Search() {
             <TextInput
               value={f.q}
               onChangeText={(q) => set({ q })}
-              autoFocus
+              autoFocus={!asTab}
               autoCorrect={false}
               autoCapitalize="none"
               returnKeyType="search"
               clearButtonMode="while-editing"
-              placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Umbreon VMAX 215'}
+              placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Card, set or number'}
               placeholderTextColor={color.secondary}
               style={[type.body, styles.input]}
               accessibilityLabel="Search cards"
@@ -279,7 +292,18 @@ export default function Search() {
           style={{ paddingTop: top }}
           // Last results stay reachable above the keyboard instead of hiding behind it.
           automaticallyAdjustKeyboardInsets
-          ListEmptyComponent={hint ? <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text> : undefined}
+          ListEmptyComponent={
+            state === 'idle' && !con && !trade ? (
+              <SearchLanding
+                onQuery={(q) => set({ q })}
+                onOpen={(c) => openCard(c, false)}
+                vault={vaultRows}
+                note={loading ? `The catalog is still loading (${progress!.done} of ${progress!.total} sets), so some cards aren’t in yet.` : null}
+              />
+            ) : hint ? (
+              <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text>
+            ) : undefined
+          }
           numColumns={layout === 'grid' ? 2 : 1}
           keyExtractor={(c) => String(c.productId)}
           keyboardShouldPersistTaps="handled"
@@ -575,16 +599,34 @@ function CheckRow({ label, detail, on, onPress }: { label: string; detail?: stri
   );
 }
 
+/** Which game to search: quiet words, the picked one in ink with a short underline. */
+function GameTabs({ value, onChange, options }: { value: GameFilter; onChange: (g: GameFilter) => void; options: { value: GameFilter; label: string }[] }) {
+  const color = useColors();
+  return (
+    <View style={{ flexDirection: 'row', gap: space.xl, height: size.touch, alignItems: 'center' }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable key={o.value} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onChange(o.value)} hitSlop={6}>
+            <Text style={[type.text, { color: on ? color.ink : color.secondary, fontWeight: on ? '600' : '400' }]}>{o.label}</Text>
+            <View style={{ height: size.selectLine, marginTop: 4, backgroundColor: on ? color.ink : 'transparent', borderRadius: 1 }} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 type ResultProps = { card: Found; con: boolean; trade?: boolean; rules: PricingRules; change: number | null; days: number };
 
 // Con mode's Buying goes straight to "They're asking" for the card (the full card page is a link
 // there); the trade calculator opens the card page with "Add to their side".
-const openCard = (card: Found, con: boolean, trade = false) =>
-  trade
-    ? router.push(`/search/${card.productId}?trade=1`)
-    : con
-      ? router.push({ pathname: '/con/buy/[id]', params: { id: String(card.productId), grade: 'psa10' } })
-      : router.push(`/search/${card.productId}`);
+const openCard = (card: Found, con: boolean, trade = false) => {
+  useRecent.getState().addViewed(card);
+  if (trade) router.push(`/search/${card.productId}?trade=1`);
+  else if (con) router.push({ pathname: '/con/buy/[id]', params: { id: String(card.productId), grade: 'psa10' } });
+  else router.push(`/search/${card.productId}`);
+};
 
 /** Grid tile: the card photo, then name, set · number and price, like home's grid. */
 function ResultTile({ card, width, con, trade, rules, change, days }: ResultProps & { width: number }) {
