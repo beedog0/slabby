@@ -8,6 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import catalogJson from '../mocks/catalog.json';
 import type { CatalogCard } from './search';
+import type { Game } from '../types';
 import { setId, type Found } from './searchFilters';
 import { supabase } from './supabase';
 
@@ -207,4 +208,47 @@ export async function setMeta(card: Pick<CatalogCard, 'setName' | 'language' | '
   const s = matchSet(await memo, card.setName);
   if (!s) return null;
   return { logo: s.images?.logo ?? null, symbol: s.images?.symbol ?? null, series: s.series ?? null, releaseDate: s.releaseDate ?? null, total: s.printedTotal ?? s.total ?? null };
+}
+
+// ── companion sets ───────────────────────────────────────────────────────────────────────────
+// TCGplayer files some anniversary sets as two groups: the main set and a "Classic
+// Collection" of reprints ("ME: 30th Celebration" + "ME: 30th Celebration Classic Collection",
+// "Celebrations" + "Celebrations: Classic Collection"). Each set page links to the other, so the
+// Pikachus aren't "missing" from the 30-card reprint page (Bryan, Nov 9).
+
+const CLASSIC = /[:\s]*classic collection$/i;
+
+/** Pure: the shared name of a main set and its Classic Collection. */
+export function companionBase(setName: string): string {
+  return setName.replace(CLASSIC, '').trim();
+}
+
+export type Companion = { groupId: number; setName: string; label: string; count: number };
+
+/** Pure: from catalog rows (group id + set name), the other groups that share this set's base name. */
+export function companionsFrom(rows: { group_id: number; set_name: string }[], groupId: number, setName: string): Companion[] {
+  const base = companionBase(setName).toLowerCase();
+  const by = new Map<number, Companion>();
+  for (const r of rows) {
+    if (r.group_id === groupId || companionBase(r.set_name).toLowerCase() !== base) continue;
+    const c = by.get(r.group_id) ?? { groupId: r.group_id, setName: r.set_name, label: CLASSIC.test(r.set_name) ? 'Classic Collection' : 'Main set', count: 0 };
+    c.count++;
+    by.set(r.group_id, c);
+  }
+  return [...by.values()].sort((a, b) => b.count - a.count);
+}
+
+export async function companionSets(groupId: number, setName: string, game: Game): Promise<Companion[]> {
+  if (!supabase || !setName) return [];
+  const base = companionBase(setName).replace(/[%_\\]/g, (m) => `\\${m}`);
+  const { data, error } = await supabase
+    .from('catalog')
+    .select('group_id, set_name')
+    .eq('game', game)
+    .is('sealed_type', null)
+    .ilike('set_name', `${base}%`)
+    .neq('group_id', groupId)
+    .limit(1000);
+  if (error) return [];
+  return companionsFrom((data ?? []) as { group_id: number; set_name: string }[], groupId, setName);
 }

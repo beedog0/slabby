@@ -12,7 +12,7 @@ import { BackIcon, Hairline, IconButton } from '../../src/components/ui';
 import { cardPrice, money, pct } from '../../src/lib/format';
 import { cardNumber, displayName, type Game } from '../../src/services/search';
 import type { Found } from '../../src/services/searchFilters';
-import { arrangeSet, cardsInSet, rarities, SET_SORTS, setMeta, type SetMeta, type SetSort } from '../../src/services/setCards';
+import { arrangeSet, cardsInSet, companionSets, rarities, SET_SORTS, setMeta, type Companion, type SetMeta, type SetSort } from '../../src/services/setCards';
 import { radius, shadow, size, space, type } from '../../src/theme/tokens';
 import { themed, useColors } from '../../src/theme/theme';
 
@@ -65,6 +65,15 @@ export default function SetPage() {
     };
   }, [setName, language, game]);
 
+  const [companions, setCompanions] = useState<Companion[]>([]);
+  useEffect(() => {
+    let live = true;
+    if (setName) companionSets(Number(p.id), setName, game).then((c) => live && setCompanions(c)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [p.id, setName, game]);
+
   const shown = useMemo(() => arrangeSet(list, sort, picked), [list, sort, picked]);
   const kinds = useMemo(() => rarities(list), [list]);
   const priced = list.filter((c) => c.marketCents != null);
@@ -107,6 +116,19 @@ export default function SetPage() {
           </Text>
         )}
         {facts ? <Text style={[type.text, { color: color.secondary, paddingTop: space.s }]}>{facts}</Text> : null}
+        {/* The other half of a set TCGplayer files in two (main set + Classic Collection). */}
+        {companions.map((c) => (
+          <Pressable
+            key={c.groupId}
+            accessibilityRole="link"
+            onPress={() => router.push({ pathname: '/set/[id]', params: { id: String(c.groupId), name: c.setName, language, game } })}
+            style={styles.companion}
+          >
+            <Text style={[type.text, { color: color.ink }]}>
+              {c.label} <Text style={{ color: color.secondary }}>· {c.count} cards ›</Text>
+            </Text>
+          </Pressable>
+        ))}
 
         {priced.length ? (
           <View style={styles.stats}>
@@ -237,6 +259,7 @@ const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   logo: { width: '70%', height: 76, marginTop: space.s },
+  companion: { minHeight: size.touch, justifyContent: 'center' },
   stats: { flexDirection: 'row', gap: space.l, paddingTop: space.xl, paddingBottom: space.l },
   controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: space.s },
   control: { minHeight: size.touch - 12, justifyContent: 'center' },

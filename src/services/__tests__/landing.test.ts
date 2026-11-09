@@ -20,3 +20,20 @@ describe('landingFrom', () => {
     expect(isEmptyLanding(landingFrom({ up: 'x' }))).toBe(true);
   });
 });
+
+import { companionBase, companionsFrom } from '../setCards';
+describe('companion sets', () => {
+  it('pairs a main set with its Classic Collection', () => {
+    expect(companionBase('ME: 30th Celebration Classic Collection')).toBe('ME: 30th Celebration');
+    expect(companionBase('Celebrations: Classic Collection')).toBe('Celebrations');
+    const rows = [
+      ...Array.from({ length: 3 }, () => ({ group_id: 24722, set_name: 'ME: 30th Celebration' })),
+      ...Array.from({ length: 2 }, () => ({ group_id: 24837, set_name: 'ME: 30th Celebration Classic Collection' })),
+      { group_id: 24856, set_name: 'MF: 30th CELEBRATION Premium Deck Set' },
+    ];
+    expect(companionsFrom(rows, 24837, 'ME: 30th Celebration Classic Collection')).toEqual([
+      { groupId: 24722, setName: 'ME: 30th Celebration', label: 'Main set', count: 3 },
+    ]);
+    expect(companionsFrom(rows, 24722, 'ME: 30th Celebration')[0]).toMatchObject({ groupId: 24837, label: 'Classic Collection', count: 2 });
+  });
+});
