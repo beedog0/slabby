@@ -10,8 +10,11 @@ import { sealedOf } from './search';
 import type { Found } from './searchFilters';
 import { supabase } from './supabase';
 
-/** A catalog item with how much it moved and over how many nights (1–7). */
-export type Mover = Found & { change: number; days: number; thenCents: number | null };
+/** A catalog item with its recent nightly prices (oldest first) and its steady weekly move, if any. */
+export type Priced = Found & { change: number | null; days: number; hist: number[] };
+
+/** A top mover: always has a move. */
+export type Mover = Priced & { change: number; thenCents: number | null };
 
 export type HotSet = {
   groupId: number;
@@ -30,8 +33,8 @@ export type HotSet = {
 export type Landing = {
   up: Mover[];
   down: Mover[];
-  sealedNew: Found[];
-  sealedPick: Found[];
+  sealedNew: Priced[];
+  sealedPick: Priced[];
   sets: HotSet[];
   asOf: string | null;
   /** While there isn't a week of prices yet: the day Top movers starts (YYYY-MM-DD). */
@@ -58,6 +61,7 @@ type ItemRow = {
   change?: number;
   days?: number;
   then_cents?: number | null;
+  hist?: (number | null)[] | null;
 };
 
 type SetRow = {
@@ -91,7 +95,9 @@ const found = (r: ItemRow): Found => ({
   aka: [],
 });
 
-const mover = (r: ItemRow): Mover => ({ ...found(r), change: r.change ?? 0, days: r.days ?? 7, thenCents: r.then_cents ?? null });
+const histOf = (r: ItemRow): number[] => (Array.isArray(r.hist) ? r.hist.filter((v): v is number => typeof v === 'number' && v > 0) : []);
+const priced = (r: ItemRow): Priced => ({ ...found(r), change: typeof r.change === 'number' ? r.change : null, days: r.days ?? 7, hist: histOf(r) });
+const mover = (r: ItemRow): Mover => ({ ...priced(r), change: r.change ?? 0, thenCents: r.then_cents ?? null });
 
 /** Pure: the server's JSON to app types, dropping anything malformed. */
 export function landingFrom(j: unknown): Landing {
@@ -100,8 +106,8 @@ export function landingFrom(j: unknown): Landing {
   return {
     up: list<ItemRow>('up').filter((r) => r?.product_id).map(mover),
     down: list<ItemRow>('down').filter((r) => r?.product_id).map(mover),
-    sealedNew: list<ItemRow>('sealed_new').filter((r) => r?.product_id).map(found),
-    sealedPick: list<ItemRow>('sealed_pick').filter((r) => r?.product_id).map(found),
+    sealedNew: list<ItemRow>('sealed_new').filter((r) => r?.product_id).map(priced),
+    sealedPick: list<ItemRow>('sealed_pick').filter((r) => r?.product_id).map(priced),
     sets: list<SetRow>('sets')
       .filter((s) => s?.group_id)
       .map((s) => ({
@@ -155,7 +161,12 @@ function mockLanding(game: Game | null): Landing {
   const all = (catalogJson as MockRow[]).filter((c) => (!game || c.game === game) && !c.sealedType && (c.marketCents ?? 0) >= 2000);
   const asFound = (c: MockRow): Found => ({ ...c, change7d: null, change30d: null, sealedType: sealedOf(c.sealedType ?? null), aka: [] });
   // Fixed, made-up moves so the sections render the same every time.
-  const moves = all.map((c, i) => ({ ...asFound(c), change: [0.18, -0.12, 0.09, -0.07, 0.31, -0.04, 0.05][i % 7], days: 7, thenCents: null }));
+  const moves = all.map((c, i) => {
+    const change = [0.18, -0.12, 0.09, -0.07, 0.31, -0.04, 0.05][i % 7];
+    const m = c.marketCents ?? 0;
+    const hist = Array.from({ length: 12 }, (_, d) => Math.round((m / (1 + change)) * (1 + (change * d) / 11) * (1 + ((d * 7 + i) % 5) / 100)));
+    return { ...asFound(c), change, days: 7, thenCents: null, hist };
+  });
   const bySet = new Map<string, MockRow[]>();
   for (const c of all) bySet.set(c.setName, [...(bySet.get(c.setName) ?? []), c]);
   return {

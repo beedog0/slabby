@@ -71,6 +71,8 @@ export default function SetPage() {
   const value = priced.reduce((t, c) => t + (c.marketCents ?? 0), 0);
   const up = list.filter((c) => (c.change7d ?? 0) > 0.03).length;
   const down = list.filter((c) => (c.change7d ?? 0) < -0.03).length;
+  // No card with a week of prices yet (the nightly copy is new): say so instead of a false 0.
+  const weekKnown = list.some((c) => c.change7d != null);
   const cellW = Math.floor((width - space.gutter * 2 - GAP * (COLS - 1)) / COLS);
 
   const facts = [
@@ -109,9 +111,14 @@ export default function SetPage() {
         {priced.length ? (
           <View style={styles.stats}>
             <Stat label="Raw set value" value={money(value)} />
-            <Stat label="Up this week" value={String(up)} tint={up ? color.gain : undefined} />
-            <Stat label="Down this week" value={String(down)} tint={down ? color.loss : undefined} />
+            <Stat label="Up this week" value={weekKnown ? String(up) : '—'} tint={up ? color.gain : undefined} />
+            <Stat label="Down this week" value={weekKnown ? String(down) : '—'} tint={down ? color.loss : undefined} />
           </View>
+        ) : null}
+        {priced.length && !weekKnown ? (
+          <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.l }]}>
+            Weekly moves start once there’s a full week of TCGplayer prices.
+          </Text>
         ) : null}
         <Hairline />
 

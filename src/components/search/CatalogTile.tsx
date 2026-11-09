@@ -6,9 +6,11 @@ import { cardPrice, langTag, pct, pctSign } from '../../lib/format';
 import { sealedLabel } from '../../lib/sealed';
 import { displayName } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
-import { radius, space, type } from '../../theme/tokens';
+import { radius, size, space, type } from '../../theme/tokens';
 import { themed, useColors } from '../../theme/theme';
 import { ArtImage } from '../ArtImage';
+import { MiniChart } from '../MiniChart';
+import { Sparkline } from '../Sparkline';
 
 /** Card art height for a width: TCGplayer card scans are 63 × 88. */
 export const cardH = (w: number) => Math.round((w * 88) / 63);
@@ -34,14 +36,14 @@ export function CatalogTile({
   width,
   onPress,
   change,
-  showKind = false,
+  hist,
 }: {
   item: Found;
   width: number;
   onPress: () => void;
   change?: number | null;
-  /** Sealed: say what it is (Booster box, ETB) under the name. */
-  showKind?: boolean;
+  /** Recent nightly prices, oldest first, for the small price line. */
+  hist?: number[];
 }) {
   const color = useColors();
   const styles = useStyles();
@@ -70,13 +72,18 @@ export function CatalogTile({
           {name}
           {tag ? <Text style={{ color: color.secondary }}>{`  ${tag}`}</Text> : null}
         </Text>
-        {showKind && sealed ? <Text style={[type.caption, { color: color.secondary }]}>{sealedLabel(sealed)}</Text> : null}
-        <View style={styles.priceLine}>
-          <Text style={[type.numberM, { color: item.marketCents != null ? color.ink : color.secondary }]}>
-            {item.marketCents != null ? cardPrice(item.marketCents) : '—'}
-          </Text>
-          {change != null ? <ChangeText fraction={change} style={type.numberM} /> : null}
+        {/* What is moving: a card's raw (ungraded) TCGplayer market, or the sealed product's. */}
+        <Text style={[type.caption, { color: color.secondary }]}>{sealed ? sealedLabel(sealed) : 'Raw · TCGplayer'}</Text>
+        <View style={styles.priceRow}>
+          <View style={styles.priceLine}>
+            <Text style={[type.numberM, { color: item.marketCents != null ? color.ink : color.secondary }]}>
+              {item.marketCents != null ? cardPrice(item.marketCents) : '—'}
+            </Text>
+            {change != null ? <ChangeText fraction={change} style={type.secondary} /> : null}
+          </View>
+          {hist && hist.length >= 3 && width >= size.sparkW * 3 ? <Sparkline values={hist} change={change ?? 0} /> : null}
         </View>
+        {hist && hist.length >= 3 && width < size.sparkW * 3 ? <MiniChart values={hist} width={width} height={size.sparkH} /> : null}
       </View>
     </Pressable>
   );
@@ -87,6 +94,7 @@ const useStyles = themed((color) =>
     art: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
     sealed: { overflow: 'hidden' },
     text: { paddingTop: space.s, gap: space.xs / 2 },
-    priceLine: { flexDirection: 'row', alignItems: 'baseline', gap: space.s, flexWrap: 'wrap' },
+    priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.s },
+    priceLine: { flex: 1, flexDirection: 'row', alignItems: 'baseline', columnGap: space.s, flexWrap: 'wrap' },
   }),
 );

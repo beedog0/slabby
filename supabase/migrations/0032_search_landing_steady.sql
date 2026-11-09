@@ -9,6 +9,8 @@
 --     night on either end can't make the move;
 --   * both medians at least $20, and TCGplayer still listing it (low_cents present);
 --   * the move between −60% and +200% (anything bigger on a $20+ card in a week is a data issue).
+-- Every item carries its last 14 priced nights (`hist`) for a small price line, and sealed
+-- product gets the same steady weekly change as cards.
 -- Until the catalog has 10 nights, movers and sets come back empty and the app hides them; the
 -- feed says when they start in `movers_from`.
 
@@ -19,6 +21,19 @@ language sql immutable as $$
   from unnest(hist[array_length(hist, 1) - from_end - n + 1 : array_length(hist, 1) - from_end]) v
   where v is not null and v > 0;
 $$;
+
+-- The catalog's own change_7d / change_30d (set pages, search sorts, card captions) use the same
+-- steady rule, so every screen agrees: median of the last 3 nights against the median of the 3
+-- nights ending `days` back; null until there are days + 3 priced nights.
+create or replace function hist_change(hist int[], days int) returns real
+language sql immutable as $$
+  select case
+    when coalesce(array_length(hist, 1), 0) >= days + 3
+      then (hist_median(hist, 0, 3) / nullif(hist_median(hist, days, 3), 0)) - 1
+  end;
+$$;
+update catalog set change_7d = hist_change(market_hist, 7), change_30d = hist_change(market_hist, 30)
+where change_7d is distinct from hist_change(market_hist, 7) or change_30d is distinct from hist_change(market_hist, 30);
 
 create or replace function search_landing(game_filter text default null)
 returns jsonb
@@ -50,7 +65,8 @@ language sql stable set search_path = public as $$
         'number', number, 'rarity', rarity, 'set_name', set_name, 'set_code', set_code,
         'image_url', image_url, 'market_cents', market_cents, 'low_cents', low_cents,
         'change_7d', change_7d, 'change_30d', change_30d, 'sealed_type', sealed_type,
-        'change', chg, 'days', 7, 'then_cents', round(then_c)::int
+        'change', chg, 'days', 7, 'then_cents', round(then_c)::int,
+        'hist', market_hist[greatest(1, nights - 13):nights]
       ) as j
     from sane
   ),
@@ -58,6 +74,7 @@ language sql stable set search_path = public as $$
   down as (select j, row_number() over (order by chg asc, market_cents desc) as ord from card_json where chg < 0 order by ord limit 12),
   sealed as (
     select p.*,
+      case when p.nights >= 10 then (hist_median(p.market_hist, 0, 3) / nullif(hist_median(p.market_hist, 7, 3), 0)) - 1 end as chg,
       case p.sealed_type when 'booster_box' then 0 when 'etb' then 1 when 'booster_bundle' then 2
         when 'collection' then 3 when 'booster_pack' then 4 else 5 end as kind_rank
     from priced p
@@ -69,7 +86,9 @@ language sql stable set search_path = public as $$
       'product_id', product_id, 'game', game, 'language', language, 'name', name,
       'number', number, 'rarity', rarity, 'set_name', set_name, 'set_code', set_code,
       'image_url', image_url, 'market_cents', market_cents, 'low_cents', low_cents,
-      'change_7d', change_7d, 'change_30d', change_30d, 'sealed_type', sealed_type
+      'change_7d', change_7d, 'change_30d', change_30d, 'sealed_type', sealed_type,
+      'change', case when chg between -0.6 and 2 then chg end, 'days', 7,
+      'hist', market_hist[greatest(1, nights - 13):nights]
     ) as j
     from sealed s
   ),

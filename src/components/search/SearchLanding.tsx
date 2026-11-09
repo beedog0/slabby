@@ -33,9 +33,7 @@ const POPULAR: Record<Game | 'all', string[]> = {
 /** Rail tiles: two and a half across, so the next one peeks in. */
 const railW = (screen: number) => Math.floor((screen - space.gutter - space.m * 2) / 2.6);
 const MOVERS_SHOWN = 4;
-const MOVERS_MORE = 12;
 const SEALED_SHOWN = 6;
-const SEALED_MORE = 12;
 
 export function SearchLanding({
   onQuery,
@@ -61,8 +59,7 @@ export function SearchLanding({
   const wish = useMemo(() => wishView(wished), [wished]);
   const feed = useLanding(game);
   const [dir, setDir] = useState<'up' | 'down'>('up');
-  const [moreMovers, setMoreMovers] = useState(false);
-  const [moreSealed, setMoreSealed] = useState(false);
+  const openList = (kind: 'up' | 'down' | 'sealed') => router.push({ pathname: '/movers', params: { kind, game: game ?? 'all' } });
 
   const half = Math.floor((width - space.gutter * 2 - space.l) / 2);
   const third = Math.floor((width - space.gutter * 2 - space.m * 2) / 3);
@@ -70,10 +67,10 @@ export function SearchLanding({
 
   // Up and Down: show whichever has cards; the toggle only when both do.
   const side = dir === 'up' ? (feed.up.length ? 'up' : 'down') : feed.down.length ? 'down' : 'up';
-  const movers = (side === 'up' ? feed.up : feed.down).slice(0, moreMovers ? MOVERS_MORE : MOVERS_SHOWN);
+  const movers = (side === 'up' ? feed.up : feed.down).slice(0, MOVERS_SHOWN);
   const dayList = movers.map((m) => m.days);
   const moverDays = dayList.length && Math.min(...dayList) === Math.max(...dayList) ? dayList[0] : null;
-  const sealed = feed.sealedNew.slice(0, moreSealed ? SEALED_MORE : SEALED_SHOWN);
+  const sealed = feed.sealedNew.slice(0, SEALED_SHOWN);
   const hot = feed.sets.length && feed.sets[0].why === 'hot';
   const waitDay =
     feed.moversFrom && feed.moversFrom > new Date().toISOString().slice(0, 10)
@@ -143,11 +140,11 @@ export function SearchLanding({
         >
           <View style={[styles.grid, { rowGap: space.xl, columnGap: space.l }]}>
             {movers.map((m) => (
-              <CatalogTile key={m.productId} item={m} width={half} change={m.change} onPress={() => onOpen(m)} />
+              <CatalogTile key={m.productId} item={m} width={half} change={m.change} hist={m.hist} onPress={() => onOpen(m)} />
             ))}
           </View>
           {(side === 'up' ? feed.up : feed.down).length > MOVERS_SHOWN ? (
-            <More open={moreMovers} onPress={() => setMoreMovers((v) => !v)} />
+            <More label={`See all ${(side === 'up' ? feed.up : feed.down).length} ${side === 'up' ? 'rising' : 'falling'}`} onPress={() => openList(side)} />
           ) : null}
         </Section>
       ) : null}
@@ -162,10 +159,10 @@ export function SearchLanding({
         <Section title="New sealed" sub="Boxes, ETBs, bundles and collections from the newest sets">
           <View style={[styles.grid, { rowGap: space.xl, columnGap: space.m }]}>
             {sealed.map((s) => (
-              <CatalogTile key={s.productId} item={s} width={third} showKind change={s.change7d} onPress={() => onOpen(s)} />
+              <CatalogTile key={s.productId} item={s} width={third} change={s.change} hist={s.hist} onPress={() => onOpen(s)} />
             ))}
           </View>
-          {feed.sealedNew.length > SEALED_SHOWN ? <More open={moreSealed} onPress={() => setMoreSealed((v) => !v)} /> : null}
+          {feed.sealedNew.length > SEALED_SHOWN ? <More label={`See all ${feed.sealedNew.length}`} onPress={() => openList('sealed')} /> : null}
         </Section>
       ) : null}
 
@@ -243,6 +240,11 @@ function Section({
   const styles = useStyles();
   return (
     <View style={[styles.section, first && { paddingTop: 0 }]}>
+      {first ? null : (
+        <View style={[styles.gutter, { paddingBottom: space.xl }]}>
+          <Hairline />
+        </View>
+      )}
       <View style={styles.sectionHead}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[type.section, { color: color.ink }]}>{title}</Text>
@@ -260,23 +262,25 @@ function Section({
   );
 }
 
-function More({ open, onPress }: { open: boolean; onPress: () => void }) {
+function More({ label, onPress }: { label: string; onPress: () => void }) {
   const color = useColors();
   const styles = useStyles();
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.more}>
-      <Text style={[type.text, { color: color.ink }]}>{open ? 'Show less' : 'Show more'}</Text>
+      <Text style={[type.text, { color: color.ink }]}>
+        {label} <Text style={{ color: color.secondary }}>›</Text>
+      </Text>
     </Pressable>
   );
 }
 
 /** A sideways row of catalog tiles. */
-function Rail({ items, width, onOpen }: { items: Found[]; width: number; onOpen: (c: Found) => void }) {
+function Rail({ items, width, onOpen }: { items: (Found & { change?: number | null; hist?: number[] })[]; width: number; onOpen: (c: Found) => void }) {
   const styles = useStyles();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail} keyboardShouldPersistTaps="handled">
       {items.map((c) => (
-        <CatalogTile key={c.productId} item={c} width={width} change={c.change7d} onPress={() => onOpen(c)} />
+        <CatalogTile key={c.productId} item={c} width={width} change={c.change !== undefined ? c.change : c.change7d} hist={c.hist} onPress={() => onOpen(c)} />
       ))}
     </ScrollView>
   );
@@ -296,7 +300,7 @@ function SetRow({ set }: { set: HotSet }) {
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[type.body, { color: color.ink }]}>{set.setName}</Text>
         {set.topName ? (
-          <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+          <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
             Top card {displayName(set.topName)}
             {set.topCents != null ? ` · ${cardPrice(set.topCents)}` : ''}
           </Text>
