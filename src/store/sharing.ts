@@ -5,17 +5,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { Audience, ShowcaseOrder } from '../profile/publicProfile';
+import type { ImageOrder, WishTitle } from '../profile/shareImage';
+import type { PerRow } from '../components/share/ShelfImage';
 
 type SharingState = {
   order: ShowcaseOrder;
   /** Market values on your public profile and share image. Off: a collection's worth is private. */
   showValue: boolean;
   audience: Audience;
-  /** Slabs on the share image: 3, 6 or 9. */
-  imageCount: number;
+  /** Profile share image: which cards (an order, or your own pick), how many across, how many shelves. */
+  imageOrder: ImageOrder;
+  imageIds: string[];
+  perRow: PerRow;
+  rows: number;
+  /** Wishlist share image: the title, whether prices show, and your picks in order (wishlist keys). */
+  wishTitle: WishTitle;
+  wishPrices: boolean;
+  wishKeys: string[];
+  wishPerRow: PerRow;
   /** What was last published to the showcases table. */
   published: string | null;
-  set: (p: Partial<Pick<SharingState, 'order' | 'showValue' | 'audience' | 'imageCount'>>) => void;
+  set: (p: Partial<Omit<SharingState, 'set' | 'markPublished' | 'published'>>) => void;
   markPublished: (key: string) => void;
 };
 
@@ -25,11 +35,18 @@ export const useSharing = create<SharingState>()(
       order: 'value',
       showValue: false,
       audience: 'friends',
-      imageCount: 6,
+      imageOrder: 'value',
+      imageIds: [],
+      perRow: 3,
+      rows: 2,
+      wishTitle: 'buying',
+      wishPrices: true,
+      wishKeys: [],
+      wishPerRow: 3,
       published: null,
       set: (p) => set(p),
       markPublished: (published) => set({ published }),
     }),
-    { name: 'slabby.sharing', storage: createJSONStorage(() => AsyncStorage), version: 1 },
+    { name: 'slabby.sharing', storage: createJSONStorage(() => AsyncStorage), version: 2, migrate: (old) => ({ ...(old as object), imageOrder: 'value', perRow: 3, rows: 2 }) as never },
   ),
 );
