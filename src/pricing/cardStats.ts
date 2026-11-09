@@ -93,10 +93,14 @@ export function gradingLine(r: GradingRead): string {
   return `Grading pays if about 1 in ${r.oneIn} come back PSA 10.`;
 }
 
-/** Chart windows on the search card page. */
-export const RANGES = [30, 90, 180] as const;
+/** Chart windows on the search card page. ALL = everything we have (raw goes back to Feb 2024). */
+export const ALL = 10_000 as const;
+export const RANGES = [30, 90, 180, 365, ALL] as const;
 export type Range = (typeof RANGES)[number];
-export const rangeLabel = (r: Range) => (r === 180 ? '6M' : `${r}D`);
+export const rangeLabel = (r: Range) => (r === ALL ? 'All' : r === 365 ? '1Y' : r === 180 ? '6M' : `${r}D`);
+
+/** Days of history a card needs before 1Y / All are offered, so they never just repeat 6M. */
+const LONG_MIN_DAYS: Record<number, number> = { 365: 330, [ALL]: 240 };
 
 const shiftDay = (day: string, n: number) => {
   const d = new Date(`${day}T00:00:00Z`);
@@ -116,11 +120,12 @@ export function rangeSeries(p: CardPrice | null | undefined, range: Range, today
   let asOf: string;
   if (p.hist?.length && p.histFrom) {
     asOf = shiftDay(p.histFrom, p.hist.length - 1);
-    const start = shiftDay(today, -(range - 1));
+    if (LONG_MIN_DAYS[range] && p.hist.length < LONG_MIN_DAYS[range]) return null;
+    const start = range === ALL ? p.histFrom : shiftDay(today, -(range - 1));
     const skip = Math.max(0, Math.round((Date.parse(`${start}T00:00:00Z`) - Date.parse(`${p.histFrom}T00:00:00Z`)) / 86_400_000));
     values = p.hist.slice(skip);
   } else {
-    if (range === 180 || !chartable(p)) return null;
+    if (range >= 180 || !chartable(p)) return null;
     values = p.series90.slice(-range);
     asOf = p.asOf;
   }

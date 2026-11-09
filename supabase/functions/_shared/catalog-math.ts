@@ -251,3 +251,39 @@ export function packPrice(products: TcgProduct[], prices: TcgPrice[]): { name: s
     .sort((a, b) => a.name.length - b.name.length || a.cents - b.cents);
   return packs[0] ?? null;
 }
+
+/** One product's weekly TCGplayer market (raw_price_weekly): cents[i] is week from_day + 7i. */
+export type Weekly = { from_day: string; cents: (number | null)[] };
+
+/**
+ * Raw history reaching back past PPT's 180 days: the weekly backfill (from Feb 2024), spread over
+ * every day by carrying each week forward, then the daily history from `histFrom` on. Leading
+ * empty weeks are dropped. Returns the daily history unchanged when there is no older weekly data.
+ */
+export function extendHistory(
+  daily: { histFrom: string; hist: number[] } | null,
+  weekly: Weekly | null,
+): { histFrom: string; hist: number[] } | null {
+  if (!weekly?.cents?.length) return daily;
+  const first = weekly.cents.findIndex((c) => c != null && c > 0);
+  if (first < 0) return daily;
+  const start = addDaysIso(weekly.from_day, first * 7);
+  const end = daily ? daily.histFrom : addDaysIso(weekly.from_day, (weekly.cents.length - 1) * 7 + 1);
+  if (start >= end) return daily;
+  const older: number[] = [];
+  let last = weekly.cents[first] as number;
+  let i = 0;
+  for (let d = start; d < end; d = nextDay(d), i++) {
+    const w = first + Math.floor(i / 7);
+    const c = i % 7 === 0 ? weekly.cents[w] : null;
+    if (c != null && c > 0) last = c;
+    older.push(last);
+  }
+  return { histFrom: start, hist: daily ? [...older, ...daily.hist] : older };
+}
+
+function addDaysIso(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
