@@ -40,13 +40,37 @@ export async function publishProfile(p: Profile): Promise<string | null> {
   return null;
 }
 
-/** Pick a photo from the camera roll, cropped square and shrunk to a small JPEG data URI. */
-export async function pickProfilePhoto(): Promise<string | null> {
-  // The system photo picker needs no library permission: you only hand over the photo you pick.
-  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
-  const uri = r.canceled ? null : r.assets?.[0]?.uri;
-  if (!uri) return null;
-  const small = await manipulateAsync(uri, [{ resize: { width: AVATAR_PX, height: AVATAR_PX } }], {
+/**
+ * A profile photo from the photo library or the camera, as a small square JPEG data URI, or null
+ * when you back out.
+ *
+ * The library uses Apple's photo picker with no in-picker crop: asking for the crop makes iOS fall
+ * back to the old picker, which loads the whole library first and sat silent for ~5 s on first open.
+ * We crop the middle square ourselves. The picker gets the photo as it's stored (no HEIC re-encode)
+ * and only the small copy is made here.
+ */
+export async function pickProfilePhoto(from: 'library' | 'camera' = 'library'): Promise<string | null> {
+  const opts: ImagePicker.ImagePickerOptions = {
+    mediaTypes: ['images'],
+    quality: 1,
+    preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+  };
+  let r: ImagePicker.ImagePickerResult;
+  if (from === 'camera') {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) throw new Error('Slabby needs the camera for this. Turn it on in Settings › Slabby.');
+    r = await ImagePicker.launchCameraAsync({ ...opts, allowsEditing: true, aspect: [1, 1] });
+  } else {
+    r = await ImagePicker.launchImageLibraryAsync(opts);
+  }
+  const asset = r.canceled ? null : r.assets?.[0];
+  if (!asset?.uri) return null;
+  const side = Math.min(asset.width || AVATAR_PX, asset.height || AVATAR_PX);
+  const crop =
+    asset.width && asset.height
+      ? [{ crop: { originX: Math.round((asset.width - side) / 2), originY: Math.round((asset.height - side) / 2), width: side, height: side } }]
+      : [];
+  const small = await manipulateAsync(asset.uri, [...crop, { resize: { width: AVATAR_PX, height: AVATAR_PX } }], {
     format: SaveFormat.JPEG,
     compress: 0.7,
     base64: true,

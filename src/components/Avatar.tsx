@@ -1,11 +1,11 @@
 // Your profile photo in a circle, or the first letter of your name on a well when there's none.
 
-import { Image, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { type } from '../theme/tokens';
 import { useColors } from '../theme/theme';
 
-export function Avatar({ photo, letter, px }: { photo: string | null; letter: string; px: number }) {
+export function Avatar({ photo, letter, px, busy = false }: { photo: string | null; letter: string; px: number; busy?: boolean }) {
   const color = useColors();
   return (
     <View
@@ -30,6 +30,11 @@ export function Avatar({ photo, letter, px }: { photo: string | null; letter: st
       ) : (
         <Text style={[type.title, { color: color.secondary, fontSize: px * 0.4 }]}>{letter}</Text>
       )}
+      {busy ? (
+        <View style={{ position: 'absolute', left: 0, top: 0, width: px, height: px, alignItems: 'center', justifyContent: 'center', backgroundColor: color.scrimLight }}>
+          <ActivityIndicator color={color.onInk} />
+        </View>
+      ) : null}
     </View>
   );
 }

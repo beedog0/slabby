@@ -7,7 +7,7 @@
 // Settings (Edit profile, Account, Pricing rules, Appearance) live in the … menu at the top.
 
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, type ComponentRef, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -20,7 +20,8 @@ import { IconButton, PrimaryButton } from '../../src/components/ui';
 import { changeText, money } from '../../src/lib/format';
 import { rowFor } from '../../src/pricing/portfolio';
 import { profileStats, showcase } from '../../src/pricing/profileStats';
-import { pickProfilePhoto, publishProfile } from '../../src/services/profile';
+import { publishProfile } from '../../src/services/profile';
+import { choosePhoto } from '../../src/components/photoChoice';
 import { useAccount } from '../../src/store/account';
 import { useAppearance } from '../../src/store/appearance';
 import { usePrices } from '../../src/store/prices';
@@ -58,14 +59,19 @@ export default function ProfileTab() {
   const [hero, ...rest] = shelf;
 
   const edit = () => router.push('/settings/profile');
+  const [picking, setPicking] = useState(false);
+  const setPhoto = (photo: string | null) => {
+    const p = useProfile.getState();
+    p.save({ name: p.name, handle: p.handle, bio: p.bio, photo });
+  };
   const changePhoto = () =>
-    pickProfilePhoto()
-      .then((photo) => {
-        if (!photo) return;
-        const p = useProfile.getState();
-        p.save({ name: p.name, handle: p.handle, bio: p.bio, photo });
-      })
-      .catch((e: Error) => Alert.alert('Couldn’t open your photos', e?.message || 'Try again.'));
+    choosePhoto({
+      hasPhoto: !!profile.photo,
+      onBusy: setPicking,
+      onPicked: setPhoto,
+      onRemove: () => setPhoto(null),
+      onError: (m) => Alert.alert('Couldn’t get that photo', m),
+    });
 
   const moreRef = useRef<ComponentRef<typeof View>>(null);
   const accountDetail = guest ? 'Not signed in' : saving ? 'Saving…' : syncError ? 'Not saved yet' : 'Saved';
@@ -100,8 +106,8 @@ export default function ProfileTab() {
 
       {/* Who you are. Tap the photo to change it, the name to edit the rest. */}
       <View style={styles.who}>
-        <Pressable accessibilityRole="button" accessibilityLabel={profile.photo ? 'Change photo' : 'Add a photo'} onPress={changePhoto}>
-          <Avatar photo={profile.photo} letter={initialOf(profile.name, profile.handle, email)} px={size.avatarEdit} />
+        <Pressable accessibilityRole="button" accessibilityLabel={profile.photo ? 'Change photo' : 'Add a photo'} onPress={changePhoto} disabled={picking}>
+          <Avatar photo={profile.photo} letter={initialOf(profile.name, profile.handle, email)} px={size.avatarEdit} busy={picking} />
           {!profile.photo ? (
             <View style={styles.camera}>
               <CameraIcon />
