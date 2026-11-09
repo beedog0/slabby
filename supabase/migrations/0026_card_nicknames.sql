@@ -1,7 +1,7 @@
 -- Card nicknames in search: "scream pikachu" (or "pikachu scream") finds the Japanese SM-P 288
 -- Pikachu, "moonbreon" the Evolving Skies Umbreon VMAX alt art. A nickname typed exactly ranks
--- first, like an exactly typed name (0023). The app shows "aka Scream Pikachu" under the name so
--- it's clear why the card came up.
+-- first, like an exactly typed name (0023). The app doesn't show the nickname (Bryan: an "aka"
+-- line looked unprofessional); catalog.aka is there if a later design wants it.
 --
 -- Nicknames are rules, not product ids: game, language, words the TCGplayer name must hold, and
 -- optionally the number and words of the set. So a card the nightly import adds later (another
