@@ -46,10 +46,7 @@ create index if not exists catalog_name_norm_trgm on catalog using gin (name_nor
 -- word is somewhere in name, set or number, 4 a close misspelling of the name.
 create or replace function search_hits(q text, game_filter text default null)
 returns table (product_id bigint, tier int, score real)
-language sql stable
-set search_path = public, extensions
-set pg_trgm.word_similarity_threshold = 0.45  -- "charzard" scores 0.58 against "charizard"
-as $$
+language sql stable set search_path = public, extensions as $$
   with qn as (select search_fold(q) as s),
   terms as (
     select t from unnest(regexp_split_to_array((select s from qn), ' ')) t where t <> ''
@@ -79,7 +76,9 @@ as $$
     where not exists (select 1 from strict)
       and length(coalesce((select w from words), '')) >= 4
       and (game_filter is null or c.game = game_filter)
-      and (select w from words) <% c.name_norm
+      -- 0.45, not the <% operator's 0.6 ("charzard" scores 0.58 against "charizard"). Setting
+      -- the operator's threshold on the function is refused on Supabase once pg_trgm is loaded.
+      and word_similarity((select w from words), c.name_norm) >= 0.45
       and not exists (select 1 from terms where terms.t ~ '[0-9]' and position(terms.t in c.search_norm) = 0)
   )
   select * from strict

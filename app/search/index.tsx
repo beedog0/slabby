@@ -594,6 +594,11 @@ function ResultTile({ card, width, con, trade, rules, change, days }: ResultProp
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {(sealed ? [sealedLabel(sealed)] : [no && `#${no}`, promoTag(card, { setShown: true }), card.setName]).filter(Boolean).join(' · ')}
         </Text>
+        {card.aka?.length ? (
+          <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+            aka {card.aka[0]}
+          </Text>
+        ) : null}
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {sealed ? 'market' : 'raw'} <Text style={{ color: color.ink }}>{card.marketCents != null ? cardPrice(card.marketCents) : '—'}</Text>
           {change != null ? <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{`  ${pct(change)} ${days}d`}</Text> : null}
@@ -626,6 +631,11 @@ function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <CardName name={sealed ? card.name : displayName(card.name)} language={card.language} numberOfLines={sealed ? 2 : 1} style={[type.body, { color: color.ink }]} />
+        {card.aka?.length ? (
+          <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+            aka {card.aka[0]}
+          </Text>
+        ) : null}
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {sub}
         </Text>

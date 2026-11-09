@@ -29,6 +29,8 @@ export type CatalogCard = {
   printings?: Printing[];
   /** Sealed product (0015_sealed.sql): its kind. Null or missing for a single card. */
   sealedType?: SealedType | null;
+  /** Collectors' nicknames, main one first: "Scream Pikachu" (0026_card_nicknames.sql). */
+  aka?: string[];
 };
 
 /** One printing of a card and its TCGplayer market: "Holofoil", "Reverse Holofoil", "1st Edition". */
@@ -67,6 +69,7 @@ export type Row = {
   low_cents: number | null;
   printings?: { name: string; market_cents: number | null; low_cents: number | null }[] | null;
   sealed_type?: string | null;
+  aka?: string[] | null;
 };
 
 export const fromRow = (r: Row): CatalogCard => ({
@@ -83,6 +86,7 @@ export const fromRow = (r: Row): CatalogCard => ({
   lowCents: r.low_cents,
   printings: (r.printings ?? []).map((x) => ({ name: x.name, marketCents: x.market_cents, lowCents: x.low_cents })),
   sealedType: sealedOf(r.sealed_type),
+  aka: r.aka ?? [],
 });
 
 /** A row's sealed kind; an unknown one still counts as sealed (shown as "Sealed"). */
@@ -99,11 +103,13 @@ export function terms(q: string): string[] {
 
 /**
  * Mock and vault search: every word must appear in name, set, set code or number (same rule as
- * SQL). The name also counts with its spaces taken out, so "kai sa" and "hooh" both match.
+ * SQL). The name also counts with its spaces taken out, so "kai sa" and "hooh" both match, and
+ * so do the card's nicknames ("scream pikachu").
  */
-export function matches(c: Pick<CatalogCard, 'name' | 'setName' | 'setCode' | 'number'>, q: string): boolean {
+export function matches(c: Pick<CatalogCard, 'name' | 'setName' | 'setCode' | 'number'> & { aka?: string[] | null }, q: string): boolean {
   const name = fold(c.name);
-  const hay = `${name} ${name.replace(/ /g, '')} ${fold(c.setName)} ${fold(c.setCode)} ${fold(c.number)}`;
+  const aka = fold((c.aka ?? []).join(' '));
+  const hay = `${name} ${name.replace(/ /g, '')} ${fold(c.setName)} ${fold(c.setCode)} ${fold(c.number)} ${aka} ${aka.replace(/ /g, '')}`;
   const t = terms(q);
   return t.length > 0 && t.every((w) => hay.includes(w));
 }

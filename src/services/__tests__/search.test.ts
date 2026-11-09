@@ -23,6 +23,10 @@ describe('search helpers', () => {
     expect(matches({ name: 'Ho-Oh', setName: 'Neo Revelation', setCode: null, number: '7/64' }, 'hooh')).toBe(true);
     expect(matches({ name: 'Pikachu', setName: 'Pokémon GO', setCode: 'PGO', number: '1' }, 'pokemon go')).toBe(true);
     expect(matches(kaisa, 'kai su')).toBe(false);
+    const scream = { name: 'Pikachu - 288/SM-P', setName: 'SM-P: Sun & Moon Promos', setCode: 'SM-P', number: '288/SM-P', aka: ['Scream Pikachu'] };
+    expect(matches(scream, 'pikachu scream')).toBe(true);
+    expect(matches(scream, 'screampikachu')).toBe(true);
+    expect(matches({ ...scream, aka: [] }, 'scream')).toBe(false);
   });
   it('ranks the exact name first, then names that start with it', () => {
     expect(nameTier("Kai'Sa - Daughter of the Void", 'kai sa')).toBe(0);

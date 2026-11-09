@@ -121,6 +121,7 @@ type Row = {
   change_7d: number | null;
   change_30d: number | null;
   sealed_type?: string | null;
+  aka?: string[] | null;
 };
 
 const fromRow = (r: Row): Found => ({
@@ -138,6 +139,7 @@ const fromRow = (r: Row): Found => ({
   change7d: r.change_7d ?? null,
   change30d: r.change_30d ?? null,
   sealedType: sealedOf(r.sealed_type),
+  aka: r.aka ?? [],
 });
 
 export async function findCards(f: Query): Promise<Found[]> {
