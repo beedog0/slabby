@@ -216,6 +216,8 @@ export default function Search() {
             <TextInput
               value={f.q}
               onChangeText={(q) => set({ q })}
+              // Pushed (con's Search to buy, a scan's name): type straight away. The tab never does:
+              // it opens onto its landing, keyboard down until you tap the field.
               autoFocus={!asTab}
               autoCorrect={false}
               autoCapitalize="none"
