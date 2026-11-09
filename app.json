@@ -43,7 +43,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Slabby uses the camera to read the QR code on your PSA label.",
+          "cameraPermission": "Slabby uses the camera to scan your slabs and take your profile photo.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

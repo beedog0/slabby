@@ -59,3 +59,14 @@ describe('wishView', () => {
     expect(underBy(items[4])).toBe(0);
   });
 });
+
+import { liquidityLine } from '../cardStats';
+describe('liquidityLine', () => {
+  const now = Date.parse('2026-11-09T12:00:00Z');
+  it('says what the label means', () => {
+    expect(liquidityLine(14)).toBe('Sells often · 14 sales in 30 days');
+    expect(liquidityLine(4)).toBe('Sells slowly · 4 sales in 30 days');
+    expect(liquidityLine(1, '2026-10-18', now)).toBe('Rarely sells · last sale Oct 18, 22 days ago');
+    expect(liquidityLine(0)).toBe('Rarely sells · no sales in 30 days');
+  });
+});

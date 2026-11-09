@@ -34,9 +34,11 @@ export type Landing = {
   sealedPick: Found[];
   sets: HotSet[];
   asOf: string | null;
+  /** While there isn't a week of prices yet: the day Top movers starts (YYYY-MM-DD). */
+  moversFrom: string | null;
 };
 
-export const EMPTY_LANDING: Landing = { up: [], down: [], sealedNew: [], sealedPick: [], sets: [], asOf: null };
+export const EMPTY_LANDING: Landing = { up: [], down: [], sealedNew: [], sealedPick: [], sets: [], asOf: null, moversFrom: null };
 
 type ItemRow = {
   product_id: number;
@@ -115,6 +117,7 @@ export function landingFrom(j: unknown): Landing {
         topCents: s.top_cents ?? null,
       })),
     asOf: typeof o.as_of === 'string' ? o.as_of : null,
+    moversFrom: typeof o.movers_from === 'string' ? o.movers_from : null,
   };
 }
 
@@ -176,5 +179,6 @@ function mockLanding(game: Game | null): Landing {
       };
     }),
     asOf: null,
+    moversFrom: null,
   };
 }

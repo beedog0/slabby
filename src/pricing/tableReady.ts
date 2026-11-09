@@ -51,3 +51,11 @@ export function recentSales(rows: CardRow[], n = 5): CardRow[] {
     .sort((a, b) => b.card.soldAt!.localeCompare(a.card.soldAt!))
     .slice(0, n);
 }
+
+/** Cards you bought (a price paid and a day), newest first. */
+export function recentBuys(rows: CardRow[], n = 5): CardRow[] {
+  return rows
+    .filter((r) => r.card.paidCents != null && (r.card.paidAt || r.card.createdAt))
+    .sort((a, b) => (b.card.paidAt ?? b.card.createdAt).localeCompare(a.card.paidAt ?? a.card.createdAt))
+    .slice(0, n);
+}

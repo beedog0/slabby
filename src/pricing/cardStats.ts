@@ -80,6 +80,23 @@ export function liquidity(sales30d: number): Liquidity {
   return sales30d >= 10 ? 'Liquid' : sales30d >= 3 ? 'Slow' : 'Stale';
 }
 
+/**
+ * Liquidity in words, never a bare label (Bryan: "Stale" alone meant nothing):
+ * "Sells often · 14 sales in 30 days", "Sells slowly · 4 sales in 30 days",
+ * "Rarely sells · last sale Oct 18, 22 days ago".
+ */
+export function liquidityLine(sales30d: number, lastSaleDay?: string | null, now = Date.now()): string {
+  const l = liquidity(sales30d);
+  const n = `${sales30d} ${sales30d === 1 ? 'sale' : 'sales'} in 30 days`;
+  if (l === 'Liquid') return `Sells often · ${n}`;
+  if (l === 'Slow') return `Sells slowly · ${n}`;
+  if (!lastSaleDay) return sales30d ? `Rarely sells · ${n}` : 'Rarely sells · no sales in 30 days';
+  const d = new Date(`${lastSaleDay.slice(0, 10)}T12:00:00Z`);
+  const ago = Math.max(0, Math.round((now - d.getTime()) / 86_400_000));
+  const day = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return `Rarely sells · last sale ${day}${ago >= 1 ? `, ${ago} ${ago === 1 ? 'day' : 'days'} ago` : ''}`;
+}
+
 export function trend(change: number): Trend {
   return change > 0.03 ? 'Rising' : change < -0.03 ? 'Falling' : 'Flat';
 }

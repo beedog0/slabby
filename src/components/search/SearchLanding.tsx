@@ -22,7 +22,6 @@ import { radius, size, space, type } from '../../theme/tokens';
 import { themed, useColors } from '../../theme/theme';
 import { ArtImage, prefetchArt } from '../ArtImage';
 import { Hairline } from '../ui';
-import { WishTile } from '../WishTile';
 import { CatalogTile, ChangeText, cardH } from './CatalogTile';
 
 const POPULAR: Record<Game | 'all', string[]> = {
@@ -76,32 +75,41 @@ export function SearchLanding({
   const moverDays = dayList.length && Math.min(...dayList) === Math.max(...dayList) ? dayList[0] : null;
   const sealed = feed.sealedNew.slice(0, moreSealed ? SEALED_MORE : SEALED_SHOWN);
   const hot = feed.sets.length && feed.sets[0].why === 'hot';
+  const waitDay =
+    feed.moversFrom && feed.moversFrom > new Date().toISOString().slice(0, 10)
+      ? new Date(`${feed.moversFrom}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+      : null;
 
   return (
     <View style={{ paddingTop: space.l }}>
+      {/* Wishlist: one compact button into its own sheet (Bryan: the rail took too much room). */}
       {wished.length ? (
-        <Section
-          title="Wishlist"
-          sub={
-            wish.below.length
-              ? `${wish.count} ${wish.count === 1 ? 'card' : 'cards'} · ${wish.below.length} at or under your price`
-              : `${wish.count} ${wish.count === 1 ? 'card' : 'cards'} · ${money(wish.totalCents)} at your prices`
-          }
-          action={{ label: 'See all', onPress: () => router.push('/wishlist') }}
-          first
-        >
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail} keyboardShouldPersistTaps="handled">
-            {[...wish.below, ...wish.watching].slice(0, 10).map((w) => (
-              <WishTile key={w.key} item={w} width={railW(width)} />
-            ))}
-          </ScrollView>
-        </Section>
+        <View style={[styles.gutter, { paddingBottom: space.xl }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Wishlist, ${wish.count} ${wish.count === 1 ? 'card' : 'cards'}`}
+            onPress={() => router.push('/wishlist')}
+            style={({ pressed }) => [styles.wishPill, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={[type.text, { color: color.ink, fontWeight: '600' }]}>Wishlist</Text>
+            <Text style={[type.text, { color: color.secondary }]}>
+              {wish.count}
+              {wish.below.length ? (
+                <>
+                  {' · '}
+                  <Text style={{ color: color.gain }}>{wish.below.length}</Text> at or under your price
+                </>
+              ) : null}
+            </Text>
+            <Text style={[type.text, { color: color.secondary }]}>›</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       <Section
         title={queries.length ? 'Recent searches' : 'Popular searches'}
         action={queries.length ? { label: 'Clear', onPress: clearQueries } : undefined}
-        first={!wished.length}
+        first
       >
         <View style={styles.chips}>
           {searches.map((q) => (
@@ -117,7 +125,7 @@ export function SearchLanding({
       {movers.length ? (
         <Section
           title="Top movers"
-          sub={`TCGplayer market · ${moverDays == null ? 'last few days' : moverDays >= 7 ? 'last 7 days' : `last ${moverDays} ${moverDays === 1 ? 'day' : 'days'}`}`}
+          sub={`TCGplayer market · this week vs last, steady prices only${moverDays != null && moverDays < 7 ? ` · ${moverDays} days` : ''}`}
           right={
             feed.up.length && feed.down.length ? (
               <View style={styles.toggle}>
@@ -141,6 +149,12 @@ export function SearchLanding({
           {(side === 'up' ? feed.up : feed.down).length > MOVERS_SHOWN ? (
             <More open={moreMovers} onPress={() => setMoreMovers((v) => !v)} />
           ) : null}
+        </Section>
+      ) : null}
+
+      {!movers.length && waitDay ? (
+        <Section title="Top movers" sub={`Starts ${waitDay}, once there’s a full week of TCGplayer prices to compare.`}>
+          {null}
         </Section>
       ) : null}
 
@@ -318,6 +332,16 @@ const useStyles = themed((color) =>
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: space.gutter },
     more: { alignSelf: 'center', minHeight: size.touch, justifyContent: 'center', paddingTop: space.m },
     rail: { paddingHorizontal: space.gutter, gap: space.m },
+    wishPill: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.s,
+      minHeight: size.touch,
+      paddingHorizontal: space.l,
+      borderRadius: size.touch / 2,
+      backgroundColor: color.well,
+    },
     setRow: { minHeight: size.rowVault, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingVertical: space.s },
     thumb: { width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, overflow: 'hidden', backgroundColor: color.well },
   }),

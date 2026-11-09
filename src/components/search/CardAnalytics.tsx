@@ -10,7 +10,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ebayCardListedUrl, ebayCardSoldUrl, type EbayCard } from '../../lib/ebay';
 import { cardPrice, money, pct } from '../../lib/format';
-import { gradingLine, gradingRead, history, liquidity, ratio, spread, spreadWord, trend } from '../../pricing/cardStats';
+import { gradingLine, gradingRead, history, liquidityLine, ratio, spread, spreadWord, trend } from '../../pricing/cardStats';
 import { catalogFor, choiceFor, type Choice } from '../../services/cardLink';
 import { priceFor, type CardPrice } from '../../services/comps';
 import { usePrices } from '../../store/prices';
@@ -216,7 +216,7 @@ export function KeyStats({ pick, price, prices, sealed }: { pick: Choice; price:
       { label: 'vs raw', value: times(ratio(price, prices.raw, true, false)) },
       { label: `vs PSA ${n - 1}`, value: n > 1 ? times(ratio(price, below)) : null },
     );
-    read.push(liquidity(price.sales30d));
+    read.push(liquidityLine(price.sales30d, price.lastSale?.day ?? price.lastSaleDay));
     const word = sp != null ? spreadWord(sp) : null;
     if (word) read.push(word);
   }
