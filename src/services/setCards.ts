@@ -7,7 +7,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import catalogJson from '../mocks/catalog.json';
-import type { CatalogCard } from './search';
+import { isLandscape, type CatalogCard } from './search';
 import { setId, type Found } from './searchFilters';
 import { supabase } from './supabase';
 
@@ -30,6 +30,7 @@ type Row = {
   change_7d: number | null;
   change_30d: number | null;
   group_id: number;
+  card_type?: string | null;
 };
 
 const fromRow = (r: Row): Found => ({
@@ -46,6 +47,7 @@ const fromRow = (r: Row): Found => ({
   lowCents: r.low_cents,
   change7d: r.change_7d ?? null,
   change30d: r.change_30d ?? null,
+  landscape: isLandscape(r.game, r.card_type),
 });
 
 const mockFound = (c: Mock): Found => {
@@ -88,16 +90,21 @@ export async function cardsInSet(groupId: number, limit = 600): Promise<Found[]>
       .slice(0, limit)
       .map(mockFound);
   }
-  const { data, error } = await supabase
-    .from('catalog')
-    .select(COLS)
-    .eq('group_id', groupId)
-    // Singles only: sealed product (0015) has no card number.
-    .not('number', 'is', null)
-    .order('market_cents', { ascending: false, nullsFirst: false })
-    .limit(limit);
+  const db = supabase;
+  const query = (cols: string) =>
+    db
+      .from('catalog')
+      .select(cols)
+      .eq('group_id', groupId)
+      // Singles only: sealed product (0015) has no card number.
+      .not('number', 'is', null)
+      .order('market_cents', { ascending: false, nullsFirst: false })
+      .limit(limit);
+  let { data, error } = await query(`${COLS}, card_type`);
+  // card_type arrives with 0033; until it is applied, load the set without it.
+  if (error?.code === '42703') ({ data, error } = await query(COLS));
   if (error) throw error;
-  return ((data ?? []) as Row[]).map(fromRow);
+  return ((data ?? []) as unknown as Row[]).map(fromRow);
 }
 
 // ── set sorting and filtering (pure) ────────────────────────────────────────────────────────

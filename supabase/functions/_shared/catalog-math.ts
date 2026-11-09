@@ -47,6 +47,8 @@ export type CatalogRow = {
   printings: Printing[];
   /** Sealed product (0015_sealed.sql): what kind, e.g. "booster_box". Null for a single card. */
   sealed_type: SealedType | null;
+  /** TCGplayer's "Card Type" (0033_card_type.sql): "Battlefield" lays a Riftbound card sideways. */
+  card_type?: string | null;
 };
 
 /** Kinds of sealed product, in the order the filter lists them. */
@@ -156,6 +158,7 @@ export function catalogRows(
       ...primaryPrice(byProduct.get(p.productId) ?? []),
       printings: sealed ? [] : printings(byProduct.get(p.productId) ?? []),
       sealed_type: sealed,
+      card_type: sealed ? null : ext(p, 'Card Type'),
     });
   }
   return rows;

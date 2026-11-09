@@ -61,6 +61,7 @@ export function CatalogTile({
         <ArtImage
           uri={item.imageUrl}
           label={item.name}
+          landscape={item.landscape}
           recyclingKey={String(item.productId)}
           fit={sealed ? 'contain' : 'cover'}
           position={sealed ? 'bottom' : undefined}

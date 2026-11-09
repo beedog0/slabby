@@ -6,7 +6,7 @@ import catalogJson from '../mocks/catalog.json';
 import { displayName, matches, terms, type CatalogCard, type Game } from './search';
 import { supabase } from './supabase';
 import { SEALED_TYPES, typeLabel, type TypeFilter } from '../lib/sealed';
-import { sealedOf } from './search';
+import { isLandscape, sealedOf } from './search';
 import { ART_TYPES, artLabel, artTypeOf, isArtType, type ArtType } from '../lib/artType';
 
 export type { TypeFilter, ArtType };
@@ -122,6 +122,7 @@ type Row = {
   change_30d: number | null;
   sealed_type?: string | null;
   aka?: string[] | null;
+  card_type?: string | null;
 };
 
 const fromRow = (r: Row): Found => ({
@@ -138,6 +139,7 @@ const fromRow = (r: Row): Found => ({
   lowCents: r.low_cents,
   change7d: r.change_7d ?? null,
   change30d: r.change_30d ?? null,
+  landscape: isLandscape(r.game, r.card_type),
   sealedType: sealedOf(r.sealed_type),
   aka: r.aka ?? [],
 });

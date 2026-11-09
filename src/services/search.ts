@@ -32,7 +32,13 @@ export type CatalogCard = {
   sealedType?: SealedType | null;
   /** Collectors' nicknames, main one first: "Scream Pikachu" (0026_card_nicknames.sql). */
   aka?: string[];
+  /** A landscape card (Riftbound battlefields): tiles lay it sideways and upright (0033). */
+  landscape?: boolean;
 };
+
+/** TCGplayer's card type says the card is printed landscape: Riftbound battlefields. */
+export const isLandscape = (game: string, cardType: string | null | undefined) =>
+  game === 'riftbound' && /battlefield/i.test(cardType ?? '');
 
 /** One printing of a card and its TCGplayer market: "Holofoil", "Reverse Holofoil", "1st Edition". */
 export type Printing = { name: string; marketCents: number | null; lowCents: number | null };
@@ -71,6 +77,8 @@ export type Row = {
   printings?: { name: string; market_cents: number | null; low_cents: number | null }[] | null;
   sealed_type?: string | null;
   aka?: string[] | null;
+  /** TCGplayer's "Card Type" (0033_card_type.sql), e.g. "Battlefield". */
+  card_type?: string | null;
 };
 
 export const fromRow = (r: Row): CatalogCard => ({
@@ -88,6 +96,7 @@ export const fromRow = (r: Row): CatalogCard => ({
   printings: (r.printings ?? []).map((x) => ({ name: x.name, marketCents: x.market_cents, lowCents: x.low_cents })),
   sealedType: sealedOf(r.sealed_type),
   aka: r.aka ?? [],
+  landscape: isLandscape(r.game, r.card_type),
 });
 
 /** A row's sealed kind; an unknown one still counts as sealed (shown as "Sealed"). */

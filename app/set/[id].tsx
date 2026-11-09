@@ -216,7 +216,7 @@ function Tile({ card, w, trade }: { card: Found; w: number; trade?: boolean }) {
       accessibilityLabel={`${displayName(card.name)}${no ? ` number ${no}` : ''}, ${card.marketCents != null ? cardPrice(card.marketCents) : 'no price'}`}
     >
       <View style={[{ width: w, height: Math.round(w * (88 / 63)), borderRadius: radius.thumb * 2, backgroundColor: color.well }, shadow.thumb]}>
-        <ArtImage uri={card.imageUrl} label={card.name} recyclingKey={String(card.productId)} fit="contain" style={{ flex: 1, borderRadius: radius.thumb * 2 }} />
+        <ArtImage uri={card.imageUrl} label={card.name} landscape={card.landscape} recyclingKey={String(card.productId)} fit="contain" style={{ flex: 1, borderRadius: radius.thumb * 2 }} />
       </View>
       <Text numberOfLines={1} style={[type.secondary, { color: color.ink, paddingTop: space.s }]}>
         {displayName(card.name)}

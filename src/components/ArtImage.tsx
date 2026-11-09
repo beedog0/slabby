@@ -30,6 +30,7 @@ export function ArtImage({
   position,
   onLoad,
   label,
+  landscape,
 }: {
   /** Null or a picture that fails to load (TCGplayer has none yet) shows the placeholder. */
   uri: string | null | undefined;
@@ -43,10 +44,14 @@ export function ArtImage({
   onLoad?: (e: ImageLoadEventData) => void;
   /** The card's name, for the placeholder's initial. */
   label?: string | null;
+  /** A card printed landscape (Riftbound battlefields): laid sideways in the box, upright. */
+  landscape?: boolean;
 }) {
   // Remember which picture failed, so a recycled row with a new uri tries again.
   const [failed, setFailed] = useState<string | null>(null);
   if (!uri || failed === uri) return <NoPicture label={label} style={style} />;
+  if (landscape)
+    return <LandscapeArt uri={uri} style={style} recyclingKey={recyclingKey} onError={() => setFailed(uri)} onLoad={onLoad} />;
   return (
     <Image
       source={{ uri: hiResArt(uri) }}
@@ -61,6 +66,70 @@ export function ArtImage({
       priority="high"
       allowDownscaling={!sharp}
     />
+  );
+}
+
+/**
+ * A landscape card in a portrait box: as wide as the box, centred. TCGplayer scans battlefields
+ * standing up (the text runs bottom to top), so a portrait file is turned a quarter clockwise; a
+ * landscape file (Riot's gallery) is shown as it is. Hidden until loaded, when its shape is known.
+ */
+function LandscapeArt({
+  uri,
+  style,
+  recyclingKey,
+  onError,
+  onLoad,
+}: {
+  uri: string;
+  style?: StyleProp<ImageStyle>;
+  recyclingKey?: string;
+  onError: () => void;
+  onLoad?: (e: ImageLoadEventData) => void;
+}) {
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const [shape, setShape] = useState<{ uri: string; w: number; h: number } | null>(null);
+  const known = shape?.uri === uri ? shape : null;
+  const turn = !!known && known.h > known.w;
+  // The card's long side over its short side; 88/63 until the file has loaded.
+  const ratio = known ? Math.max(known.w, known.h) / Math.min(known.w, known.h) : 88 / 63;
+  const w = box?.w ?? 0;
+  const h = box?.h ?? 0;
+  const cardH = Math.min(w / ratio, h);
+  const cardW = cardH * ratio;
+  // Before turning, the picture stands cardH wide and cardW tall.
+  const imgW = turn ? cardH : cardW;
+  const imgH = turn ? cardW : cardH;
+  return (
+    <View
+      style={[StyleSheet.flatten(style as never), { overflow: 'hidden' }]}
+      onLayout={(e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+    >
+      {box ? (
+        <Image
+          source={{ uri: hiResArt(uri) }}
+          style={{
+            position: 'absolute',
+            width: imgW,
+            height: imgH,
+            left: (w - imgW) / 2,
+            top: (h - imgH) / 2,
+            opacity: known ? 1 : 0,
+            borderRadius: (StyleSheet.flatten(style as never) as ImageStyle | undefined)?.borderRadius ?? 0,
+            transform: turn ? [{ rotate: '90deg' }] : [],
+          }}
+          contentFit="contain"
+          onLoad={(e) => {
+            setShape({ uri, w: e.source.width, h: e.source.height });
+            onLoad?.(e);
+          }}
+          onError={onError}
+          cachePolicy="memory-disk"
+          transition={0}
+          recyclingKey={recyclingKey}
+        />
+      ) : null}
+    </View>
   );
 }
 
