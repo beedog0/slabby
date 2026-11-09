@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Slabby app icon: a black slab with a white label strip and a face in the card window. -->
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <rect x="292" y="132" width="440" height="760" rx="52" fill="#0A0A0A"/>
+  <rect x="334" y="174" width="356" height="128" rx="18" fill="#FFFFFF"/>
+  <rect x="410" y="470" width="58" height="124" rx="29" fill="#FFFFFF"/>
+  <rect x="556" y="470" width="58" height="124" rx="29" fill="#FFFFFF"/>
+  <path d="M 438 690 Q 512 748 586 690" fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round"/>
+</svg>

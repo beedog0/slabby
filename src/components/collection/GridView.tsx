@@ -2,12 +2,15 @@
 
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { cardLabel, money, pct, rowTitle } from '../../lib/format';
+import { cardPrice, gradeLabel, money, pct, pctSign, promoTag, rowTitle } from '../../lib/format';
+import { CardName } from '../CardName';
 import { weekChange, type CardRow } from '../../pricing/portfolio';
+import { useDeal } from '../../pricing/useDeal';
 import { dimmed, type SlabActions } from './actions';
 import { CopiesMark, PinMark } from './PinMark';
 import { SelectOutline } from './SelectOutline';
-import { color, space, type } from '../../theme/tokens';
+import { space, type } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 import { SlabView } from '../SlabView';
 import { slabLayout } from '../slab/geometry';
 
@@ -49,28 +52,37 @@ export function GridView({ rows, width, actions }: { rows: CardRow[]; width: num
 }
 
 export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
+  const color = useColors();
   const { card, price } = row;
   const sold = card.status === 'sold';
   const value = sold ? card.soldCents : price?.marketCents;
   // Last 7 days of market movement, as "+3% this week". What you paid is on the card.
   const week = weekChange(row);
+  const deal = useDeal(card.id);
   const align = center ? 'center' : 'flex-start';
   return (
     <View style={{ gap: 2, alignItems: align }}>
-      <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
-        {rowTitle(card)}
-      </Text>
+      <CardName name={rowTitle(card)} language={card.language} center={center} style={[type.text, { color: color.ink, fontWeight: '500' }]} />
       <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-        {cardLabel(card)}
+        {[gradeLabel(card.grader, card.grade, card.condition), promoTag(card)].filter(Boolean).join(' · ')}
         {' · '}
-        <Text style={{ color: color.ink }}>{value != null ? money(value) : '—'}</Text>
+        <Text style={{ color: color.ink }}>{value != null ? cardPrice(value) : '—'}</Text>
         {sold ? ' sold' : ''}
       </Text>
       {/* Its own line so it never truncates; a blank line when there's nothing to say, so rows line up. */}
       <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-        {week ? (
+        {deal ? (
+          // Sold with others: the deal total and how many, since line 2 is only this card's share.
+          deal.totalCents != null ? (
+            <>
+              <Text style={{ color: color.ink }}>{money(deal.totalCents)}</Text> deal · {deal.ids.length} cards
+            </>
+          ) : (
+            `Sold with ${deal.ids.length - 1} more`
+          )
+        ) : week ? (
           <>
-            <Text style={{ color: week.cents >= 0 ? color.gain : color.loss }}>{pct(week.fraction)}</Text> this week
+            <Text style={{ color: pctSign(week.fraction) === 0 ? color.secondary : week.cents >= 0 ? color.gain : color.loss }}>{pct(week.fraction)}</Text> this week
           </>
         ) : (
           ' '

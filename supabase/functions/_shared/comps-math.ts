@@ -112,11 +112,13 @@ export function bareNumber(n: string | null | undefined): string {
  * "OP05-119" where the label says #119; Riftbound prints "OGN-001" or "001/298".
  */
 export function numberMatches(catalog: string | null | undefined, label: string | null | undefined): boolean {
-  const want = bareNumber(label).toLowerCase();
+  // Riftbound signature printings carry a star ("299*/298"); the label's number reads without it,
+  // and the variety ("SIGNATURE") picks between the plain and starred rows.
+  const want = bareNumber(label).replace(/\*$/, '').toLowerCase();
   if (!want) return false;
-  const have = bareNumber(catalog).toLowerCase();
+  const have = bareNumber(catalog).replace(/\*$/, '').toLowerCase();
   if (have === want) return true;
-  const tail = (t: string) => bareNumber(t.split('-').pop()).toLowerCase();
+  const tail = (t: string) => bareNumber(t.split('-').pop()).replace(/\*$/, '').toLowerCase();
   return tail(have) === tail(want);
 }
 
@@ -309,3 +311,86 @@ export function nameAgrees(label: string | null | undefined, product: string | n
   if (have.some((w) => want.has(w))) return true;
   return !have.some((w) => /^[a-z]{4,}$/.test(w));
 }
+
+// ── TCGCSV slab matching (tcgcsv.ts fetches; these pick) ─────────────────────────────────────
+
+export const compact = (t: string | null | undefined) => (t ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+type LabelCard = { game?: string; variety?: string | null; name: string; number: string | null; setCode?: string | null; setName?: string | null };
+
+/** The groups a label's set can be, most likely first. Exported for tests. */
+export function groupsFor<G extends { name: string; abbreviation?: string | null }>(groups: G[], c: Pick<LabelCard, 'setCode' | 'setName'>): G[] {
+  const code = compact(c.setCode);
+  const out: G[] = [];
+  const add = (g: G | undefined) => g && !out.includes(g) && out.push(g);
+  if (code) {
+    groups.filter((g) => compact(g.abbreviation) === code).forEach(add);
+    // "OP14-EB04" and "OP14 RE" both hold OP14: split on spaces and on a hyphen before letters
+    // ("PRB-02" stays whole). Groups with only codes (the main set) before event groups.
+    const parts = (g: G) => (g.abbreviation ?? '').split(/\s+|-(?=[A-Z]{2})/i).map(compact).filter(Boolean);
+    const coded = groups.filter((g) => parts(g).includes(code));
+    const isEvent = (g: G) => parts(g).some((p) => /^[a-z]+$/.test(p) && p.length <= 3 && p !== code);
+    coded.filter((g) => !isEvent(g)).forEach(add);
+    coded.filter(isEvent).forEach(add);
+    groups.filter((g) => compact(g.name).startsWith(code)).forEach(add);
+  }
+  if (c.setName) {
+    add(groups.find((g) => compact(g.name).includes(compact(c.setName))));
+    // Abbreviated label sets: "25TH ANNIV-GOLDEN BOX" is "25th Anniversary Golden Box".
+    add(groups.find((g) => wordsPrefix(c.setName!, g.name)));
+  }
+  return out;
+}
+
+/** The product a label names among one group's products: number first, then name and variety. */
+export function pickProduct<P extends { name: string; extendedData?: { name: string; value: string }[] }>(products: P[], c: LabelCard): P | null {
+  const hits = products.filter((p) => {
+    const n = p.extendedData?.find((e) => e.name === 'Number')?.value;
+    return n && numberMatches(n, c.number);
+  });
+  if (!hits.length) return null;
+  const nameWords = c.name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const bare = (c.number ?? '').replace(/^0+(?=\d)/, '');
+  const byVariety = (c.game ?? 'pokemon') !== 'pokemon'; // Pokémon numbers are unique per printing
+  const variant = varietyWords(c.variety);
+  const code = compact(c.setCode);
+  const score = (p: P) => {
+    const n = p.name.toLowerCase();
+    const num = compact(p.extendedData?.find((e) => e.name === 'Number')?.value);
+    const tagged = /\(|\[/.test(n); // "Monkey.D.Luffy (Parallel)", "Shanks (Manga)"
+    const fits = variant.filter((w) => n.includes(w)).length;
+    // Riftbound's signed printing is the starred number ("299*/298" beside the plain "299/298").
+    const starred = /\*/.test(p.extendedData?.find((e) => e.name === 'Number')?.value ?? '');
+    const wantStar = /\*/.test(c.number ?? '') || variant.includes('signature');
+    return (
+      (byVariety ? (starred === wantStar ? 3 : -3) : 0) +
+      // The title carries the printed number ("Pikachu - 120/SV-P"); reprint rows sometimes don't.
+      (new RegExp(`\\b0*${escape(bare)}\\s*/`).test(n) ? 5 : 0) +
+      // A set's own card over a reprint from another set that shares the number ("OP14-006" in OP14
+      // over "PRB02-006").
+      (byVariety && code && /^[a-z]/.test(num) ? (num.startsWith(code) ? 4 : -4) : 0) +
+      nameWords.filter((w) => n.includes(w)).length +
+      // One Piece and Riftbound reuse the number for parallels and alt arts, so the label's variety
+      // picks the printing: tagged rows only when the label names one, the plain row otherwise.
+      (!byVariety ? 0 : variant.length ? (fits ? 3 * fits : tagged ? -1 : -2) : tagged ? -2 : 0)
+    );
+  };
+  return hits.sort((a, b) => score(b) - score(a))[0];
+}
+
+// PSA and TCGplayer word variants differently ("PARALLEL" vs "Alternate Art"), so both count.
+const SAME: Record<string, string[]> = { parallel: ['parallel', 'alternate', 'alt'], alternate: ['parallel', 'alternate', 'alt'], alt: ['parallel', 'alternate', 'alt'] };
+function varietyWords(v: string | null | undefined): string[] {
+  const words = (v ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !['art', 'rare', 'holo', 'the'].includes(w));
+  return [...new Set(words.flatMap((w) => SAME[w] ?? [w]))];
+}
+
+/** Every word of the label's set starts a word of the group's name, in any order. */
+function wordsPrefix(label: string, group: string): boolean {
+  const split = (t: string) => t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const want = split(label);
+  const have = split(group);
+  return want.length >= 2 && want.every((w) => have.some((h) => h.startsWith(w)));
+}
+
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

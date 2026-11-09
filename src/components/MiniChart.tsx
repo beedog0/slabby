@@ -3,22 +3,25 @@
 
 import Svg, { Path } from 'react-native-svg';
 import { trendOf } from '../pricing/portfolio';
-import { color, size, trendThreshold } from '../theme/tokens';
+import { size, trendThreshold } from '../theme/tokens';
+import { useColors } from '../theme/theme';
+import type { Palette } from '../theme/tokens';
 import { PriceChart } from './PriceChart';
 import { downsample, sparkPath } from './Sparkline';
 
-export const trendTint = (series: number[]) => {
+export const trendTint = (series: number[], color: Palette) => {
   const t = trendOf(series, trendThreshold);
   return t === 'up' ? color.gain : t === 'down' ? color.loss : color.ink;
 };
 
 /** A bare line (no labels), for tight spots like the swipe view caption. */
 export function MiniChart({ values, width, height = 40 }: { values: number[]; width: number; height?: number }) {
+  const color = useColors();
   if (values.length < 2) return null;
   const d = sparkPath(downsample(values, 24), width, height);
   return (
     <Svg width={width} height={height} accessibilityLabel="Price, last 30 days">
-      <Path d={d} stroke={trendTint(values)} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d={d} stroke={trendTint(values, color)} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </Svg>
   );
 }
@@ -35,8 +38,9 @@ export function ValueChart({
   asOf?: string;
   onScrub?: (point: { cents: number; date?: string } | null) => void;
 }) {
+  const color = useColors();
   if (values.length < 2) return null;
   return (
-    <PriceChart values={values} paidCents={null} width={width} height={size.homeChart} tint={trendTint(values)} asOf={asOf} compact onScrub={onScrub} />
+    <PriceChart values={values} paidCents={null} width={width} height={size.homeChart} tint={trendTint(values, color)} asOf={asOf} compact onScrub={onScrub} />
   );
 }

@@ -87,15 +87,15 @@ export async function matchCard(c: { name: string; number: string | null; langua
   return null;
 }
 
-/** Price + 90 days of history (raw and graded) for one product. 3 credits. */
-export async function fetchComps(tcgPlayerId: string, language: string): Promise<PptCard> {
+/** Price + history (raw and graded) for one product: 120 days by default, card-prices asks 180. 3 credits. */
+export async function fetchComps(tcgPlayerId: string, language: string, days = 120): Promise<PptCard> {
   const body = (await get('/cards', {
     tcgPlayerId,
     language: lang(language),
     includeEbay: 'true',
     includeHistory: 'true',
-    days: '120',
-    maxDataPoints: '120',
+    days: String(days),
+    maxDataPoints: String(days),
   })) as { data: PptCard | PptCard[] };
   return Array.isArray(body.data) ? body.data[0] : body.data;
 }

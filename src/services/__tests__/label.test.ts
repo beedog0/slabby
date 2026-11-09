@@ -125,6 +125,21 @@ describe('stepAutoRead', () => {
     expect(Object.keys(r.state!.names)).toEqual(['MEWEX']);
   });
 
+  it('never gives the next slab the cert or set of the one before it', () => {
+    const golden = ['2021 POKEMON JPN 25TH ANNIV-GOLDEN BOX', 'PIKACHU', 'GEM MT 10', '166947927'];
+    // The Pikachu is still half in frame, then the next slab slides in and its cert isn't read yet.
+    const next = ['2021 POKEMON JPN', 'TEAM ROCKET', 'GEM MT 10'];
+    const r = run([golden, next, next, next, next, next]);
+    expect(r.ready?.payload.PSACert.Subject).toBe('TEAM ROCKET');
+    expect(r.ready?.payload.PSACert.CertNumber).toBe('');
+    expect(r.ready?.payload.PSACert.Variety).toBeUndefined();
+  });
+
+  it('keeps gathering when blur only garbles a letter or two of the name', () => {
+    const r = run([full, ['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHJ VMAX', 'GEM MT 10'], full]);
+    expect(r.ready?.payload.PSACert).toMatchObject({ Subject: 'SURFING PIKACHU VMAX', CertNumber: '138092551' });
+  });
+
   it('reports progress', () => {
     expect(autoProgress(null)).toEqual({ name: { state: 'none' }, grade: { state: 'none' }, cert: { state: 'none' } });
     const one = run([['2021 POKEMON CELEBRATIONS #009', 'SURFING PIKACHU VMAX', 'GEM MT', '138092551']]);
@@ -268,5 +283,32 @@ describe('auto-read keeps the set line from any frame', () => {
     let st = stepAutoRead(null, frame({ Brand: 'POKEMON JAPANESE SV8a' }));
     st = stepAutoRead(st.state, frame({ Brand: 'POKEMON JAPANESE SV8a' }));
     expect(st.ready).not.toBeNull();
+  });
+});
+
+describe('parseLabel: lower grades from photos (Bryan, 2026-11-08)', () => {
+  const grade = (lines: string[]) => parseLabel(lines)?.payload.PSACert;
+
+  it('reads EX 5 when OCR joins the columns', () => {
+    expect(grade(['2010 POKEMON HG & SS #97', 'MEW-HOLO EX', 'TRIUMPHANT 5', '159046169'])).toMatchObject({ Subject: 'MEW-HOLO', CardGrade: 'EX 5', CertNumber: '159046169' });
+  });
+
+  it('reads EX 5 from separate column lines', () => {
+    expect(grade(['2010 POKEMON HG & SS', '#97', 'MEW-HOLO', 'EX', 'TRIUMPHANT', '5', '159046169'])).toMatchObject({ Subject: 'MEW-HOLO', CardGrade: 'EX 5' });
+  });
+
+  it('reads EX-MT 6 on a card whose name ends in EX', () => {
+    expect(grade(['2015 POKEMON XY #6', "TM.AQUA'S KYOGRE EX EX-MT", 'DOUBLE CRISIS-FA 6', '159213946'])).toMatchObject({ Subject: "TM.AQUA'S KYOGRE EX", CardGrade: 'EX-MT 6' });
+    expect(grade(['2015 POKEMON XY', '#6', "TM.AQUA'S KYOGRE EX", 'EX - MT', 'DOUBLE CRISIS-FA', '6', '159213946'])).toMatchObject({ Subject: "TM.AQUA'S KYOGRE EX", CardGrade: 'EX-MT 6' });
+    expect(grade(['2015 POKEMON XY #6', "TM.AQUA'S KYOGRE EX", 'DOUBLE CRISIS-FA', '6 159213946'])).toMatchObject({ CardGrade: 'EX-MT 6', CertNumber: '159213946' });
+  });
+
+  it('keeps an EX card name when the grade word is printed on its own', () => {
+    expect(grade(['2016 POKEMON XY EVOLUTIONS #12', 'M CHARIZARD EX', 'NM-MT', 'FULL ART', '8', '12345678'])).toMatchObject({ Subject: 'M CHARIZARD EX', CardGrade: 'NM-MT 8' });
+  });
+
+  it('reads half grades and still never guesses without a number by the cert', () => {
+    expect(grade(['1999 POKEMON GAME #4', 'CHARIZARD-HOLO NM-MT+', 'UNLIMITED 8.5', '12345679'])).toMatchObject({ CardGrade: 'NM-MT+ 8.5' });
+    expect(grade(['2010 POKEMON HG & SS #97', 'MEW-HOLO EX', 'TRIUMPHANT', '159046169'])?.CardGrade ?? '').not.toMatch(/\d/);
   });
 });

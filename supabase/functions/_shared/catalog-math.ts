@@ -45,7 +45,47 @@ export type CatalogRow = {
   low_cents: number | null;
   /** Every priced printing (Normal, Holofoil, Reverse Holofoil, 1st Edition…), the base one first. */
   printings: Printing[];
+  /** Sealed product (0015_sealed.sql): what kind, e.g. "booster_box". Null for a single card. */
+  sealed_type: SealedType | null;
 };
+
+/** Kinds of sealed product, in the order the filter lists them. */
+export const SEALED_TYPES = [
+  'booster_box',
+  'etb',
+  'booster_bundle',
+  'booster_pack',
+  'blister',
+  'tin',
+  'collection',
+  'deck',
+  'case',
+] as const;
+export type SealedType = (typeof SEALED_TYPES)[number];
+
+/** Accessories and codes: not something collectors hold sealed for its value. */
+const NOT_SEALED =
+  /code card|online code|\bcodes?\b|jumbo|oversize|card sleeves|\bsleeves\b|binder|portfolio|playmat|deck box|\bdice\b|damage counter|storage|album|poster|\bcoin\b(?!.*\b(collection|box|tin)\b)|\bpins?\b(?!.*\b(collection|box)\b)|\bfigure\b(?!.*\b(collection|box)\b)/i;
+
+/**
+ * What kind of sealed product a TCGplayer product is, from its name, or null when it is a single
+ * card or an accessory. Only products with no card number and no rarity get here. Order matters:
+ * "Booster Box Case" is a case, "Elite Trainer Box" an ETB, "Sleeved Booster Pack" a pack.
+ */
+export function sealedType(name: string): SealedType | null {
+  const n = name.toLowerCase();
+  if (NOT_SEALED.test(n)) return null;
+  if (/\bcase\b/.test(n)) return 'case';
+  if (/elite trainer box|\betb\b/.test(n)) return 'etb';
+  if (/booster box|booster display|display box|\bdisplay\b/.test(n)) return 'booster_box';
+  if (/booster bundle/.test(n)) return 'booster_bundle';
+  if (/blister|checklane|check lane/.test(n)) return 'blister';
+  if (/booster pack|\bpack\b/.test(n)) return 'booster_pack';
+  if (/\btins?\b/.test(n)) return 'tin';
+  if (/\bdeck\b/.test(n)) return 'deck';
+  if (/collection|\bbox\b|premium|bundle|\bkit\b|toolkit|stadium|gift set|\bchest\b/.test(n)) return 'collection';
+  return null;
+}
 
 export type Printing = { name: string; market_cents: number | null; low_cents: number | null };
 
@@ -83,8 +123,9 @@ export function printings(prices: TcgPrice[]): Printing[] {
 }
 
 /**
- * Catalog rows for one set. Only singles are kept: sealed product (booster boxes, ETBs, code
- * cards) has no card number on TCGplayer.
+ * Catalog rows for one set: every single, plus sealed product (booster boxes, ETBs, packs, tins,
+ * collection boxes) tagged with its sealed_type. Sealed product has no card number or rarity on
+ * TCGplayer; code cards and accessories are dropped.
  */
 export function catalogRows(
   category: { id: number; game: string; language: string },
@@ -97,7 +138,9 @@ export function catalogRows(
   const rows: CatalogRow[] = [];
   for (const p of products) {
     const number = ext(p, 'Number');
-    if (!number) continue;
+    const rarity = ext(p, 'Rarity');
+    const sealed = !number && !rarity ? sealedType(p.name) : null;
+    if (!number && !sealed) continue;
     rows.push({
       product_id: p.productId,
       category_id: category.id,
@@ -106,12 +149,13 @@ export function catalogRows(
       language: category.language,
       name: p.name.trim(),
       number,
-      rarity: ext(p, 'Rarity'),
+      rarity,
       set_name: group.name,
       set_code: group.abbreviation?.trim() || null,
       image_url: `https://tcgplayer-cdn.tcgplayer.com/product/${p.productId}_400w.jpg`,
       ...primaryPrice(byProduct.get(p.productId) ?? []),
-      printings: printings(byProduct.get(p.productId) ?? []),
+      printings: sealed ? [] : printings(byProduct.get(p.productId) ?? []),
+      sealed_type: sealed,
     });
   }
   return rows;
@@ -134,7 +178,42 @@ export type Summary = {
   /** First and last real data point in the window. */
   since?: string;
   lastReal?: string;
+  /** Up to 180 days of daily market, carried forward over gaps, starting histFrom (card-prices v2). */
+  histFrom?: string;
+  hist?: number[];
+  /** The latest day with a sale (graded only): that day's average and how many sold. */
+  lastSale?: LastSale | null;
 };
+
+/**
+ * A Summary from the catalog's own nightly TCGplayer prices (catalog.market_hist, up to 31 nights,
+ * newest last). No paid API: this is what sealed product and non-Pokémon cards chart from. The
+ * nights are taken as consecutive days ending on updated_on. Null without a price.
+ */
+export function catalogSummary(row: {
+  market_cents: number | null;
+  low_cents: number | null;
+  market_hist?: number[] | null;
+  updated_on: string;
+}): Summary | null {
+  if (row.market_cents == null) return null;
+  const hist = (row.market_hist ?? []).filter((v) => v != null && v > 0);
+  const series = hist.length ? hist : [row.market_cents];
+  series[series.length - 1] = row.market_cents;
+  const first = new Date(`${row.updated_on}T00:00:00Z`);
+  first.setUTCDate(first.getUTCDate() - (series.length - 1));
+  return {
+    marketCents: row.market_cents,
+    lowCents: row.low_cents ?? row.market_cents,
+    highCents: row.market_cents,
+    sales30d: 0,
+    asOf: row.updated_on,
+    series90: series,
+    points: series.length,
+    since: first.toISOString().slice(0, 10),
+    lastReal: row.updated_on,
+  };
+}
 
 /** Days in the last `days` that have real data, oldest first. */
 export function realDays(dates: string[], today: string, days = 90): string[] {
@@ -149,6 +228,45 @@ export function withPoints(s: Summary | null, days: string[]): Summary | null {
   if (!s) return s;
   return { ...s, points: days.length, since: days[0], lastReal: days[days.length - 1] };
 }
+
+export type LastSale = { day: string; cents: number; count: number };
+
+/**
+ * Daily rows → one value per calendar day from the first row to the last, carrying the last
+ * value over days with no row, so a chart can date every point from histFrom.
+ */
+export function denseHistory(rows: Daily[]): { histFrom: string; hist: number[] } | null {
+  if (!rows.length) return null;
+  const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day));
+  const by = new Map(sorted.map((r) => [r.day, r.market_cents]));
+  const from = sorted[0].day;
+  const to = sorted[sorted.length - 1].day;
+  const hist: number[] = [];
+  let last = sorted[0].market_cents;
+  for (let d = from; d <= to; d = nextDay(d)) {
+    last = by.get(d) ?? last;
+    hist.push(last);
+  }
+  return { histFrom: from, hist };
+}
+
+function nextDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** The most recent day with at least one sale, from PPT's daily {average, count}. */
+export function lastSale(sales: Record<string, { average: number; count: number }>): LastSale | null {
+  let best: string | null = null;
+  for (const [day, s] of Object.entries(sales)) if (s?.count > 0 && s.average > 0 && (!best || day > best)) best = day;
+  if (!best) return null;
+  const s = sales[best];
+  return { day: best.slice(0, 10), cents: Math.round(s.average * 100), count: s.count };
+}
+
+/** Bump when the card-prices answer gains fields, so cached answers are fetched again once. */
+export const ANSWER_VERSION = 2;
 
 export function summarize(rows: Daily[]): Summary | null {
   if (!rows.length) return null;
@@ -204,4 +322,40 @@ export function packPrice(products: TcgProduct[], prices: TcgPrice[]): { name: s
     .map((p) => ({ name: p.name.trim(), cents: market.get(p.productId)! }))
     .sort((a, b) => a.name.length - b.name.length || a.cents - b.cents);
   return packs[0] ?? null;
+}
+
+/** One product's weekly TCGplayer market (raw_price_weekly): cents[i] is week from_day + 7i. */
+export type Weekly = { from_day: string; cents: (number | null)[] };
+
+/**
+ * Raw history reaching back past PPT's 180 days: the weekly backfill (from Feb 2024), spread over
+ * every day by carrying each week forward, then the daily history from `histFrom` on. Leading
+ * empty weeks are dropped. Returns the daily history unchanged when there is no older weekly data.
+ */
+export function extendHistory(
+  daily: { histFrom: string; hist: number[] } | null,
+  weekly: Weekly | null,
+): { histFrom: string; hist: number[] } | null {
+  if (!weekly?.cents?.length) return daily;
+  const first = weekly.cents.findIndex((c) => c != null && c > 0);
+  if (first < 0) return daily;
+  const start = addDaysIso(weekly.from_day, first * 7);
+  const end = daily ? daily.histFrom : addDaysIso(weekly.from_day, (weekly.cents.length - 1) * 7 + 1);
+  if (start >= end) return daily;
+  const older: number[] = [];
+  let last = weekly.cents[first] as number;
+  let i = 0;
+  for (let d = start; d < end; d = nextDay(d), i++) {
+    const w = first + Math.floor(i / 7);
+    const c = i % 7 === 0 ? weekly.cents[w] : null;
+    if (c != null && c > 0) last = c;
+    older.push(last);
+  }
+  return { histFrom: start, hist: daily ? [...older, ...daily.hist] : older };
+}
+
+function addDaysIso(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }

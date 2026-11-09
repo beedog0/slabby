@@ -1,8 +1,13 @@
 // Design tokens from DESIGN.md. Components never hardcode colors or sizes.
 import type { TextStyle } from 'react-native';
 
-export const color = {
+/** Light palette, the default. Dark mirrors every key; see DESIGN.md. Components read the live one with useColors(). */
+export const light = {
   canvas: '#FFFFFF',
+  /** Bottom sheets, menus, dropdowns: the same white as the page in light. */
+  sheet: '#FFFFFF',
+  /** A control lifted off a well: the on segment, keypad keys. */
+  raised: '#FFFFFF',
   well: '#F2F2F4',
   ink: '#0A0A0A',
   secondary: '#6E6E73',
@@ -32,7 +37,42 @@ export const color = {
   scanGuide: 'rgba(255,255,255,0.45)',
   /** The label window's wash when a read locks. */
   scanLocked: 'rgba(255,176,32,0.18)',
-} as const;
+};
+
+export type Palette = typeof light;
+
+/**
+ * Dark palette. Ink and canvas swap, so primary buttons turn white with black text; sheets sit one
+ * step above the page because there is no shadow to lift them. Gain and loss are brightened just
+ * enough to read on near-black. Slab colors (case, label, PSA red) never change: they are the
+ * grader's identity, not UI.
+ */
+export const dark: Palette = {
+  canvas: '#0A0A0A',
+  sheet: '#161617',
+  raised: '#333336',
+  well: '#1F1F21',
+  ink: '#F4F4F5',
+  secondary: '#8C8C91',
+  hairline: '#2A2A2C',
+  gain: '#34C77B',
+  loss: '#FF5A4F',
+  conText: '#FFB020',
+  conFill: '#FFB020',
+  psaRed: light.psaRed,
+  onInk: '#0A0A0A',
+  slabCase: light.slabCase,
+  slabLabel: light.slabLabel,
+  shelfTop: '#8F6C49',
+  shelfFront: '#6A4A2B',
+  ghost: '#2E2E31',
+  scrim: 'rgba(0,0,0,0.6)',
+  scrimLight: 'rgba(0,0,0,0.45)',
+  scanScrim: light.scanScrim,
+  scanHint: light.scanHint,
+  scanGuide: light.scanGuide,
+  scanLocked: light.scanLocked,
+};
 
 export const space = {
   xs: 4,
@@ -55,11 +95,15 @@ export const radius = {
   thumb: 3,
   slab: 12,
   chip: 15,
+  /** Language badge next to a card name (JP, KR, CN). */
+  badge: 5,
 } as const;
 
 export const size = {
   button: 52,
   touch: 44,
+  /** Photo mode's shutter on the scan screen. */
+  shutter: 72,
   rowVault: 64,
   rowCon: 74,
   thumbW: 36,
@@ -105,6 +149,17 @@ export const size = {
   skeletonBar: 14,
   /** Applied-filter chips under search's control row. */
   chip: 30,
+  // Bottom tab bar (above the home indicator).
+  tabBar: 54,
+  tabIcon: 24,
+  /** The black Scan button in the middle of the tab bar. */
+  tabScanW: 56,
+  tabScanH: 38,
+  // Profile.
+  avatar: 76,
+  avatarEdit: 96,
+  /** Profile's secondary (well) button: Edit profile. */
+  wellButton: 40,
 } as const;
 
 /** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */
@@ -133,6 +188,8 @@ export const type = {
   text: { ...tab, fontSize: 15, fontWeight: '400' },
   secondary: { ...tab, fontSize: 13, fontWeight: '400' },
   caption: { ...tab, fontSize: 12, fontWeight: '400' },
+  /** Tab bar labels. Sentence case, never tracked. */
+  tabLabel: { ...tab, fontSize: 11, fontWeight: '500' },
 } as const satisfies Record<string, TextStyle>;
 
 export const shadow = {
@@ -179,3 +236,15 @@ export const slabPose = {
 /** Sparkline color thresholds: ±3% over 30 days. */
 export const trendThreshold = 0.03;
 
+
+/**
+ * Buy-signal dial (card page): three calm, flat tints, Buy · Fair · Hold off. Pale on purpose so
+ * the needle and the words stay the loudest thing; green/red stay reserved for up/down numbers.
+ * The dark set is for the dark-mode palette (useColors) once that lands on main.
+ */
+export const signal = {
+  light: { buy: '#CFE8DA', fair: '#E5E5EA', hold: '#F1DCC4' },
+  dark: { buy: '#1F3D2E', fair: '#2A2A2C', hold: '#45331F' },
+} as const;
+
+export const dial = { w: 240, h: 132, r: 96, stroke: 14 } as const;

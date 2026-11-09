@@ -32,6 +32,8 @@ export type ParsedCard = {
   words: Set<string>;
   /** The card's name as read from the top line ("Snivy", "Charizard ex"); null when none looks like one. */
   name?: string | null;
+  /** Read only on the enlarged-pieces pass: small print at arm's length, more often misread. */
+  closeLook?: boolean;
 };
 
 // A grader label in the frame: then it's a slab, never a raw card.
@@ -55,6 +57,11 @@ const JP_PROMO = /(?<![A-Z0-9])(\d{1,3})\/((?:SV|SM|XY|BW|DP|S|M|30TH)-?P)(?![A-
 // One Piece (OP05-119, ST01-012, EB01-001, PRB01-001, P-001), Riftbound (OGN-301), Pokémon
 // Japanese-style S-P without a number ahead.
 const DASH = /(?<![A-Z0-9])((?:OP|ST|EB|PRB)\d{2}-\d{3}|P-\d{3}|[A-Z]{3}-\d{3})(?![0-9])/g;
+// Riftbound runes from Radiance on print R01–R06 (R01a, R01b, R01c for alt arts and promos), with
+// no set size. Only read on a card that says Rune or carries a Riftbound set code, since "R01" alone
+// could be anything.
+const RUNE = /(?<![A-Z0-9])(R0[1-9][ABC]?)(?![A-Z0-9])/g;
+const RIFTBOUND = /\bRUNE\b|(?<![A-Z0-9])(OGN|RAD|SFD|OPP|VEN|OGS)(?![A-Z0-9])/;
 // English black star promos with the code fused to the number: SWSH123, SM100, XY67, BW04,
 // HGSS01, DP45. (Wizards and Nintendo promos print a bare number; too ambiguous to read alone.)
 const PROMO = /(?<![A-Z0-9])((?:SWSH|HGSS|SM|XY|BW|DP)\d{2,3})(?![0-9])/g;
@@ -112,12 +119,12 @@ const NOT_NAME = /^(BASIC|STAGE ?[12]?|MEGA|TRAINER|ITEM|SUPPORTER|STADIUM|POK[E
 
 /**
  * The card's name: the highest line that reads like one (letters, an optional "ex"/"V"/"GX"
- * suffix, not a stage word or HP). Used only to suggest similar cards when the number finds none.
+ * suffix, not a stage word or HP; a Diamond & Pearl era level, "Magnezone LV.44", is dropped). Used only to suggest similar cards when the number finds none.
  */
 export function readName(input: (LabelLine | string)[]): string | null {
   const lines = input
     .map((l, i) => (typeof l === 'string' ? { text: l, y: i } : l))
-    .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').replace(/\s*(HP|нр|Hp)\s*\d+.*$/, '').trim() }))
+    .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').replace(/\s*(HP|нр|Hp)\s*\d+.*$/, '').replace(/\s+LV\.?\s*(\d{1,3}|X)\b.*$/i, '').trim() }))
     .sort((a, b) => a.y - b.y);
   for (const l of lines) {
     const t = l.text.replace(/^(BASIC|STAGE ?[12])\s+/i, '');
@@ -142,6 +149,7 @@ export function parseCardText(input: (LabelLine | string)[]): ParsedCard | null 
     if (!NOT_CODES.has(c) && !codes.includes(c)) codes.push(c);
   };
 
+  const rift = texts.some((t) => RIFTBOUND.test(t.toUpperCase()));
   for (const raw of texts) {
     for (const w of raw.toUpperCase().split(/[^A-Z0-9'é.-]+/i)) if (w.length >= 2) words.add(w.toUpperCase());
     const t = fixDigits(raw);
@@ -165,6 +173,11 @@ export function parseCardText(input: (LabelLine | string)[]): ParsedCard | null 
       push({ num: m[1], total: null });
       found = true;
     }
+    if (rift)
+      for (const m of up.matchAll(RUNE)) {
+        push({ num: m[1], total: null });
+        found = true;
+      }
     for (const m of up.matchAll(PROMO)) {
       push({ num: m[1], total: null });
       found = true;
@@ -216,6 +229,11 @@ export function numberVariants(n: CardNumber): string[] {
   if (/^\d+$/.test(n.num)) nums.push(n.num.padStart(3, '0'));
   for (const x of nums) {
     out.add(n.total ? `${x}/${n.total}` : x);
+    // Alternate arts carry a letter, lower case on TCGplayer ("063a/166"); OCR text is upper-cased.
+    if (/\d[A-Z]$/.test(x)) {
+      const lower = x.slice(0, -1) + x.slice(-1).toLowerCase();
+      out.add(n.total ? `${lower}/${n.total}` : lower);
+    }
     // TCGplayer writes the 30th anniversary promo code in lower case: "013/30th-P".
     if (n.total?.includes('TH-')) out.add(`${x}/${n.total.replace('TH-', 'th-')}`);
   }

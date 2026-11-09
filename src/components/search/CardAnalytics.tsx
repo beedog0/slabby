@@ -7,17 +7,21 @@
 
 import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { money, pct } from '../../lib/format';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ebayCardListedUrl, ebayCardSoldUrl, type EbayCard } from '../../lib/ebay';
+import { cardPrice, money, pct } from '../../lib/format';
 import { gradingLine, gradingRead, history, liquidity, ratio, spread, spreadWord, trend } from '../../pricing/cardStats';
 import { catalogFor, choiceFor, type Choice } from '../../services/cardLink';
 import type { CardPrice } from '../../services/comps';
 import { isQuiet, openPrices, type CatalogCard, type SearchGrade, type SearchPrices } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
 import { setCards } from '../../services/setCards';
-import { color, space, type } from '../../theme/tokens';
+import { space, type } from '../../theme/tokens';
+import { useColors } from '../../theme/theme';
 import type { Card } from '../../types';
-import { Hairline } from '../ui';
+import { Chevron, Hairline } from '../ui';
+import { buySignal, shortDay, signalGap, thinRead } from '../../pricing/buySignal';
+import { BuySignalDial } from './BuySignal';
 import { GradeLadder, RangeMeter, SetRow } from './CardInsights';
 
 export type { Choice };
@@ -28,13 +32,16 @@ export function setTitle(name: string): string {
 }
 
 export const rangeText = (p: CardPrice) =>
-  p.lowCents === p.highCents ? money(p.marketCents) : `${money(p.lowCents)}–${money(p.highCents).replace('$', '')}`;
+  p.lowCents === p.highCents ? cardPrice(p.marketCents) : `${money(p.lowCents)}–${money(p.highCents).replace('$', '')}`;
 const times = (r: number | null) => (r == null ? null : `${r >= 10 ? Math.round(r) : r.toFixed(1)}×`);
 
 /** Open the set page for a catalog card. */
-export function openSetPage(card: CatalogCard, groupId: number | null) {
+export function openSetPage(card: CatalogCard, groupId: number | null, opts: { trade?: boolean } = {}) {
   if (groupId == null) return;
-  router.push({ pathname: '/set/[id]', params: { id: String(groupId), name: card.setName, language: card.language, game: card.game } });
+  router.push({
+    pathname: '/set/[id]',
+    params: { id: String(groupId), name: card.setName, language: card.language, game: card.game, ...(opts.trade ? { trade: '1' } : {}) },
+  });
 }
 
 /**
@@ -49,6 +56,9 @@ export function CardAnalyticsView({
   onPick,
   onAll,
   con,
+  trade,
+  sealed,
+  ebay,
 }: {
   pick: Choice;
   prices: SearchPrices | null | undefined;
@@ -57,16 +67,29 @@ export function CardAnalyticsView({
   onPick: (c: Choice) => void;
   onAll?: () => void;
   con?: boolean;
+  /** From the trade calculator: cards opened from here keep "Add to their side". */
+  trade?: boolean;
+  /** Sealed product: market stats only, no grades. */
+  sealed?: boolean;
+  /** The card, for the eBay sold and listed links. */
+  ebay?: Omit<EbayCard, 'grade'>;
 }) {
   const price = !prices ? null : pick === 'raw' ? prices.raw : prices.grades[pick];
   const live = !!price && !!prices && (pick === 'raw' || !isQuiet(price, prices.fetchedAt));
   const hist = live ? history(price) : null;
+  const graded = pick !== 'raw';
+  const sig = hist ? buySignal(price, graded) : null;
+  // A grade with a price but no recent sale still shows what we know, with its caveat.
+  const quiet = !!price && !!prices && !live;
   return (
     <>
-      {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} /> : null}
+      {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} sealed={sealed} /> : null}
+      {quiet && price ? <ThinStats price={price} /> : null}
       {hist && price ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
-      {prices ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}
-      <SetRow setName={setTitle(setName)} cards={more} onAll={onAll} con={con} />
+      {price && (sig || !sealed) ? <BuySignalDial signal={sig} gap={sig ? undefined : signalGap(price, graded, quiet)} graded={graded} /> : null}
+      {ebay ? <EbayLinks card={{ ...ebay, grade: pick }} /> : null}
+      {prices && !sealed ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}
+      <SetRow setName={setTitle(setName)} cards={more} onAll={onAll} con={con} trade={trade} />
     </>
   );
 }
@@ -77,6 +100,7 @@ export function CardAnalyticsView({
  * card is matched, and nothing at all when it can't be.
  */
 export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
+  const color = useColors();
   const pick = choiceFor(card);
   const [cat, setCat] = useState<CatalogCard | null>(null);
   const [prices, setPrices] = useState<SearchPrices | null | undefined>(undefined);
@@ -131,6 +155,7 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
         onPick={(g) => (g === pick ? undefined : open(g))}
         onAll={groupId != null ? () => openSetPage(cat, groupId) : undefined}
         con={con}
+        ebay={cat}
       />
     </View>
   );
@@ -141,13 +166,19 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
  * two to a row. A stat with too little behind it is left out, never shown as a dash. Math lives
  * in src/pricing/cardStats.ts.
  */
-export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPrice; prices: SearchPrices }) {
+export function KeyStats({ pick, price, prices, sealed }: { pick: Choice; price: CardPrice; prices: SearchPrices; sealed?: boolean }) {
+  const color = useColors();
   const hist = history(price);
   const cells: { label: string; value: string | null }[] = [];
   const read: ReactNode[] = [];
   let grading: string | null = null;
 
-  if (pick === 'raw') {
+  if (sealed) {
+    cells.push(
+      { label: 'TCGplayer market', value: money(price.marketCents) },
+      { label: 'TCGplayer low', value: price.lowCents < price.marketCents ? money(price.lowCents) : null },
+    );
+  } else if (pick === 'raw') {
     const p10 = prices.grades.psa10;
     const p9 = prices.grades.psa9;
     cells.push(
@@ -223,17 +254,112 @@ export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPri
       </View>
       {grading ? <Text style={[type.text, { color: color.ink, paddingTop: space.l }]}>{grading}</Text> : null}
       <Text style={[type.caption, { color: color.secondary, paddingTop: grading ? space.xs : space.m }]}>
-        {pick === 'raw'
+        {sealed
+          ? 'TCGplayer market price, sealed. Updated every night.'
+          : pick === 'raw'
           ? grading
             ? 'TCGplayer market. Grading math assumes $25 to grade, $8 shipping, eBay fees, and a PSA 9 when it misses.'
             : 'TCGplayer market price, near mint.'
-          : 'eBay sold, 30-day median. Ratios need 5 sales on each side.'}
+          : price.basis === 'median5'
+            ? 'eBay sold, median of the last 5 sales. Ratios need 5 sales on each side.'
+            : price.basis === 'lastSold'
+              ? 'eBay sold, last sale (too few for a median). Ratios need 5 sales on each side.'
+              : 'eBay sold, 30-day median. Ratios need 5 sales on each side.'}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Check the comps yourself: eBay sold and active listings for this card at the picked grade,
+ * searched by name, set, number and language. Quiet rows, opened in the browser.
+ */
+export function EbayLinks({ card }: { card: EbayCard }) {
+  const color = useColors();
+  const grade = card.grade === 'raw' ? 'raw' : `PSA ${card.grade.slice(3)}`;
+  const rows = [
+    { label: 'Sold on eBay', hint: `Opens eBay sold listings for this card, ${grade}`, url: ebayCardSoldUrl(card) },
+    { label: 'Listed on eBay', hint: `Opens eBay listings for this card, ${grade}, cheapest first`, url: ebayCardListedUrl(card) },
+  ];
+  return (
+    <View style={{ paddingTop: space.l }}>
+      {rows.map((r) => (
+        <View key={r.label}>
+          <Hairline />
+          <Pressable
+            accessibilityRole="link"
+            accessibilityHint={r.hint}
+            onPress={() => Linking.openURL(r.url).catch(() => {})}
+            style={({ pressed }) => [styles.link, pressed && { opacity: 0.5 }]}
+          >
+            <Text style={[type.text, { color: color.ink }]}>{r.label}</Text>
+            <Chevron />
+          </Pressable>
+        </View>
+      ))}
+      <Hairline />
+    </View>
+  );
+}
+
+/**
+ * Key stats for a grade with a price but no sale in 30 days: the last sale, how many days had a
+ * sale in 90, the headline price and the 90-day range of sales. Bryan wants every price to
+ * show where it came from, so a thin price gets its numbers with the caveat, never a bare figure.
+ */
+/** What the headline number is, for a stat label. */
+function priceLabel(p: CardPrice): string {
+  return p.basis === 'median5' ? 'Median, last 5 sales' : p.basis === 'lastSold' ? 'Last sold price' : 'Last 30-day price';
+}
+
+export function ThinStats({ price }: { price: CardPrice }) {
+  const color = useColors();
+  const t = thinRead(price);
+  if (!t) return null;
+  const cells = [
+    { label: 'Last sale', value: t.lastSale ? shortDay(t.lastSale) : null },
+    { label: 'Days with a sale, 90 days', value: String(t.saleDays) },
+    { label: priceLabel(price), value: money(price.marketCents) },
+    { label: 'Range, 90 days', value: t.low != null && t.high != null ? `${money(t.low)}–${money(t.high).replace('$', '')}` : null },
+  ].filter((c): c is { label: string; value: string } => !!c.value);
+  const rows: (typeof cells)[] = [];
+  for (let i = 0; i < cells.length; i += 2) rows.push(cells.slice(i, i + 2));
+  return (
+    <View style={{ paddingTop: space.xl }}>
+      <Text style={[type.section, { color: color.ink }]}>Key stats</Text>
+      <Text style={[type.text, { color: color.secondary, paddingTop: space.xs }]}>
+        {t.saleDays <= 1 ? 'Rarely sells' : `Thin · sales on ${t.saleDays} days in 90`} · no sale in the last 30 days
+      </Text>
+      <View style={{ paddingTop: space.m }}>
+        {rows.map((row, i) => (
+          <View key={i}>
+            <Hairline />
+            <View style={styles.statRow}>
+              {row.map((c) => (
+                <View key={c.label} style={styles.stat} accessible accessibilityLabel={`${c.label}, ${c.value}`}>
+                  <Text style={[type.secondary, { color: color.secondary }]}>{c.label}</Text>
+                  <Text style={[type.numberM, { color: color.ink }]}>{c.value}</Text>
+                </View>
+              ))}
+              {row.length === 1 ? <View style={styles.stat} /> : null}
+            </View>
+          </View>
+        ))}
+        <Hairline />
+      </View>
+      <Text style={[type.caption, { color: color.secondary, paddingTop: space.m }]}>
+        {price.basis === 'median5'
+          ? 'eBay sold. The price is the median of the last 5 sales, however far back they go.'
+          : price.basis === 'lastSold'
+            ? 'eBay sold. Too few sales for a median, so the price is the last sale.'
+            : 'eBay sold. The price is the median of the last 30 days that had sales, so it may be out of date.'}
       </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  link: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: space.m },
   statRow: { flexDirection: 'row', gap: space.xl, paddingVertical: space.m },
   stat: { flex: 1, gap: 2 },
 });

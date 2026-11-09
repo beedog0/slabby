@@ -1,4 +1,5 @@
-// Display shelves: slabs standing on a flat wood ledge, 1 to 5 per shelf (3 by default; set in
+// Display shelves: slabs and raw singles standing on a flat wood ledge (singles rest on it, not
+// centred in the air above it), 1 to 5 per shelf (3 by default; set in
 // Arrange shelf). Tap a slab for its detail.
 
 import { router } from 'expo-router';
@@ -7,7 +8,8 @@ import type { CardRow } from '../../pricing/portfolio';
 import { dimmed, type SlabActions } from './actions';
 import { CopiesMark, PinMark } from './PinMark';
 import { SelectOutline } from './SelectOutline';
-import { color, shadow, size, space } from '../../theme/tokens';
+import { shadow, size, space } from '../../theme/tokens';
+import { themed } from '../../theme/theme';
 import { SlabView } from '../SlabView';
 
 const INSET = space.m; // slabs sit this far in from the ledge ends
@@ -34,6 +36,7 @@ export function ShelfView({
   actions?: SlabActions;
   perRow?: number;
 }) {
+  const styles = useStyles();
   const { slabW, left } = shelfLayout(width, PER_ROW);
   const shelves: CardRow[][] = [];
   for (let i = 0; i < rows.length; i += PER_ROW) shelves.push(rows.slice(i, i + PER_ROW));
@@ -53,9 +56,9 @@ export function ShelfView({
                 style={({ pressed }) => [pressed && { opacity: 0.85 }, dimmed(actions, r) && { opacity: 0.35 }]}
               >
                 <View>
-                  <SlabView card={r.card} width={slabW} posed={false} />
-                  {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} card={r.card} /> : null}
-                  <CopiesMark slabW={slabW} card={r.card} copies={r.copies ?? 1} />
+                  <SlabView card={r.card} width={slabW} posed={false} anchor="bottom" />
+                  {actions?.pinnedId === r.card.id ? <PinMark slabW={slabW} card={r.card} anchor="bottom" /> : null}
+                  <CopiesMark slabW={slabW} card={r.card} copies={r.copies ?? 1} anchor="bottom" />
                   <SelectOutline on={!!actions?.selected?.has(r.card.id)} slabW={slabW} />
                 </View>
               </Pressable>
@@ -69,6 +72,7 @@ export function ShelfView({
 }
 
 export function Ledge() {
+  const styles = useStyles();
   return (
     <View style={shadow.shelf}>
       <View style={styles.top} />
@@ -77,7 +81,7 @@ export function Ledge() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   slabs: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -97,4 +101,4 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 2,
     borderBottomRightRadius: 2,
   },
-});
+}));

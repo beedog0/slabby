@@ -5,9 +5,10 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { gradeLabel, money, rowTitle } from '../../lib/format';
+import { cardPrice, gradeLabel, money, rowTitle } from '../../lib/format';
 import { boughtIn, buyMarket, conBuySummary, type CardRow } from '../../pricing/portfolio';
-import { color, radius, size, space, type } from '../../theme/tokens';
+import { radius, size, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import { CardThumb } from '../CardThumb';
 import { Hairline, PrimaryButton, ScanIcon } from '../ui';
 import { ArtImage } from '../ArtImage';
@@ -27,6 +28,8 @@ type Props = {
 const lookUp = () => router.push('/search?con=1');
 
 export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
+  const color = useColors();
+  const styles = useStyles();
   const sum = conBuySummary(rows, conId);
   const bought = boughtIn(rows, conId);
   const wishes = useWishlist((s) => s.items);
@@ -68,20 +71,28 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
       </Pressable>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.gutter, paddingTop: space.l, paddingBottom: space.xxl }}>
+        {/* The wishlist always has its heading, so it's there to find even before it has cards. */}
+        <View style={styles.heading}>
+          <Text style={[type.section, { color: color.ink }]}>Wishlist</Text>
+          {wishes.length ? <Text style={[type.secondary, { color: color.secondary }]}>{wishes.length}</Text> : null}
+        </View>
         {wishes.length ? (
-          <>
-            <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.xs }]}>Wishlist</Text>
-            {wishes.map((w) => (
-              <View key={w.key}>
-                <WishRow item={w} />
-                <Hairline inset={size.thumbW + space.m} />
-              </View>
-            ))}
-            <View style={{ height: space.xl }} />
-          </>
-        ) : null}
+          wishes.map((w) => (
+            <View key={w.key}>
+              <WishRow item={w} />
+              <Hairline inset={size.thumbW + space.m} />
+            </View>
+          ))
+        ) : (
+          <Text style={[type.text, { color: color.secondary, paddingBottom: space.s }]}>
+            Cards you're hunting, with the price you want. Look up a card and tap Add to wishlist.
+          </Text>
+        )}
         {bought.length ? (
-          <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.xs }]}>Bought today</Text>
+          <View style={[styles.heading, { paddingTop: space.xxl }]}>
+            <Text style={[type.section, { color: color.ink }]}>Bought today</Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>{bought.length}</Text>
+          </View>
         ) : null}
         {bought.map((r) => {
           const c = r.card;
@@ -97,7 +108,7 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
                     {rowTitle(c)}
                   </Text>
                   <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-                    {gradeLabel(c.grader, c.grade, c.condition)}
+                    {gradeLabel(c.grader, c.grade, c.condition, c.sealed)}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>
@@ -118,20 +129,15 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
             </View>
           );
         })}
-        {bought.length === 0 && wishes.length === 0 ? (
-          <Text style={[type.text, { color: color.secondary, paddingTop: space.s }]}>
-            Nothing bought yet. Look up a card, type what they're asking, and Slabby rates it against your buying rules. Cards
-            you're hunting can go on your wishlist with the price you want.
-          </Text>
-        ) : null}
+
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: bottomInset + space.l }]}>
         <PrimaryButton style={{ flex: 1 }} title="Look up a card" onPress={lookUp} />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Scan a slab"
-          onPress={() => router.push('/scan')}
+          accessibilityLabel="Price check: scan their slab"
+          onPress={() => router.push({ pathname: '/scan', params: { check: '1' } })}
           style={({ pressed }) => [styles.icon, pressed && { opacity: 0.6 }]}
         >
           <ScanIcon />
@@ -143,6 +149,8 @@ export function BuyingPane({ rows, conId, bottomInset, flash }: Props) {
 
 /** A wanted card: your price, how it rates against the last market seen, tap to rate their price. */
 function WishRow({ item }: { item: WishItem }) {
+  const color = useColors();
+  const styles = useStyles();
   const rules = useRules((s) => s.rules);
   const remove = useWishlist((s) => s.remove);
   const b = buyPrices(item.marketCents, rules);
@@ -171,15 +179,13 @@ function WishRow({ item }: { item: WishItem }) {
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
     >
       <View style={styles.thumb}>
-        {item.imageUrl ? <ArtImage uri={item.imageUrl} recyclingKey={item.key} style={{ flex: 1 }} /> : null}
+        <ArtImage uri={item.imageUrl} label={item.name} recyclingKey={item.key} style={{ flex: 1 }} />
       </View>
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-        <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
-          {item.name}
-        </Text>
-        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+        <Text style={[type.body, { color: color.ink }]}>{item.name}</Text>
+        <Text style={[type.secondary, { color: color.secondary }]}>
           {searchGrade(item.grade)}
-          {item.marketCents ? ` · market ${money(item.marketCents)}` : ''}
+          {item.marketCents ? ` · market ${cardPrice(item.marketCents)}` : ''}
           {rating ? ` · ${BUY_RATING_LABEL[rating.kind].toLowerCase()}` : ''}
         </Text>
       </View>
@@ -191,7 +197,8 @@ function WishRow({ item }: { item: WishItem }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
+  heading: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: space.s },
   thumb: { width: size.thumbW, height: size.thumbH, borderRadius: 3, overflow: 'hidden', backgroundColor: color.well },
   totals: { paddingHorizontal: space.gutter, paddingTop: space.xl, gap: 2 },
   search: {
@@ -215,4 +222,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

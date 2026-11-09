@@ -2,20 +2,25 @@
 // the vault. Results show tonight's raw market; open a card for PSA prices with charts.
 // Typing, filtering and sorting only query our own catalog table, never a paid API.
 // Quiet controls under the field: "Filter" (language, rarity, set), the sort dropdown, and
-// List / Grid (remembered, like home's view switch). Scrolling down slides the title, field and
-// game tabs away and keeps that control row pinned; scrolling up brings them back.
+// List / Grid (remembered, like home's view switch). Scrolling down slides the whole header away
+// (title, game tabs, field, control row and filter chips) so results get the screen. Scrolling up
+// anywhere brings back the field and the control row under it (Bryan: no scrolling all the way up
+// to search again); the title and game tabs return at the top. Also the Search tab (app/(tabs)/find).
 
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { Animated, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, FlatList, Modal, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { sheetTop } from '../../src/lib/sheetTop';
 import { ArtImage } from '../../src/components/ArtImage';
 import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/sheet/useSheetDrag';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
 import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
-import { money, pct } from '../../src/lib/format';
+import { cardPrice, money, pct, promoTag } from '../../src/lib/format';
+import { CardName } from '../../src/components/CardName';
 import { buyPrices, cardNumber, displayName, type Game } from '../../src/services/search';
+import { sealedLabel, typeLabel, type TypeFilter } from '../../src/lib/sealed';
 import {
   catalogProgress,
   changeOf,
@@ -28,6 +33,7 @@ import {
   filterCount,
   findCards,
   findFacets,
+  NO_FILTERS,
   runnable,
   SORTS,
   type Facets,
@@ -37,17 +43,24 @@ import {
 } from '../../src/services/searchFilters';
 import { useDisplay } from '../../src/store/display';
 import { useRules } from '../../src/store/rules';
-import { color, radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 import type { PricingRules } from '../../src/types';
+import { ART_TYPES, ART_TYPES_BY_GAME, artLabel, type ArtType } from '../../src/lib/artType';
 
 type GameFilter = 'all' | Game;
 const GRID_GAP = space.l;
 
 export default function Search() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   // Con mode opens search with ?con=1: each result also shows what to pay, from the buying rules.
-  const params = useLocalSearchParams<{ con?: string; q?: string }>();
+  // The trade calculator opens it with ?trade=1: a card opens with "Add to their side".
+  const params = useLocalSearchParams<{ con?: string; q?: string; trade?: string }>();
   const con = params.con === '1';
+  const trade = params.trade === '1';
+  const asTab = useSegments()[0] === '(tabs)';
   const rules = useRules((s) => s.rules);
   const { searchLayout: layout, setSearchLayout } = useDisplay();
   const { width } = useWindowDimensions();
@@ -62,20 +75,28 @@ export default function Search() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuTop, setMenuTop] = useState(0);
-  const [topH, setTopH] = useState(0); // the part that slides away
-  const [headerH, setHeaderH] = useState(0); // all of it, pinned row included
+  const [topH, setTopH] = useState(0); // title and game tabs: back only at the top
+  const [headerH, setHeaderH] = useState(0); // all of it, field, control row and chips included
   const controlsRef = useRef<ComponentRef<typeof View>>(null);
   const listRef = useRef<FlatList<Found>>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
-  // Follows scroll direction: down hides up to topH, any scroll up reveals again.
-  const slide = useMemo(
-    () =>
-      Animated.diffClamp(scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' }), 0, Math.max(topH, 1)).interpolate({
-        inputRange: [0, Math.max(topH, 1)],
-        outputRange: [0, -Math.max(topH, 1)],
-      }),
-    [scrollY, topH],
-  );
+  // How far the header is slid up. The top part follows the list exactly; the field and control row
+  // under it hide on scroll down and come back on any scroll up, so search is always one flick away.
+  const slide = useRef(new Animated.Value(0)).current;
+  const scrollState = useRef({ y: 0, rowHidden: 0 });
+  const onListScroll = (y: number) => {
+    const st = scrollState.current;
+    const rowH = Math.max(0, headerH - topH);
+    const top = Math.max(0, y);
+    st.rowHidden = Math.max(0, Math.min(rowH, st.rowHidden + top - st.y));
+    st.y = top;
+    slide.setValue(-Math.min(top, topH + st.rowHidden));
+  };
+  // Switching list and grid remounts the list at the top, without a scroll event.
+  useEffect(() => {
+    scrollState.current = { y: 0, rowHidden: 0 };
+    slide.setValue(0);
+  }, [layout, slide]);
   const openSort = () => {
     // The row moves with the header, so measure where it is now.
     controlsRef.current?.measureInWindow((_x, y, _w, h) => {
@@ -120,7 +141,7 @@ export default function Search() {
   const changeKey = changeOf(f.sort);
   const hint =
     state === 'idle'
-      ? `Search any card by name, set or number.${loadingLine}`
+      ? `Search any card or sealed product by name, set or number.${loadingLine}`
       : state === 'error'
         ? 'Search isn’t reachable right now.'
         : state === 'done' && !results.length
@@ -129,39 +150,31 @@ export default function Search() {
             : `No cards match${nFilters ? ' with these filters' : ` “${f.q.trim()}”`}.${loadingLine}`
           : null;
   const sortLabel = SORTS.find((s) => s.value === f.sort)!.label;
+  // As a sheet (con mode) the top inset is the sheet's, not the status bar's. Header, cover and
+  // list all have to use the same number, or the first results sit under the header.
+  const top = sheetTop(insets.top, con);
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
       <Animated.View
-        style={[styles.header, { top: insets.top, transform: [{ translateY: slide }] }]}
+        style={[styles.header, { top, transform: [{ translateY: slide }] }]}
         onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
       >
         <View onLayout={(e) => setTopH(e.nativeEvent.layout.height)}>
-          <View style={styles.nav}>
-            <IconButton label="Back" onPress={() => router.back()}>
-              <BackIcon />
-            </IconButton>
-          </View>
-          <View style={styles.gutter}>
-            <Text style={[type.title, { color: color.ink, paddingBottom: space.l }]}>{con ? 'Search to buy' : 'Search'}</Text>
-            <View style={styles.field}>
-              <SearchIcon s={18} tint={color.secondary} />
-              <TextInput
-                value={f.q}
-                onChangeText={(q) => set({ q })}
-                autoFocus
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-                placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Umbreon VMAX 215'}
-                placeholderTextColor={color.secondary}
-                style={[type.body, styles.input]}
-                accessibilityLabel="Search cards"
-              />
+          {/* As the Search tab it's a top-level screen: no back button. */}
+          {asTab ? (
+            <View style={{ height: space.l }} />
+          ) : (
+            <View style={styles.nav}>
+              <IconButton label="Back" onPress={() => router.back()}>
+                <BackIcon />
+              </IconButton>
             </View>
+          )}
+          <View style={styles.gutter}>
+            <Text style={[type.title, { color: color.ink, paddingBottom: space.m }]}>{con ? 'Search to buy' : 'Search'}</Text>
             <Segmented<GameFilter>
-              style={{ marginTop: space.m }}
+              style={{ marginBottom: space.m }}
               value={f.game ?? 'all'}
               onChange={(g) =>
                 // Sets and rarities belong to one game; Japanese only exists for Pokémon.
@@ -170,6 +183,8 @@ export default function Search() {
                   sets: [],
                   rarities: [],
                   languages: g === 'all' || g === 'pokemon' ? f.languages : [],
+                  // Keep art types the new game has (One Piece has no illustration rares).
+                  arts: g === 'all' ? f.arts : (f.arts ?? []).filter((a) => ART_TYPES_BY_GAME[g].includes(a)),
                 })
               }
               options={[
@@ -178,6 +193,25 @@ export default function Search() {
                 { value: 'onepiece', label: 'One Piece' },
                 { value: 'riftbound', label: 'Riftbound' },
               ]}
+            />
+          </View>
+        </View>
+        {/* The field sits just above the control row so a mid-list scroll up brings both back. */}
+        <View style={styles.gutter}>
+          <View style={styles.field}>
+            <SearchIcon s={18} tint={color.secondary} />
+            <TextInput
+              value={f.q}
+              onChangeText={(q) => set({ q })}
+              autoFocus
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Umbreon VMAX 215'}
+              placeholderTextColor={color.secondary}
+              style={[type.body, styles.input]}
+              accessibilityLabel="Search cards"
             />
           </View>
         </View>
@@ -213,13 +247,13 @@ export default function Search() {
               </Pressable>
             ))}
             {filterCount(f) > 1 ? (
-              <Pressable accessibilityRole="button" onPress={() => set({ languages: [], sets: [], rarities: [] })} hitSlop={8} style={styles.chipClear}>
+              <Pressable accessibilityRole="button" onPress={() => set(NO_FILTERS)} hitSlop={8} style={styles.chipClear}>
                 <Text style={[type.secondary, { color: color.secondary }]}>Clear</Text>
               </Pressable>
             ) : null}
           </ScrollView>
         ) : null}
-        {/* A hairline under the pinned row once results scroll beneath it. */}
+        {/* A hairline under the header once results scroll beneath it. */}
         <Animated.View
           style={{
             height: StyleSheet.hairlineWidth * 2,
@@ -229,17 +263,22 @@ export default function Search() {
         />
       </Animated.View>
       {/* Covers the status bar so the header slides under it. */}
-      <View style={[styles.statusCover, { height: insets.top }]} />
+      <View style={[styles.statusCover, { height: top }]} />
 
       {headerH ? (
         <Animated.FlatList
           ref={listRef}
           key={layout}
           data={hint ? [] : results}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+            listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => onListScroll(e.nativeEvent.contentOffset.y),
+          })}
           scrollEventThrottle={16}
           scrollIndicatorInsets={{ top: headerH }}
-          style={{ paddingTop: insets.top }}
+          style={{ paddingTop: top }}
+          // Last results stay reachable above the keyboard instead of hiding behind it.
+          automaticallyAdjustKeyboardInsets
           ListEmptyComponent={hint ? <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text> : undefined}
           numColumns={layout === 'grid' ? 2 : 1}
           keyExtractor={(c) => String(c.productId)}
@@ -250,9 +289,9 @@ export default function Search() {
           ItemSeparatorComponent={layout === 'grid' ? undefined : () => <Hairline inset={space.gutter + size.thumbW + space.m} />}
           renderItem={({ item }) =>
             layout === 'grid' ? (
-              <ResultTile card={item} width={cellW} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+              <ResultTile card={item} width={cellW} con={con} trade={trade} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
             ) : (
-              <ResultRow card={item} con={con} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
+              <ResultRow card={item} con={con} trade={trade} rules={rules} change={changeKey ? item[changeKey] : null} days={changeKey === 'change7d' ? 7 : 30} />
             )
           }
         />
@@ -274,6 +313,7 @@ export default function Search() {
 
 /** Small dropdown under the sort control. */
 function SortMenu({ open, top, sort, onSort, onClose }: { open: boolean; top: number; sort: Sort; onSort: (s: Sort) => void; onClose: () => void }) {
+  const styles = useStyles();
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
@@ -296,7 +336,10 @@ function SortMenu({ open, top, sort, onSort, onClose }: { open: boolean; top: nu
 
 /**
  * Filters for the current search, from what actually matches it (with counts). Every group is
- * pick-several: languages (Pokémon only), rarities, sets. Changes apply as you tap.
+ * pick-several: art type, type (cards or sealed), languages (Pokémon only), rarities, sets. Changes apply as
+ * you tap. Order (chosen in a design review, 2026-11-08): short, decisive groups first and the long
+ * lists last. Art type leads (Bryan asked for it near the top); Rarity, its detailed version, sits
+ * low so its 10–30 rows don't bury Language; Set, up to 40 rows, is last.
  * The scrim fades and the sheet slides as one motion, starting only once the sheet's height is
  * known, so nothing dims before the sheet is there.
  */
@@ -317,6 +360,8 @@ function FilterSheet({
   onClose: () => void;
   bottom: number;
 }) {
+  const color = useColors();
+  const styles = useStyles();
   const [mounted, setMounted] = useState(open);
   const [sheetH, setSheetH] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
@@ -347,6 +392,26 @@ function FilterSheet({
   // Keep picked sets and rarities visible even when they fall out of the facet list.
   const setRows = [...f.sets.filter((x) => !sets.some((s) => s.id === x.id)).map((x) => ({ ...x, n: 0 })), ...sets];
   const rarityRows = [...f.rarities.filter((r) => !rarities.some((x) => x.key === r)).map((key) => ({ key, n: 0 })), ...rarities];
+  // Boxes and ETBs have no art type or rarity, so with only sealed kinds picked those groups hide.
+  const sealedOnly = (f.types ?? []).length > 0 && !(f.types ?? []).includes('card');
+  // Art type: what the matches have, in fixed order; with no search yet, what the game can have.
+  const pickedArts = f.arts ?? [];
+  const artRows: { key: ArtType; n: number }[] = facets
+    ? [...facets.arts, ...pickedArts.filter((a) => !facets.arts.some((x) => x.key === a)).map((key) => ({ key, n: 0 }))].sort(
+        (a, b) => ART_TYPES.indexOf(a.key) - ART_TYPES.indexOf(b.key),
+      )
+    : (f.game ? ART_TYPES_BY_GAME[f.game] : ART_TYPES).map((key) => ({ key, n: 0 }));
+  // Type: Cards, then All sealed (once there's more than one kind), then each kind of sealed.
+  const picked = f.types ?? [];
+  const kinds = facets?.types ?? [];
+  const sealedKinds = kinds.filter((t) => t.key !== 'card');
+  const sealedN = sealedKinds.reduce((sum, t) => sum + t.n, 0);
+  const typeRows: { key: TypeFilter; n: number }[] = [
+    ...kinds.filter((t) => t.key === 'card'),
+    ...(sealedKinds.length > 1 || picked.includes('sealed') ? [{ key: 'sealed' as TypeFilter, n: sealedN }] : []),
+    ...sealedKinds,
+    ...picked.filter((t) => !kinds.some((x) => x.key === t) && t !== 'sealed').map((key) => ({ key, n: 0 })),
+  ];
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
@@ -369,12 +434,70 @@ function FilterSheet({
         <View style={styles.sheetHead}>
           <Text style={[type.section, { color: color.ink }]}>Filter</Text>
           {filterCount(f) ? (
-            <Pressable accessibilityRole="button" onPress={() => onChange({ languages: [], sets: [], rarities: [] })} hitSlop={8}>
+            <Pressable accessibilityRole="button" onPress={() => onChange(NO_FILTERS)} hitSlop={8}>
               <Text style={[type.text, { color: color.secondary }]}>Clear</Text>
             </Pressable>
           ) : null}
         </View>
         <SheetScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: space.l }}>
+          {artRows.length && !sealedOnly ? (
+            <View style={styles.sheetSection}>
+              <Text style={[type.body, styles.sectionTitle]}>Art type</Text>
+              {/* Pills, not rows: eight short choices fit in a few lines near the top. */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, paddingHorizontal: space.gutter, paddingBottom: space.s }}>
+                {artRows.map((a) => {
+                  const on = pickedArts.includes(a.key);
+                  return (
+                    <Pressable
+                      key={a.key}
+                      accessibilityRole="button"
+                      accessibilityLabel={a.n ? `${artLabel(a.key)}, ${a.n}` : artLabel(a.key)}
+                      accessibilityState={{ selected: on }}
+                      onPress={() => onChange({ arts: toggle(pickedArts, a.key) })}
+                      hitSlop={{ top: 4, bottom: 4 }}
+                      style={({ pressed }) => [
+                        {
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: space.xs,
+                          minHeight: size.chip + 6,
+                          paddingHorizontal: space.m,
+                          borderRadius: radius.chip + 3,
+                          backgroundColor: on ? color.ink : color.well,
+                        },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <Text style={[type.text, { color: on ? color.onInk : color.ink }]}>{artLabel(a.key)}</Text>
+                      {a.n ? (
+                        <Text style={[type.secondary, { color: on ? color.onInk : color.secondary, fontVariant: ['tabular-nums'], opacity: on ? 0.7 : 1 }]}>{a.n}</Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
+          {typeRows.length > 1 || picked.length ? (
+            <View style={styles.sheetSection}>
+              <Text style={[type.body, styles.sectionTitle]}>Type</Text>
+              {typeRows.map((t) => (
+                <CheckRow
+                  key={t.key}
+                  label={typeLabel(t.key)}
+                  detail={t.n ? String(t.n) : undefined}
+                  on={picked.includes(t.key)}
+                  onPress={() => {
+                    const types = toggle(picked, t.key);
+                    // Picking only sealed drops art type and rarity picks, which no box can match.
+                    onChange(types.length && !types.includes('card') ? { types, arts: [], rarities: [] } : { types });
+                  }}
+                />
+              ))}
+            </View>
+          ) : null}
+
           {showLanguage ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Language</Text>
@@ -390,7 +513,7 @@ function FilterSheet({
             </View>
           ) : null}
 
-          {rarityRows.length ? (
+          {rarityRows.length && !sealedOnly ? (
             <View style={styles.sheetSection}>
               <Text style={[type.body, styles.sectionTitle]}>Rarity</Text>
               {rarityRows.map((r) => (
@@ -425,7 +548,7 @@ function FilterSheet({
           ) : null}
         </SheetScrollView>
         <View style={styles.gutter}>
-          <PrimaryButton title={`Show ${count} ${count === 1 ? 'card' : 'cards'}`} onPress={onClose} />
+          <PrimaryButton title={`Show ${count} ${count === 1 ? 'result' : 'results'}`} onPress={onClose} />
         </View>
         </SheetScope>
       </Animated.View>
@@ -434,6 +557,8 @@ function FilterSheet({
 }
 
 function CheckRow({ label, detail, on, onPress }: { label: string; detail?: string; on: boolean; onPress: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="menuitem"
@@ -450,28 +575,37 @@ function CheckRow({ label, detail, on, onPress }: { label: string; detail?: stri
   );
 }
 
-type ResultProps = { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number };
+type ResultProps = { card: Found; con: boolean; trade?: boolean; rules: PricingRules; change: number | null; days: number };
 
-const openCard = (card: Found, con: boolean) => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`);
+// Con mode's Buying goes straight to "They're asking" for the card (the full card page is a link
+// there); the trade calculator opens the card page with "Add to their side".
+const openCard = (card: Found, con: boolean, trade = false) =>
+  trade
+    ? router.push(`/search/${card.productId}?trade=1`)
+    : con
+      ? router.push({ pathname: '/con/buy/[id]', params: { id: String(card.productId), grade: 'psa10' } })
+      : router.push(`/search/${card.productId}`);
 
 /** Grid tile: the card photo, then name, set · number and price, like home's grid. */
-function ResultTile({ card, width, con, rules, change, days }: ResultProps & { width: number }) {
+function ResultTile({ card, width, con, trade, rules, change, days }: ResultProps & { width: number }) {
+  const color = useColors();
+  const styles = useStyles();
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
+  const sealed = card.sealedType;
   return (
-    <Pressable accessibilityRole="button" onPress={() => openCard(card, con)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
-      <View style={[styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
-        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}
+    <Pressable accessibilityRole="button" onPress={() => openCard(card, con, trade)} style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}>
+      {/* A box photo sits on the canvas, whole; a card fills its card-shaped tile. */}
+      <View style={[sealed ? styles.tileSealed : styles.tileArt, { width, height: Math.round((width * 88) / 63) }]}>
+        <ArtImage uri={card.imageUrl} label={card.name} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} />
       </View>
       <View style={{ gap: 2, paddingTop: space.m }}>
-        <Text numberOfLines={1} style={[type.text, { color: color.ink, fontWeight: '500' }]}>
-          {displayName(card.name)}
+        <CardName name={sealed ? card.name : displayName(card.name)} language={card.language} numberOfLines={sealed ? 3 : 1} style={[type.text, { color: color.ink, fontWeight: '500' }]} />
+        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+          {(sealed ? [sealedLabel(sealed)] : [no && `#${no}`, promoTag(card, { setShown: true }), card.setName]).filter(Boolean).join(' · ')}
         </Text>
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-          {[no && `#${no}`, card.language === 'ja' ? 'JP' : null, card.setName].filter(Boolean).join(' · ')}
-        </Text>
-        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-          raw <Text style={{ color: color.ink }}>{card.marketCents != null ? money(card.marketCents) : '—'}</Text>
+          {sealed ? 'market' : 'raw'} <Text style={{ color: color.ink }}>{card.marketCents != null ? cardPrice(card.marketCents) : '—'}</Text>
           {change != null ? <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{`  ${pct(change)} ${days}d`}</Text> : null}
         </Text>
         {buy ? (
@@ -484,47 +618,50 @@ function ResultTile({ card, width, con, rules, change, days }: ResultProps & { w
   );
 }
 
-function ResultRow({ card, con, rules, change, days }: { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number }) {
+function ResultRow({ card, con, trade, rules, change, days }: ResultProps) {
+  const color = useColors();
+  const styles = useStyles();
   const no = cardNumber(card.number);
   const buy = con ? buyPrices(card.marketCents, rules) : null;
-  const sub = [card.setName, no && `#${no}`, card.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
+  const sealed = card.sealedType;
+  const sub = (sealed ? [sealedLabel(sealed)] : [card.setName, no && `#${no}`, promoTag(card, { setShown: true })]).filter(Boolean).join(' · ');
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`)}
+      onPress={() => openCard(card, con, trade)}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.5 }]}
     >
-      <View style={styles.thumb}>{card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}</View>
+      <View style={sealed ? styles.thumbSealed : styles.thumb}>
+        <ArtImage uri={card.imageUrl} label={card.name} recyclingKey={String(card.productId)} fit={sealed ? 'contain' : 'cover'} style={{ flex: 1 }} />
+      </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={[type.body, { color: color.ink }]}>
-          {displayName(card.name)}
-        </Text>
+        <CardName name={sealed ? card.name : displayName(card.name)} language={card.language} numberOfLines={sealed ? 2 : 1} style={[type.body, { color: color.ink }]} />
         <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
           {sub}
         </Text>
         {buy ? (
           <Text numberOfLines={1} style={[type.secondary, { color: color.ink, paddingTop: 2 }]}>
-            Raw: open {money(buy.target)} · pay up to {money(buy.max)}
+            {sealed ? 'Open' : 'Raw: open'} {money(buy.target)} · pay up to {money(buy.max)}
           </Text>
         ) : null}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={[type.numberM, { color: card.marketCents != null ? color.ink : color.secondary }]}>
-          {card.marketCents != null ? money(card.marketCents) : '—'}
+          {card.marketCents != null ? cardPrice(card.marketCents) : '—'}
         </Text>
         {change != null ? (
           <Text style={[type.caption, { color: change >= 0 ? color.gain : color.loss }]}>
             {pct(change)} {days}d
           </Text>
         ) : (
-          <Text style={[type.caption, { color: color.secondary }]}>raw</Text>
+          <Text style={[type.caption, { color: color.secondary }]}>{sealed ? 'market' : 'raw'}</Text>
         )}
       </View>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   field: {
@@ -560,7 +697,7 @@ const styles = StyleSheet.create({
     right: space.gutter,
     width: 230,
     borderRadius: radius.field,
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     paddingVertical: space.xs,
     ...shadow.menu,
   },
@@ -572,7 +709,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     maxHeight: '80%',
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingTop: space.s,
@@ -604,4 +741,6 @@ const styles = StyleSheet.create({
   gridRow: { gap: GRID_GAP, paddingHorizontal: space.gutter, paddingBottom: space.xxl },
   tileArt: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
   thumb: { width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, backgroundColor: color.well, overflow: 'hidden' },
-});
+  tileSealed: { borderRadius: radius.thumb * 2, overflow: 'hidden' },
+  thumbSealed: { width: size.thumbW, height: size.thumbH },
+}));

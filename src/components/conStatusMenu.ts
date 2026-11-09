@@ -5,6 +5,9 @@ import { router } from 'expo-router';
 import { CON_STATUSES, CON_STATUS_LABEL, conStatusOf, conTabFor, planPatch, type ConStatus } from '../lib/conStatus';
 import { useVault } from '../store/vault';
 import type { Card } from '../types';
+import { dealsFor } from '../pricing/deals';
+import { paidItem } from './collection/paidSheet';
+import { openEditDeal } from './collection/soldTogether';
 import { openSlabMenu } from './menu/Menu';
 
 // Set when a scan started from the table sheet ends by adding a slab. Con mode reads it on focus:
@@ -25,8 +28,11 @@ export function backToCon(s: ConStatus, id?: string) {
 /** Long-press on a con row: Hold, For sale, Trade only, Sold. Sold hands off for the price. */
 export function openConStatusMenu(card: Card, opts: { onChanged: (s: ConStatus) => void; onSold: () => void }) {
   const now = conStatusOf(card);
+  const inDeal = card.status === 'sold' && dealsFor(useVault.getState().cards).has(card.id);
   openSlabMenu(card, [
-    [{ label: 'Got an offer', onPress: () => router.push(`/con/offer/${card.id}`) }],
+    inDeal
+      ? [{ label: 'Edit deal split', onPress: () => openEditDeal(card) }, paidItem(card)]
+      : [{ label: 'Got an offer', onPress: () => router.push(`/con/offer/${card.id}`) }, paidItem(card)],
     CON_STATUSES.map((s) => ({
       label: CON_STATUS_LABEL[s],
       selected: now === s,

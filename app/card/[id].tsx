@@ -13,25 +13,34 @@ import { trendTint } from '../../src/components/MiniChart';
 import { PriceChart } from '../../src/components/PriceChart';
 import { shareSlab } from '../../src/components/share/ShareCard';
 import { openSlabMenu } from '../../src/components/menu/Menu';
+import { openPaidSheet } from '../../src/components/collection/paidSheet';
 import { statusItems } from '../../src/components/collection/statusSheets';
+import { openEditSale } from '../../src/components/collection/soldTogether';
+import { useDeal } from '../../src/pricing/useDeal';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
 import { CardAnalytics } from '../../src/components/search/CardAnalytics';
+import { NoPriceSource } from '../../src/components/estimate/NoPriceSource';
+import { SaleLines } from '../../src/components/search/SaleLines';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
-import { gradeLabel, money, rowTitle } from '../../src/lib/format';
-import { GAMES, LANGUAGE_NAME, gameOf } from '../../src/lib/games';
+import { gradeLabel, money, promoTag, rowTitle, THIN_SALES } from '../../src/lib/format';
+import { sealedLabel } from '../../src/lib/sealed';
+import { CardName } from '../../src/components/CardName';
+import { GAMES, gameOf } from '../../src/lib/games';
 import { detailFor } from '../../src/pricing/portfolio';
 import { freshnessLine, trendSentence, trendVerdict } from '../../src/pricing/trend';
 import { useCardRow } from '../../src/pricing/useCardRow';
 import { useCardRefresh } from '../../src/services/useRefresh';
 import { useVault } from '../../src/store/vault';
-import { color, space, type } from '../../src/theme/tokens';
+import { space, type } from '../../src/theme/tokens';
+import { useColors } from '../../src/theme/theme';
 
 type Range = '30' | '90';
 
 
 export default function SlabDetail() {
+  const color = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -40,13 +49,42 @@ export default function SlabDetail() {
   const [range, setRange] = useState<Range>('90');
   const [tilting, setTilting] = useState(false);
   const refresh = useCardRefresh(row?.card, { auto: true });
+  const deal = useDeal(id);
 
-  if (!row) return null;
+  // Opened from a link or history after the slab was removed: say so and give a way out,
+  // never a blank page.
+  if (!row) {
+    return (
+      <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
+        <View style={styles.nav}>
+          <IconButton label="Back" onPress={goBack}>
+            <BackIcon />
+          </IconButton>
+        </View>
+        <View style={{ paddingHorizontal: space.l, paddingTop: space.xl }}>
+          <Text style={[type.title, { color: color.ink }]}>Not in your collection</Text>
+          <Text style={[type.text, { color: color.secondary, paddingTop: space.xs }]}>
+            This slab was removed from your collection.
+          </Text>
+        </View>
+      </View>
+    );
+  }
   const { card, price } = row;
   const days = range === '90' ? 90 : 30;
   const detail = detailFor(row, days);
   const forSale = card.plan === 'sell';
   const raw = card.grader === 'raw';
+  // No eBay or TCGplayer comps: an AI estimate, your own price, or nothing yet ("Find a price").
+  const noSource = !price || !!price.source;
+  // Sold: the headline number is what it sold for (like home's caption), and the gain is against that.
+  const sold = card.status === 'sold';
+  const headline = sold ? card.soldCents : price?.marketCents ?? null;
+  const gainCents = sold
+    ? card.soldCents != null && card.paidCents != null
+      ? card.soldCents - card.paidCents
+      : null
+    : detail?.gainCents ?? null;
   const trend = price ? trendSentence(trendVerdict(price, days, { raw }), days, raw) : null;
   const fresh = price ? freshnessLine(price, { raw, state: refresh.pulling ? 'refreshing' : refresh.state }) : null;
 
@@ -57,9 +95,43 @@ export default function SlabDetail() {
 
   // Pokémon is the default, so only other games are named.
   const game = gameOf(card) === 'pokemon' ? null : GAMES[gameOf(card)].name;
-  const subtitle = [game, card.grader === 'raw' ? null : LANGUAGE_NAME[card.language] ?? card.language, gradeLabel(card.grader, card.grade, card.condition)]
+  // The language is the badge beside the name, so the gray line leaves it out.
+  const subtitle = card.sealed
+    ? [game, sealedLabel(card.sealed)].filter(Boolean).join(' · ')
+    : [game, promoTag(card), gradeLabel(card.grader, card.grade, card.condition)]
     .filter(Boolean)
     .join(' · ');
+
+  // Asking price, with the lowest you'll take under it. Opens Before the table.
+  const askRow =
+    card.status === 'owned' && row.ask != null && row.floor != null ? (
+      <>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Asking price ${money(row.ask)}, lowest you'll take ${money(row.floor)}`}
+          onPress={() => router.push(`/con/table/${card.id}`)}
+          style={({ pressed }) => [styles.compsRow, pressed && { opacity: 0.5 }]}
+        >
+          <View style={{ gap: 2, flex: 1 }}>
+            <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>Asking price</Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>
+              {row.askRaisedToPaid ? (
+                'Raised to what you paid'
+              ) : (
+                <>
+                  Lowest you'll take <Text style={{ color: color.ink }}>{money(row.floor)}</Text>
+                </>
+              )}
+            </Text>
+          </View>
+          <View style={styles.priceLink}>
+            <Text style={[type.body, { color: color.ink }]}>{money(row.ask)}</Text>
+            <Chevron />
+          </View>
+        </Pressable>
+        <Hairline />
+      </>
+    ) : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: color.canvas }}>
@@ -72,7 +144,7 @@ export default function SlabDetail() {
         refreshControl={<RefreshControl refreshing={refresh.pulling} onRefresh={refresh.pull} tintColor={color.secondary} />}
       >
         <View style={styles.nav}>
-          <IconButton label="Back" onPress={() => router.back()}>
+          <IconButton label="Back" onPress={goBack}>
             <BackIcon />
           </IconButton>
           <IconButton label="More" onPress={menu}>
@@ -81,44 +153,92 @@ export default function SlabDetail() {
         </View>
 
         <View style={styles.hero}>
-          <SlabView card={card} interactive onDragChange={setTilting} />
+          <SlabView card={card} interactive spotlight onDragChange={setTilting} />
         </View>
 
         <View style={styles.titleRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={1} style={[type.title, { color: color.ink }]}>
-              {rowTitle(card)}
-            </Text>
+            <CardName name={rowTitle(card)} language={card.language} numberOfLines={card.sealed ? 3 : 2} large style={[type.title, { color: color.ink }]} />
             <Text style={[type.text, { color: color.secondary }]}>{subtitle}</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             {/* The price stays ink: the market's direction is told by the chart and the trend line
                 below it, so the only colored number here is your own gain or loss. */}
             <Text style={[type.title, { color: color.ink, fontVariant: ['tabular-nums'] }]}>
-              {price ? money(price.marketCents) : '—'}
+              {headline != null ? money(headline) : '—'}
             </Text>
-            {detail?.gainCents != null && card.paidCents != null ? (
-              <Text style={[type.text, { color: color.secondary, fontVariant: ['tabular-nums'] }]}>
-                <Text style={{ color: detail.gainCents >= 0 ? color.gain : color.loss }}>
-                  {detail.gainCents >= 0 ? '+' : '−'}
-                  {money(Math.abs(detail.gainCents))}
+            {/* Tap the paid line to change what you paid (or add it). */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint="Edit price paid"
+              hitSlop={space.m}
+              onPress={() => openPaidSheet(card)}
+              style={({ pressed }) => pressed && { opacity: 0.5 }}
+            >
+              {gainCents != null && card.paidCents != null ? (
+                <Text style={[type.text, { color: color.secondary, fontVariant: ['tabular-nums'] }]}>
+                  <Text style={{ color: gainCents >= 0 ? color.gain : color.loss }}>
+                    {gainCents >= 0 ? '+' : '−'}
+                    {money(Math.abs(gainCents))}
+                  </Text>
+                  {' · '}paid {money(card.paidCents)}
                 </Text>
-                {' · '}paid {money(card.paidCents)}
-              </Text>
-            ) : card.paidCents != null ? (
-              <Text style={[type.text, { color: color.secondary }]}>paid {money(card.paidCents)}</Text>
-            ) : null}
+              ) : card.paidCents != null ? (
+                <Text style={[type.text, { color: color.secondary }]}>paid {money(card.paidCents)}</Text>
+              ) : (
+                <Text style={[type.text, { color: color.secondary }]}>Add price paid</Text>
+              )}
+            </Pressable>
           </View>
         </View>
 
-        {detail ? (
+        {sold ? (
+          <View style={[styles.gutter, { paddingTop: space.xl }]}>
+            <Hairline />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint={deal ? 'Edit the deal split' : 'Change the sale price'}
+              onPress={() => openEditSale(card)}
+              style={({ pressed }) => [styles.compsRow, pressed && { opacity: 0.5 }]}
+            >
+              <View style={{ gap: 2, flex: 1 }}>
+                <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>
+                  {card.soldAt ? `Sold ${new Date(card.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Sold'}
+                </Text>
+                <Text style={[type.secondary, { color: color.secondary }]}>
+                  {deal
+                    ? deal.totalCents != null
+                      ? `Its share of a ${money(deal.totalCents)} deal · ${deal.ids.length} cards`
+                      : `Sold with ${deal.ids.length - 1} more`
+                    : card.soldWhere ?? (card.soldCents == null ? 'Price not set' : 'On its own')}
+                  {deal && card.soldWhere ? ` · ${card.soldWhere}` : ''}
+                </Text>
+              </View>
+              <View style={styles.priceLink}>
+                {/* The sale price is the headline above; this row is the sale's story and its edit. */}
+                <Text style={[type.body, { color: color.secondary, fontWeight: '400' }]}>{card.soldCents != null ? 'Edit' : 'Add price'}</Text>
+                <Chevron />
+              </View>
+            </Pressable>
+            <Hairline />
+          </View>
+        ) : null}
+
+        {raw ? null : <SaleLines price={price} style={styles.gutter} />}
+
+        {noSource && !sold ? (
+          <View style={styles.gutter}>
+            <NoPriceSource card={card} price={price} />
+            {askRow}
+          </View>
+        ) : detail ? (
           <View style={styles.gutter}>
             <View style={{ paddingTop: space.xxl, paddingBottom: space.xl }}>
               <PriceChart
                 values={detail.series}
                 paidCents={card.paidCents}
                 width={width - space.gutter * 2}
-                tint={trendTint(detail.series)}
+                tint={trendTint(detail.series, color)}
                 asOf={price?.asOf}
               />
             </View>
@@ -150,7 +270,7 @@ export default function SlabDetail() {
                       {raw
                         ? 'TCGplayer market'
                         : price.sales30d > 0
-                          ? `${price.sales30d} eBay sales, 30 days`
+                          ? `${price.sales30d <= THIN_SALES ? 'Only ' : ''}${price.sales30d} eBay ${price.sales30d === 1 ? 'sale' : 'sales'}, 30 days`
                           : 'No eBay sales in 30 days'}
                     </Text>
                     <View style={styles.priceLink}>
@@ -169,32 +289,11 @@ export default function SlabDetail() {
                 <Hairline />
               </>
             ) : null}
-            {card.status === 'owned' && row.ask != null && row.floor != null ? (
-              <>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Asking price ${money(row.ask)}, lowest you'll take ${money(row.floor)}`}
-                  onPress={() => router.push(`/con/table/${card.id}`)}
-                  style={({ pressed }) => [styles.compsRow, pressed && { opacity: 0.5 }]}
-                >
-                  <View style={{ gap: 2, flex: 1 }}>
-                    <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>Asking price</Text>
-                    <Text style={[type.secondary, { color: color.secondary }]}>
-                      Lowest you'll take <Text style={{ color: color.loss }}>{money(row.floor)}</Text>
-                    </Text>
-                  </View>
-                  <View style={styles.priceLink}>
-                    <Text style={[type.body, { color: color.ink }]}>{money(row.ask)}</Text>
-                    <Chevron />
-                  </View>
-                </Pressable>
-                <Hairline />
-              </>
-            ) : null}
+            {askRow}
           </View>
         ) : (
           <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.xxl }]}>
-            No comps yet for this card. Prices fill in when sales come in.
+            {card.sealed ? 'No TCGplayer price yet. It fills in with the nightly catalog update.' : 'No comps yet for this card. Prices fill in when sales come in.'}
           </Text>
         )}
         {/* The search page's analytics, at this card's grade (raw for raw). */}
@@ -208,6 +307,7 @@ export default function SlabDetail() {
 }
 
 function MoreIcon() {
+  const color = useColors();
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24">
       <Circle cx={5} cy={12} r={1.8} fill={color.ink} />
@@ -233,3 +333,9 @@ const styles = StyleSheet.create({
   compsLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.m },
   compsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.xl },
 });
+
+/** Back, or home when this page was opened with nothing to go back to. */
+function goBack() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/');
+}

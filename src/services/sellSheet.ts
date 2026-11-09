@@ -5,7 +5,8 @@ import * as Print from 'expo-print';
 import { Platform, Share } from 'react-native';
 import { gradeLabel, money, rowTitle } from '../lib/format';
 import type { CardRow } from '../pricing/portfolio';
-import { color } from '../theme/tokens';
+// The printed sheet is always light: it's paper.
+import { light as color } from '../theme/tokens';
 
 /** Cards for sale or trade, highest ask first. */
 export function sellSheetRows(rows: CardRow[]): CardRow[] {
@@ -24,7 +25,7 @@ export function sellSheetHtml(rows: CardRow[], opts: { title: string; date: stri
       const c = r.card;
       const ask = c.plan === 'trade' ? 'Trade' : r.ask != null ? money(r.ask) : 'Ask';
       const set = c.setName && !/^\d+$/.test(c.setName) ? c.setName : null;
-      const detail = [gradeLabel(c.grader, c.grade, c.condition), set, c.certNumber ? `Cert ${c.certNumber}` : null]
+      const detail = [gradeLabel(c.grader, c.grade, c.condition, c.sealed), set, c.certNumber ? `Cert ${c.certNumber}` : null]
         .filter(Boolean)
         .join(' · ');
       return `<tr><td><div class="name">${esc(rowTitle(c))}</div><div class="sub">${esc(detail)}</div></td><td class="ask">${esc(ask)}</td></tr>`;

@@ -1,5 +1,7 @@
 // Copy formatting. Uses a true minus sign (U+2212) for negatives, per the reference screens.
 
+import { sealedLabel } from './sealed';
+
 const MINUS = '−';
 
 /** 1248000 → "$12,480". Drops cents unless asked. */
@@ -30,13 +32,21 @@ export function pct(fraction: number): string {
   return `${n > 0 ? '+' : MINUS}${Math.abs(n)}%`;
 }
 
+/** -1, 0 or 1: the direction pct() shows, so a "0%" is never colored up or down. */
+export function pctSign(fraction: number): -1 | 0 | 1 {
+  const n = Math.round(fraction * 100);
+  return n === 0 ? 0 : n > 0 ? 1 : -1;
+}
+
 /** Rule percent: 10 → "+10%", -5 → "−5%". */
 export function rulePct(n: number): string {
   if (n === 0) return '0%';
   return `${n > 0 ? '+' : MINUS}${Math.abs(n)}%`;
 }
 
-export function gradeLabel(grader: string, grade: number | null, condition?: string): string {
+/** "PSA 10", "Raw · near mint", or for sealed product its kind ("Booster box"). */
+export function gradeLabel(grader: string, grade: number | null, condition?: string, sealed?: string | null): string {
+  if (sealed) return sealedLabel(sealed);
   if (grader === 'raw') return condition ? `Raw · ${condition}` : 'Raw';
   return `${grader.toUpperCase()} ${grade ?? ''}`.trim();
 }
@@ -49,9 +59,30 @@ export function langTag(language: string | null | undefined): string {
   return LANG_SHORT[language] ?? language.toUpperCase();
 }
 
-/** Row subtitle: "JP · PSA 10", "PSA 10", "Raw · near mint". */
-export function cardLabel(c: { language: string; grader: string; grade: number | null; condition?: string }): string {
-  return [langTag(c.language), gradeLabel(c.grader, c.grade, c.condition)].filter(Boolean).join(' · ');
+// A promo's catalog number carries its promo code: "001/SV-P", "013/30th-P", "SWSH123", "SVP 049".
+const PROMO_NUMBER = /\/(?:SV|SM|XY|BW|DP|S|M|30TH)-?P$|^(?:SWSH|HGSS|SM|XY|BW|DP)\d{2,3}$|^(?:SVP|MEP|SWSHP)\b|^P-\d/i;
+
+/**
+ * Whether a card is a promo: TCGplayer's "Promo" rarity, a promo set ("SV: Scarlet & Violet
+ * Promo Cards", "SV-P Promotional Cards", "One Piece Promotion Cards"), or a promo code in its
+ * number. Stamped prize-pack and league reprints aren't promos and aren't caught.
+ */
+export function isPromo(c: { setName?: string | null; rarity?: string | null; number?: string | null; variety?: string | null }): boolean {
+  if (c.rarity && /^promo$/i.test(c.rarity.trim())) return true;
+  if (c.setName && /\bpromo(?:s|tion(?:al)?)?\b|black star/i.test(c.setName)) return true;
+  if (c.number && PROMO_NUMBER.test(c.number.trim())) return true;
+  return !!c.variety && /\bpromo\b/i.test(c.variety);
+}
+
+/** "Promo" for a detail line, unless the set name shown beside it already says so. */
+export function promoTag(c: Parameters<typeof isPromo>[0], { setShown = false } = {}): string | null {
+  if (!isPromo(c)) return null;
+  return setShown && c.setName && /promo/i.test(c.setName) ? null : 'Promo';
+}
+
+/** Row subtitle: "JP · PSA 10", "PSA 10", "Raw · near mint", "JP · Booster box". */
+export function cardLabel(c: { language: string; grader: string; grade: number | null; condition?: string; sealed?: string | null }): string {
+  return [langTag(c.language), c.sealed ? sealedLabel(c.sealed) : gradeLabel(c.grader, c.grade, c.condition)].filter(Boolean).join(' · ');
 }
 
 /** "Up $640 this month" / "Down $120 this month" / "Flat this month". */
@@ -63,6 +94,13 @@ export function monthLine(deltaCents: number): string {
 /** Row title: "Mew ex 151". Numeric set names (151) read as part of the card's name. */
 export function rowTitle(c: { name: string; setName: string | null }): string {
   return c.setName && /^\d+$/.test(c.setName) ? `${c.name} ${c.setName}` : c.name;
+}
+
+/** "8:02 am" for an ISO time, local clock. */
+export function clockTime(iso: string): string {
+  const d = new Date(iso);
+  const h = d.getHours();
+  return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
 }
 
 /** "3h 12m" / "12m" since an ISO time. */
@@ -112,9 +150,41 @@ export function salesWord(n: number): string {
   return `${n} ${n === 1 ? 'sale' : 'sales'}`;
 }
 
+/** Fewer graded sales than this in 30 days and the price is a guess, so screens say so. */
+export const THIN_SALES = 5;
+
+/** "Only 3 sales in 30 days" when a graded price rests on 1 to THIN_SALES sales; else null. */
+export function thinNote(sales30d: number | null | undefined): string | null {
+  if (!sales30d || sales30d > THIN_SALES) return null;
+  return `Only ${salesWord(sales30d)} in 30 days`;
+}
+
 /** 1 → "1st", 2 → "2nd", 11 → "11th", 23 → "23rd". */
 export function ordinal(n: number): string {
   const t = n % 100;
   const s = t >= 11 && t <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
   return `${n}${s}`;
+}
+
+/** "just now", "4 min ago", "2 hr ago", "Nov 8". */
+export function savedAgo(iso: string | null, now = Date.now()): string | null {
+  if (!iso) return null;
+  const mins = Math.floor((now - Date.parse(iso)) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 24 * 60) return `${Math.floor(mins / 60)} hr ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** A typed dollar amount, cleaned as you type: digits, one point, at most two cents digits ("12.50"). */
+export function dollarsTyped(t: string, maxDollarDigits = 6): string {
+  const [whole = '', ...rest] = t.replace(/[^0-9.]/g, '').split('.');
+  const w = whole.slice(0, maxDollarDigits);
+  return rest.length ? `${w}.${rest.join('').slice(0, 2)}` : w;
+}
+
+/** Cents from a typed dollar amount ("12.5" → 1250), null when there's no number. */
+export function centsFromTyped(t: string): number | null {
+  const n = Number.parseFloat(t);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
 }

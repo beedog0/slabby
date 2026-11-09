@@ -8,7 +8,8 @@ import { useEffect, useRef } from 'react';
 import { Animated, Modal, PanResponder, StyleSheet, Text, View, useWindowDimensions, type GestureResponderEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { color, slabPose, space, type } from '../../theme/tokens';
+import { slabPose, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import type { Card } from '../../types';
 import { IconButton } from '../ui';
 import { SLAB_ASPECT } from './geometry';
@@ -31,6 +32,8 @@ const spread = (e: GestureResponderEvent) => {
 };
 
 export function SlabViewer({ card, visible, onClose }: { card: Card; visible: boolean; onClose: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { width: sw, height: sh } = useWindowDimensions();
   const raw = card.grader === 'raw';
@@ -184,9 +187,9 @@ export function SlabViewer({ card, visible, onClose }: { card: Card; visible: bo
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   page: { flex: 1, backgroundColor: color.canvas, alignItems: 'center', justifyContent: 'center', userSelect: 'none' },
   hint: { position: 'absolute', color: color.secondary },
   close: { position: 'absolute', right: space.s },
   title: { position: 'absolute', left: 64, right: 64, height: 44, alignItems: 'center', justifyContent: 'center' },
-});
+}));

@@ -11,7 +11,29 @@ export type Inputs = {
   paidCents?: number | null;
   rules: PricingRules;
   overrides?: Overrides;
+  /** The time to judge "last-day prices" against (ms). Defaults to now. */
+  now?: number;
 };
+
+/** The default cut for last-day prices, in percent. */
+export const LAST_DAY_CUT_PCT = 10;
+
+/** True while last-day prices are on: switched on and not yet past their end time. */
+export function lastDayActive(rules: PricingRules, now = Date.now()): boolean {
+  return !!rules.lastDayUntil && Date.parse(rules.lastDayUntil) > now;
+}
+
+/** The cut last-day prices apply right now, in percent (0 when off). */
+export function lastDayCut(rules: PricingRules, now = Date.now()): number {
+  return lastDayActive(rules, now) ? Math.max(0, rules.lastDayCutPct ?? LAST_DAY_CUT_PCT) : 0;
+}
+
+/** When last-day prices switched on now should end: midnight tonight, local time. */
+export function lastDayEnd(now = Date.now()): string {
+  const d = new Date(now);
+  d.setHours(24, 0, 0, 0);
+  return d.toISOString();
+}
 
 /** Round to the nearest `step` cents, half-up. A step of 0 or 1 means no rounding. */
 export function roundTo(cents: number, step: number): number {
@@ -21,25 +43,40 @@ export function roundTo(cents: number, step: number): number {
 
 const applyPct = (cents: number, pct: number) => cents * (1 + pct / 100);
 
-/** What to ask: the override, else market × (1 + ask%). */
+/**
+ * What to ask: the override, else market × (1 + ask%). When "never sell at a loss" is on and
+ * that rule ask is under what you paid, the ask is raised to paid too (so floor = ask = paid,
+ * not a floor quietly clamped back under paid). An ask you set by hand is left alone.
+ */
+export function askWithBasis(i: Inputs): { cents: number; raisedToPaid: boolean } {
+  if (i.overrides?.ask != null) return { cents: i.overrides.ask, raisedToPaid: false };
+  const a = roundTo(applyPct(i.marketCents, i.rules.askPct), i.rules.roundToCents);
+  const paid = i.rules.neverBelowPaid ? (i.paidCents ?? 0) : 0;
+  return paid > a ? { cents: paid, raisedToPaid: true } : { cents: a, raisedToPaid: false };
+}
+
+/** What to ask. See askWithBasis. */
 export function ask(i: Inputs): number {
-  if (i.overrides?.ask != null) return i.overrides.ask;
-  return roundTo(applyPct(i.marketCents, i.rules.askPct), i.rules.roundToCents);
+  return askWithBasis(i).cents;
 }
 
 /** Why the floor is what it is, so screens can explain it. */
-export type FloorBasis = 'rule' | 'paid' | 'override' | 'ask';
+export type FloorBasis = 'rule' | 'lastDay' | 'paid' | 'override' | 'ask';
 
 /**
- * The lowest you'll take, and why: the override, else 30-day low × (1 + floor%). When
- * "never sell at a loss" is on, either one is raised to what you paid. Floor never exceeds
- * ask; if it would, floor = ask.
+ * The lowest you'll take, and why: the override, else 30-day low × (1 + floor%). While last-day
+ * prices are on, a rule floor (never an override) drops by the last-day cut. When "never sell at
+ * a loss" is on, either one is raised to what you paid. Floor never exceeds ask; if it would,
+ * floor = ask.
  */
 export function floorWithBasis(i: Inputs): { cents: number; basis: FloorBasis } {
   const a = ask(i);
   const overridden = i.overrides?.floor != null;
-  let f = overridden ? i.overrides!.floor! : roundTo(applyPct(i.low30Cents, i.rules.floorPct), i.rules.roundToCents);
-  let basis: FloorBasis = overridden ? 'override' : 'rule';
+  const cut = overridden ? 0 : lastDayCut(i.rules, i.now);
+  let f = overridden
+    ? i.overrides!.floor!
+    : roundTo(applyPct(i.low30Cents, i.rules.floorPct) * (1 - cut / 100), i.rules.roundToCents);
+  let basis: FloorBasis = overridden ? 'override' : cut ? 'lastDay' : 'rule';
   const paid = i.rules.neverBelowPaid ? (i.paidCents ?? 0) : 0;
   if (paid > f) {
     f = paid;
@@ -89,11 +126,92 @@ export const COUNTER_BAND = 0.15;
  * - below that → pass. counterAt is still floor.
  */
 export function verdict(offerCents: number, i: Inputs): OfferVerdict {
-  const f = floor(i);
-  const delta = offerCents - f;
-  if (delta >= 0) return { kind: 'take', delta, counterAt: ask(i) };
-  if (offerCents >= f * (1 - COUNTER_BAND)) return { kind: 'counter', delta, counterAt: f };
-  return { kind: 'pass', delta, counterAt: f };
+  return verdictAt(offerCents, floor(i), ask(i));
+}
+
+/** The same verdict against a floor and ask you already have (a bundle's totals). */
+export function verdictAt(offerCents: number, floorCents: number, askCents: number): OfferVerdict {
+  const delta = offerCents - floorCents;
+  if (delta >= 0) return { kind: 'take', delta, counterAt: askCents };
+  if (offerCents >= floorCents * (1 - COUNTER_BAND)) return { kind: 'counter', delta, counterAt: floorCents };
+  return { kind: 'pass', delta, counterAt: floorCents };
+}
+
+// ── Bundles: one price for several cards ─────────────────────────────────────────────────────
+
+export type BundleQuote = {
+  count: number;
+  marketCents: number;
+  /** Sum of each card's ask. */
+  askCents: number;
+  /** The lowest you'll take for all of them together. */
+  floorCents: number;
+  /** What you paid for all of them (cards with no price paid count as 0). */
+  paidCents: number;
+  /** paid: the total was raised to what you paid for the lot. */
+  floorBasis: 'cards' | 'paid' | 'ask';
+};
+
+/**
+ * "How much for these three?" Ask is the sum of each card's ask. Floor is the sum of each card's
+ * floor before "never sell at a loss", then raised to what you paid for the lot when that rule is
+ * on. So a card that's down can be carried by one that's up, but the bundle as a whole never sells
+ * at a loss. Never above the ask.
+ */
+export function bundle(items: Inputs[]): BundleQuote {
+  let marketCents = 0, askCents = 0, floorCents = 0, paidCents = 0;
+  let neverBelowPaid = false;
+  for (const i of items) {
+    marketCents += i.marketCents;
+    askCents += ask(i);
+    floorCents += floor({ ...i, rules: { ...i.rules, neverBelowPaid: false } });
+    paidCents += i.paidCents ?? 0;
+    neverBelowPaid = neverBelowPaid || i.rules.neverBelowPaid;
+  }
+  let floorBasis: BundleQuote['floorBasis'] = 'cards';
+  if (neverBelowPaid && paidCents > floorCents) {
+    floorCents = paidCents;
+    floorBasis = 'paid';
+  }
+  if (floorCents > askCents) {
+    floorCents = askCents;
+    floorBasis = 'ask';
+  }
+  return { count: items.length, marketCents, askCents, floorCents, paidCents, floorBasis };
+}
+
+// ── Trades: your cards against theirs ────────────────────────────────────────────────────────
+
+/** Within this fraction either way, a trade is even. */
+export const TRADE_EVEN_BAND = 0.05;
+
+export type TradeKind = 'even' | 'yours' | 'theirs';
+
+export const TRADE_LABEL: Record<TradeKind, string> = {
+  even: 'Even trade',
+  yours: 'In your favor',
+  theirs: 'In their favor',
+};
+
+export type TradeSummary = {
+  mineCents: number;
+  theirsCents: number;
+  /** theirs − mine. Positive: you get more value than you give. */
+  gapCents: number;
+  /** gap ÷ the larger side, e.g. 0.12. */
+  gapPct: number;
+  kind: TradeKind;
+};
+
+/** Market value on each side and which way the trade leans. */
+export function trade(mine: number[], theirs: number[]): TradeSummary {
+  const mineCents = mine.reduce((a, b) => a + b, 0);
+  const theirsCents = theirs.reduce((a, b) => a + b, 0);
+  const gapCents = theirsCents - mineCents;
+  const base = Math.max(mineCents, theirsCents);
+  const gapPct = base > 0 ? gapCents / base : 0;
+  const kind: TradeKind = Math.abs(gapPct) <= TRADE_EVEN_BAND ? 'even' : gapCents > 0 ? 'yours' : 'theirs';
+  return { mineCents, theirsCents, gapCents, gapPct, kind };
 }
 
 /** eBay final value fee and per-order fee (2026 trading cards category, under $7,500). */
@@ -113,7 +231,8 @@ export function ebayNet(priceCents: number, shippingCents = EBAY_SHIP_ESTIMATE_C
 /** All four numbers for a card at once. */
 export function quote(i: Inputs) {
   const f = floorWithBasis(i);
-  return { ask: ask(i), floor: f.cents, floorBasis: f.basis, buyTarget: buyTarget(i), buyMax: buyMax(i) };
+  const a = askWithBasis(i);
+  return { ask: a.cents, askRaisedToPaid: a.raisedToPaid, floor: f.cents, floorBasis: f.basis, buyTarget: buyTarget(i), buyMax: buyMax(i) };
 }
 
 /** An offer more than this many times market is probably a typo. */
