@@ -37,6 +37,7 @@ import {
   addParams,
   buyPrices,
   cardNumber,
+  shownNumber,
   catalogCard,
   displayName,
   nameAndVariant,
@@ -189,7 +190,7 @@ export default function SearchedCard() {
   const change = hist && !quiet ? hist.change : null;
   // A graded price from a handful of sales is a guess; say so under the number.
   const thin = !ready.sealedType && pick !== 'raw' && price && !quiet ? thinNote(price.sales30d) : null;
-  const no = cardNumber(ready.number);
+  const no = shownNumber(ready.number);
   // Sealed product: one TCGplayer market price with its nightly chart; no grades, no slab.
   const sealed = ready.sealedType ?? null;
   // The language is the badge beside the name.

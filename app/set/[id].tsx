@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
 import { BackIcon, Hairline, IconButton } from '../../src/components/ui';
 import { cardPrice, money, pct } from '../../src/lib/format';
-import { cardNumber, displayName, type Game } from '../../src/services/search';
+import { displayName, shownNumber, type Game } from '../../src/services/search';
 import type { Found } from '../../src/services/searchFilters';
 import { arrangeSet, cardsInSet, companionSets, rarities, SET_SORTS, setMeta, type Companion, type SetMeta, type SetSort } from '../../src/services/setCards';
 import { radius, shadow, size, space, type } from '../../src/theme/tokens';
@@ -230,7 +230,7 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
 
 function Tile({ card, w, trade }: { card: Found; w: number; trade?: boolean }) {
   const color = useColors();
-  const no = cardNumber(card.number);
+  const no = shownNumber(card.number);
   return (
     <Pressable
       style={{ width: w }}

@@ -64,7 +64,7 @@ import { productName } from '../supabase/functions/_shared/comps-math';
 import { cardSteadyKey, findScannedCard, looksLikeSlab, correctionKey, findSimilarCards, missReason, parseCardText, printedNumber, printName, printOptions, readName, similarForSlab, withCorrection, type CardMatch, type ParsedCard } from '../src/services/cardScan';
 import { artRead, combine, identifyByArt, matchArt, printsOf, type ArtHit, type FoundCard, type Identified } from '../src/services/artMatch';
 import { useCorrections } from '../src/store/corrections';
-import { cardNumber, displayName, mockProductId, nameAndVariant, searchCards, type CatalogCard } from '../src/services/search';
+import { cardNumber, displayName, mockProductId, nameAndVariant, searchCards, shownNumber, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
@@ -1399,7 +1399,7 @@ function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: Cat
             <View style={{ flex: 1 }}>
               <CardName name={nameAndVariant(c.name).name} language={c.language} numberOfLines={2} style={[type.body, { color: color.ink }]} />
               <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
-                {[nameAndVariant(c.name).variant, c.setName, c.number ? `#${cardNumber(c.number)}` : null, promoTag(c, { setShown: true })].filter(Boolean).join(' · ')}
+                {[nameAndVariant(c.name).variant, c.setName, c.number ? `#${shownNumber(c.number)}` : null, promoTag(c, { setShown: true })].filter(Boolean).join(' · ')}
               </Text>
             </View>
             <Text style={[type.rowPrice, { color: color.ink }]}>{c.marketCents ? cardPrice(c.marketCents) : '—'}</Text>
