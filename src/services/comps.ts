@@ -137,6 +137,48 @@ function mockSealed(card: Card): CardPrice | null {
   return { ...s, sales30d: 0 };
 }
 
+/** Split a list into chunks of n. */
+export function chunks<T>(list: T[], n: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += n) out.push(list.slice(i, i + n));
+  return out;
+}
+
+/** Run jobs a few at a time, in order of the list; results in the same order. */
+async function pooled<T, R>(items: T[], width: number, job: (t: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await job(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(width, items.length) }, worker));
+  return out;
+}
+
+/**
+ * Keys per price_daily request: 91 days each stays under the server's 1,000-row cap, and the
+ * request URL stays short. One query for a whole vault (hundreds of cards after an import) used
+ * to fail or come back cut off, so most tiles showed no price until the card was opened.
+ */
+const DAILY_CHUNK = 10;
+const REF_CHUNK = 100;
+
+async function dailyFor(keys: string[], since: string): Promise<DailyRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('price_daily')
+    .select('card_key, day, market_cents, low_cents, high_cents, sales_30d')
+    .in('card_key', keys)
+    .gte('day', since)
+    // Newest first, so a limit that bites drops the oldest day, never today's.
+    .order('day', { ascending: false })
+    .limit(keys.length * 91);
+  return error || !data ? [] : (data as DailyRow[]);
+}
+
 /** Load the last 90 days of price_daily for these cards into the price store. */
 export async function refreshPrices(all: Card[]): Promise<void> {
   if (!supabase || !all.length) return;
@@ -147,18 +189,10 @@ export async function refreshPrices(all: Card[]): Promise<void> {
   fillArt(cards).catch(() => {});
   const keys = [...new Set(cards.map(cardKey))];
   const since = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
-  const { data, error } = await supabase
-    .from('price_daily')
-    .select('card_key, day, market_cents, low_cents, high_cents, sales_30d')
-    .in('card_key', keys)
-    .gte('day', since)
-    // Newest first, so a limit that bites drops the oldest day, never today's.
-    .order('day', { ascending: false })
-    .limit(keys.length * 91);
-  if (error || !data) return;
+  const data = (await pooled(chunks(keys, DAILY_CHUNK), 4, (k) => dailyFor(k, since).catch(() => [] as DailyRow[]))).flat();
   const fresh = await freshnessFor(keys);
   const grouped = new Map<string, DailyRow[]>();
-  for (const r of data as DailyRow[]) grouped.set(r.card_key, [...(grouped.get(r.card_key) ?? []), r]);
+  for (const r of data) grouped.set(r.card_key, [...(grouped.get(r.card_key) ?? []), r]);
   const lastSales = await lastSalesFor(keys);
   const today = new Date().toISOString().slice(0, 10);
   const next: Record<string, CardPrice> = {};
@@ -167,10 +201,73 @@ export async function refreshPrices(all: Card[]): Promise<void> {
     if (!daily) continue;
     const f = fresh?.get(k);
     const p = f ? { ...daily, refreshedAt: f.comps_refreshed_at, lastSaleDay: f.last_sale_day } : daily;
-    // Graded keys only have sale days; raw keeps TCGplayer market.
+    // Graded keys only have sale days; raw keys keep TCGplayer market.
     next[k] = lastSales ? withHeadline(p, lastSales.get(k), today) : p;
   }
+  // Raw cards nobody has opened yet have no price_daily rows: show the catalog's nightly TCGplayer
+  // market for their matched product until they do. Free (no comps call). Never for graded cards:
+  // a raw price on a slab would be wrong.
+  const have = usePrices.getState().byKey;
+  const rawMissing = [...new Set(cards.filter((c) => c.grader === 'raw').map(cardKey))].filter((k) => !next[k] && have[k]?.marketCents == null);
+  if (rawMissing.length) Object.assign(next, await catalogFallback(rawMissing).catch(() => ({})));
   usePrices.getState().merge(next);
+}
+
+/** Raw card_keys to CardPrices from their matched TCGplayer product in the catalog. */
+async function catalogFallback(keys: string[]): Promise<Record<string, CardPrice>> {
+  if (!supabase) return {};
+  const refs = (
+    await pooled(chunks(keys, REF_CHUNK), 3, async (k) => {
+      const { data } = await supabase!.from('card_refs').select('card_key, tcgplayer_id').in('card_key', k);
+      return (data ?? []) as { card_key: string; tcgplayer_id: string | null }[];
+    })
+  ).flat();
+  const idOf = new Map<string, number>();
+  for (const r of refs) {
+    const id = Number(r.tcgplayer_id);
+    if (r.tcgplayer_id && Number.isFinite(id)) idOf.set(r.card_key, id);
+  }
+  const ids = [...new Set(idOf.values())];
+  if (!ids.length) return {};
+  const rows = (
+    await pooled(chunks(ids, REF_CHUNK), 3, async (k) => {
+      const { data } = await supabase!.from('catalog').select('product_id, market_cents, low_cents, market_hist, updated_on').in('product_id', k);
+      return (data ?? []) as SealedRow[];
+    })
+  ).flat();
+  const byId = new Map(rows.map((r) => [r.product_id, r]));
+  const out: Record<string, CardPrice> = {};
+  for (const [key, id] of idOf) {
+    const row = byId.get(id);
+    const p = row ? sealedPrice(row) : null;
+    if (p) out[key] = p;
+  }
+  return out;
+}
+
+/** Graded cards priced in the background this launch, so a big import can't spend the day's budget. */
+const backgroundTried = new Set<string>();
+const BACKGROUND_CAP = 60;
+
+/**
+ * Graded slabs with no price at all (just imported, never opened): ask the server for their comps
+ * in the background, three at a time, at most 60 a launch. Raw cards are priced from the catalog
+ * above for free, so they're skipped here.
+ */
+export async function priceUnpriced(cards: Card[]): Promise<void> {
+  if (!canRefresh()) return;
+  const byKey = usePrices.getState().byKey;
+  const seen = new Set<string>();
+  const todo = cards.filter((c) => {
+    if (c.status !== 'owned' || c.grader === 'raw' || isSealedCard(c)) return false;
+    const k = cardKey(c);
+    if (seen.has(k) || backgroundTried.has(k) || byKey[k]?.marketCents != null) return false;
+    seen.add(k);
+    return true;
+  });
+  const batch = todo.slice(0, Math.max(0, BACKGROUND_CAP - backgroundTried.size));
+  for (const c of batch) backgroundTried.add(cardKey(c));
+  if (batch.length) await refreshCards(batch).catch(() => {});
 }
 
 type LastSaleRow = { card_key: string; day: string; sales: number; avg_cents: number };
@@ -200,12 +297,12 @@ async function lastSalesFor(keys: string[]): Promise<Map<string, SaleDay[]> | nu
 async function freshnessFor(keys: string[]): Promise<Map<string, Freshness> | null> {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase
-      .from('card_refs')
-      .select('card_key, comps_refreshed_at, last_sale_day')
-      .in('card_key', keys);
-    if (error || !data) return null;
-    return new Map((data as Freshness[]).map((r) => [r.card_key, r]));
+    const parts = await pooled(chunks(keys, REF_CHUNK), 3, async (k) => {
+      const { data, error } = await supabase!.from('card_refs').select('card_key, comps_refreshed_at, last_sale_day').in('card_key', k);
+      if (error || !data) throw error ?? new Error('no data');
+      return data as Freshness[];
+    });
+    return new Map(parts.flat().map((r) => [r.card_key, r]));
   } catch {
     return null;
   }
@@ -421,12 +518,22 @@ export async function fillArt(cards: Card[]): Promise<void> {
   const owned = cards.filter((c) => c.status === 'owned' && !isSealedCard(c));
   if (!owned.length) return;
   const keys = [...new Set(owned.map(cardKey))];
-  const named = await supabase.from('card_refs').select('card_key, tcgplayer_id, image_url, matched_name').in('card_key', keys);
-  const error = named.error;
-  // A project without 0014 has no matched_name: still fill photos.
-  const data: CardRef[] | null = error
-    ? (await supabase.from('card_refs').select('card_key, tcgplayer_id, image_url').in('card_key', keys)).data
-    : named.data;
+  // In chunks: one request for hundreds of keys makes a URL the server refuses.
+  const read = (cols: string) =>
+    pooled(chunks(keys, REF_CHUNK), 3, async (k) => {
+      const { data, error } = await supabase!.from('card_refs').select(cols).in('card_key', k);
+      if (error) throw error;
+      return (data ?? []) as unknown as CardRef[];
+    }).then((p) => p.flat());
+  let error: unknown = null;
+  let data: CardRef[] | null = null;
+  try {
+    data = await read('card_key, tcgplayer_id, image_url, matched_name');
+  } catch (e) {
+    // A project without 0014 has no matched_name: still fill photos.
+    error = e;
+    data = await read('card_key, tcgplayer_id, image_url').catch(() => null);
+  }
   const refs = new Map(data?.map((r) => [r.card_key, r]) ?? []);
   for (const key of keys) {
     const ref = refs.get(key);

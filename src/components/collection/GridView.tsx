@@ -63,12 +63,17 @@ export function Caption({ row, center }: { row: CardRow; center?: boolean }) {
   return (
     <View style={{ gap: 2, alignItems: align }}>
       <CardName name={rowTitle(card)} language={card.language} center={center} style={[type.text, { color: color.ink, fontWeight: '500' }]} />
-      <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
-        {[gradeLabel(card.grader, card.grade, card.condition), promoTag(card)].filter(Boolean).join(' · ')}
-        {' · '}
-        <Text style={{ color: color.ink }}>{value != null ? cardPrice(value) : '—'}</Text>
-        {sold ? ' sold' : ''}
-      </Text>
+      {/* Grade and promo tag shrink first; the price never gets cut off by a long label. */}
+      <View style={{ flexDirection: 'row', alignSelf: 'stretch', justifyContent: align, minWidth: 0 }}>
+        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary, flexShrink: 1 }]}>
+          {[gradeLabel(card.grader, card.grade, card.condition), promoTag(card)].filter(Boolean).join(' · ')}
+        </Text>
+        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary, flexShrink: 0 }]}>
+          {' · '}
+          <Text style={{ color: color.ink }}>{value != null ? cardPrice(value) : '—'}</Text>
+          {sold ? ' sold' : ''}
+        </Text>
+      </View>
       {/* Its own line so it never truncates; a blank line when there's nothing to say, so rows line up. */}
       <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
         {deal ? (

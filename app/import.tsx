@@ -11,7 +11,7 @@ import { CardThumb } from '../src/components/CardThumb';
 import { Segmented } from '../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../src/components/ui';
 import { cardLabel, cardPrice } from '../src/lib/format';
-import { matchNewCard, refreshPrices } from '../src/services/comps';
+import { matchNewCard, priceUnpriced, refreshPrices } from '../src/services/comps';
 import { ImportError, parseImport, SOURCE_NAME, type ImportSource } from '../src/services/importCsv';
 import { cardsFor, matchAll, type Matched } from '../src/services/importMatch';
 import { useVault } from '../src/store/vault';
@@ -252,6 +252,7 @@ async function linkAll(added: { card: Card; productId?: string }[], width = 3): 
   };
   await Promise.all(Array.from({ length: Math.min(width, jobs.length) }, worker));
   await refreshPrices(added.map((a) => a.card));
+  priceUnpriced(added.map((a) => a.card)).catch(() => {});
 }
 
 const useStyles = themed((color) => StyleSheet.create({

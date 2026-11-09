@@ -49,7 +49,7 @@ import {
   type CardRow,
   type CollectionFilter,
 } from '../../src/pricing/portfolio';
-import { refreshPrices } from '../../src/services/comps';
+import { priceUnpriced, refreshPrices } from '../../src/services/comps';
 import { useDisplay } from '../../src/store/display';
 import { usePrices } from '../../src/store/prices';
 import { useRules } from '../../src/store/rules';
@@ -135,6 +135,8 @@ export default function Home() {
       .catch(() => {})
       .finally(() => {
         if (current) setPricesBusy(false);
+        // Slabs that still have no price (a fresh import): fetch their comps in the background.
+        priceUnpriced(cards).catch(() => {});
       });
     return () => {
       current = false;
