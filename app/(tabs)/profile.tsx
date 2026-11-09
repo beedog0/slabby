@@ -127,17 +127,14 @@ export default function ProfileTab() {
       style={{ flex: 1, backgroundColor: color.canvas }}
       contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom + space.xxl }}
     >
-      <View style={styles.header}>
-        <View ref={moreRef} collapsable={false}>
-          <IconButton label="Settings" onPress={more}>
-            <MoreIcon />
-          </IconButton>
-        </View>
-      </View>
-
-      {/* You. Tap the photo to change it, the name to edit the rest. */}
+      {/* You. Tap the photo to change it, the name to edit the rest; settings sit beside the name. */}
       <View style={styles.who}>
-        <Pressable accessibilityRole="button" accessibilityLabel={profile.photo ? 'Change photo' : 'Add a photo'} onPress={changePhoto} disabled={picking}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={profile.photo ? 'Change photo' : 'Add a photo'}
+          onPress={changePhoto}
+          disabled={picking}
+        >
           <Avatar photo={profile.photo} letter={initialOf(profile.name, profile.handle, email)} px={size.avatar} busy={picking} />
           {!profile.photo ? (
             <View style={styles.camera}>
@@ -149,17 +146,28 @@ export default function ProfileTab() {
           <Text numberOfLines={2} style={[type.title, { color: profile.name ? color.ink : color.secondary }]}>
             {profile.name || 'Add your name'}
           </Text>
-          <Text style={[type.text, { color: color.secondary }]}>{profile.handle ? `@${profile.handle}` : 'Pick a handle ›'}</Text>
-        </Pressable>
-      </View>
-      {profile.bio ? <Text style={[type.text, styles.gutter, { color: color.ink, paddingTop: space.m }]}>{profile.bio}</Text> : null}
-      <View style={[styles.gutter, styles.metaRow]}>
-        <Pressable accessibilityRole="link" onPress={() => router.push('/friends')} style={styles.metaLink}>
-          <Text style={[type.text, { color: color.ink }]}>
-            {friendCount ? `${friendCount} ${friendCount === 1 ? 'friend' : 'friends'}` : 'Find friends'}
+          <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+            {profile.handle ? `@${profile.handle}` : 'Pick a handle ›'}
+            {since ? ` · since ${since}` : ''}
           </Text>
         </Pressable>
-        {since ? <Text style={[type.text, { color: color.secondary }]}>· Collecting since {since}</Text> : null}
+        <View ref={moreRef} collapsable={false} style={styles.more}>
+          <IconButton label="Settings" onPress={more}>
+            <MoreIcon />
+          </IconButton>
+        </View>
+      </View>
+      {profile.bio ? <Text style={[type.text, styles.gutter, { color: color.ink, paddingTop: space.m }]}>{profile.bio}</Text> : null}
+
+      {/* The quick counts, like a profile in any app: slabs, sets, and friends (tap to find more). */}
+      <View style={[styles.gutter, styles.counts]}>
+        <Count n={stats.owned} label={stats.owned === 1 ? 'Slab' : 'Slabs'} />
+        <Count n={stats.sets} label={stats.sets === 1 ? 'Set' : 'Sets'} />
+        <Count
+          n={friendCount ?? 0}
+          label={friendCount ? (friendCount === 1 ? 'Friend' : 'Friends') : 'Find friends ›'}
+          onPress={() => router.push('/friends')}
+        />
       </View>
       {guest ? (
         <Pressable accessibilityRole="link" onPress={() => router.push('/settings/account')} style={[styles.gutter, styles.metaLink]}>
@@ -179,13 +187,12 @@ export default function ProfileTab() {
           </Text>
           <Text style={[type.text, { color: color.secondary }]}>
             {month ? <Text style={{ color: upDown(stats.monthDeltaCents) }}>{month}</Text> : null}
-            {month ? ' this month · ' : ''}
-            {stats.owned} {stats.owned === 1 ? 'slab' : 'slabs'} · {stats.sets} {stats.sets === 1 ? 'set' : 'sets'}
+            {month ? ' this month' : 'Value of what you own today'}
           </Text>
           {series.length >= 2 ? (
             <View style={{ paddingTop: space.l }}>
               <MiniChart values={series} width={width - space.gutter * 2} height={size.homeChart - space.xl} />
-              <Text style={[type.caption, { color: color.secondary, paddingTop: space.s }]}>
+              <Text style={[type.caption, { color: color.secondary, paddingTop: space.xs }]}>
                 Last 30 days · eBay sold for slabs, TCGplayer for raw
               </Text>
             </View>
@@ -200,7 +207,13 @@ export default function ProfileTab() {
             {shelf.map((r) => {
               const wk = weekChange(r);
               return (
-                <Pressable key={r.card.id} accessibilityRole="button" accessibilityLabel={r.card.name} onPress={() => router.push(`/card/${r.card.id}`)} style={{ width: halfW }}>
+                <Pressable
+                  key={r.card.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={r.card.name}
+                  onPress={() => router.push(`/card/${r.card.id}`)}
+                  style={{ width: halfW }}
+                >
                   <SlabView card={r.card} width={halfW} posed={false} />
                   <Text numberOfLines={2} style={[type.secondary, { color: color.ink, fontWeight: '500', paddingTop: space.s }]}>
                     {r.card.name}
@@ -237,7 +250,11 @@ export default function ProfileTab() {
           </ScrollView>
         </Block>
       ) : (
-        <Block title="Wishlist" sub="Cards you’re hunting and what you’d pay" action={{ label: 'Open', onPress: () => router.push('/wishlist') }}>
+        <Block
+          title="Wishlist"
+          sub="Cards you’re hunting and what you’d pay"
+          action={{ label: 'Open', onPress: () => router.push('/wishlist') }}
+        >
           {null}
         </Block>
       )}
@@ -247,7 +264,11 @@ export default function ProfileTab() {
         <Block title="Stats">
           {[
             stats.paidCents ? (
-              <Line key="gain" label="Gain on what you paid" sub={`${gainPct != null ? `${gainPct >= 0 ? '+' : '−'}${Math.abs(gainPct)}% on ` : 'on '}${money(stats.paidCents)} paid`}>
+              <Line
+                key="gain"
+                label="Gain on what you paid"
+                sub={`${gainPct != null ? `${gainPct >= 0 ? '+' : '−'}${Math.abs(gainPct)}% on ` : 'on '}${money(stats.paidCents)} paid`}
+              >
                 <Text style={{ color: upDown(stats.gainCents) }}>{signed(stats.gainCents)}</Text>
               </Line>
             ) : null,
@@ -262,7 +283,12 @@ export default function ProfileTab() {
               </Line>
             ) : null,
             stats.sold ? (
-              <Line key="sold" label={`Sold ${stats.sold} ${stats.sold === 1 ? 'card' : 'cards'}`} sub={`${signed(stats.profitCents)} profit`} subColor={upDown(stats.profitCents)}>
+              <Line
+                key="sold"
+                label={`Sold ${stats.sold} ${stats.sold === 1 ? 'card' : 'cards'}`}
+                sub={`${signed(stats.profitCents)} profit`}
+                subColor={upDown(stats.profitCents)}
+              >
                 {money(stats.soldCents)}
               </Line>
             ) : null,
@@ -282,7 +308,10 @@ export default function ProfileTab() {
         <Block title="Grades">
           <View style={styles.bar}>
             {mix.map((b, i) => (
-              <View key={b.key} style={{ flex: b.share, backgroundColor: color.ink, opacity: BAND_OPACITY[b.key], marginLeft: i ? space.xs / 2 : 0 }} />
+              <View
+                key={b.key}
+                style={{ flex: b.share, backgroundColor: color.ink, opacity: BAND_OPACITY[b.key], marginLeft: i ? space.xs / 2 : 0 }}
+              />
             ))}
           </View>
           <View style={styles.legend}>
@@ -305,14 +334,20 @@ export default function ProfileTab() {
           {activity.map((a, i) => {
             const c = a.row.card;
             const profit = a.kind === 'sold' && c.soldCents != null && c.paidCents != null ? c.soldCents - c.paidCents : null;
-            const price = a.kind === 'sold' ? c.soldCents : a.row.price?.marketCents ?? null;
+            const price = a.kind === 'sold' ? c.soldCents : (a.row.price?.marketCents ?? null);
             return (
               <View key={`${a.kind}:${c.id}`}>
                 {i ? <Hairline inset={size.thumbW + space.m} /> : null}
-                <Pressable accessibilityRole="button" onPress={() => router.push(`/card/${c.id}`)} style={({ pressed }) => [styles.activity, pressed && { opacity: 0.6 }]}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push(`/card/${c.id}`)}
+                  style={({ pressed }) => [styles.activity, pressed && { opacity: 0.6 }]}
+                >
                   <SlabView card={c} width={size.thumbW} posed={false} shadow={false} />
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>{c.name}</Text>
+                    <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>
+                      {c.name}
+                    </Text>
                     <Text style={[type.secondary, { color: color.secondary }]}>
                       {a.kind === 'sold' ? 'Sold' : 'Added'} {saleDay(a.at)} · {cardLabel(c)}
                     </Text>
@@ -336,6 +371,30 @@ export default function ProfileTab() {
         )}
       </View>
     </ScrollView>
+  );
+}
+
+/** A count over its label: "8" above "Slabs". Tappable when it leads somewhere. */
+function Count({ n, label, onPress }: { n: number; label: string; onPress?: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
+  const body = (
+    <>
+      <Text style={[type.numberM, { color: color.ink }]}>{n}</Text>
+      <Text style={[type.secondary, { color: color.secondary }]}>{label}</Text>
+    </>
+  );
+  return onPress ? (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`${n} ${label}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.count, pressed && { opacity: 0.6 }]}
+    >
+      {body}
+    </Pressable>
+  ) : (
+    <View style={styles.count}>{body}</View>
   );
 }
 
@@ -377,11 +436,28 @@ function Block({
 }
 
 /** A stat line: label and a quiet line under it on the left, the number on the right. */
-function Line({ label, sub, subColor, onPress, children }: { label: string; sub?: string; subColor?: string; onPress?: () => void; children: ReactNode }) {
+function Line({
+  label,
+  sub,
+  subColor,
+  onPress,
+  children,
+}: {
+  label: string;
+  sub?: string;
+  subColor?: string;
+  onPress?: () => void;
+  children: ReactNode;
+}) {
   const color = useColors();
   const styles = useStyles();
   return (
-    <Pressable accessibilityRole={onPress ? 'button' : undefined} disabled={!onPress} onPress={onPress} style={({ pressed }) => [styles.line, pressed && { opacity: 0.6 }]}>
+    <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [styles.line, pressed && { opacity: 0.6 }]}
+    >
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[type.text, { color: color.ink }]}>{label}</Text>
         {sub ? <Text style={[type.secondary, { color: subColor ?? color.secondary }]}>{sub}</Text> : null}
@@ -405,7 +481,16 @@ function MoreIcon() {
 function CameraIcon() {
   const color = useColors();
   return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={color.onInk} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <Svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color.onInk}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <Path d="M4 8.5h3l1.5-2.5h7L17 8.5h3v10H4Z" />
       <Circle cx={12} cy={13} r={3.25} />
     </Svg>
@@ -415,8 +500,17 @@ function CameraIcon() {
 const useStyles = themed((color) =>
   StyleSheet.create({
     gutter: { paddingHorizontal: space.gutter },
-    header: { height: size.touch, flexDirection: 'row', justifyContent: 'flex-end', paddingRight: space.gutter - space.m },
-    who: { flexDirection: 'row', alignItems: 'center', gap: space.l, paddingHorizontal: space.gutter },
+    who: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.l,
+      paddingLeft: space.gutter,
+      paddingRight: space.gutter - space.m,
+      paddingTop: space.l,
+    },
+    more: { alignSelf: 'flex-start' },
+    counts: { flexDirection: 'row', gap: space.xxl, paddingTop: space.l },
+    count: { minHeight: size.touch, justifyContent: 'center' },
     camera: {
       position: 'absolute',
       right: -space.xs,
@@ -431,7 +525,6 @@ const useStyles = themed((color) =>
       justifyContent: 'center',
     },
     names: { flex: 1, minWidth: 0, gap: 2 },
-    metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.xs, paddingTop: space.s },
     metaLink: { minHeight: size.touch, justifyContent: 'center' },
     center: { textAlign: 'center' },
     spot: { flexDirection: 'row', alignItems: 'center', gap: space.xl, paddingHorizontal: space.gutter, paddingTop: space.xxl },
