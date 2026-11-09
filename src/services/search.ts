@@ -26,6 +26,8 @@ export type CatalogCard = {
   lowCents: number | null;
   /** Priced printings, the base one first (0011_catalog_printings.sql). Empty until imported. */
   printings?: Printing[];
+  /** Collectors' nicknames, main one first: "Scream Pikachu" (0026_card_nicknames.sql). */
+  aka?: string[];
 };
 
 /** One printing of a card and its TCGplayer market: "Holofoil", "Reverse Holofoil", "1st Edition". */
@@ -61,6 +63,7 @@ export type Row = {
   market_cents: number | null;
   low_cents: number | null;
   printings?: { name: string; market_cents: number | null; low_cents: number | null }[] | null;
+  aka?: string[] | null;
 };
 
 export const fromRow = (r: Row): CatalogCard => ({
@@ -76,22 +79,57 @@ export const fromRow = (r: Row): CatalogCard => ({
   marketCents: r.market_cents,
   lowCents: r.low_cents,
   printings: (r.printings ?? []).map((x) => ({ name: x.name, marketCents: x.market_cents, lowCents: x.low_cents })),
+  aka: r.aka ?? [],
 });
 
 /** Words a search is split into; "#205" and "205/165" both search the number. */
 export function terms(q: string): string[] {
-  return q
-    .toLowerCase()
-    .replace(/[#/,]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
+  return fold(q).split(' ').filter(Boolean);
 }
 
-/** Mock search: every word must appear in name, set, set code or number (same rule as SQL). */
-export function matches(c: Pick<CatalogCard, 'name' | 'setName' | 'setCode' | 'number'>, q: string): boolean {
-  const hay = `${c.name} ${c.setName} ${c.setCode ?? ''} ${c.number ?? ''}`.toLowerCase();
+/**
+ * Mock and vault search: every word must appear in name, set, set code or number (same rule as
+ * SQL). The name also counts with its spaces taken out, so "kai sa" and "hooh" both match, and
+ * so do the card's nicknames ("scream pikachu").
+ */
+export function matches(c: Pick<CatalogCard, 'name' | 'setName' | 'setCode' | 'number'> & { aka?: string[] | null }, q: string): boolean {
+  const name = fold(c.name);
+  const aka = fold((c.aka ?? []).join(' '));
+  const hay = `${name} ${name.replace(/ /g, '')} ${fold(c.setName)} ${fold(c.setCode)} ${fold(c.number)} ${aka} ${aka.replace(/ /g, '')}`;
   const t = terms(q);
   return t.length > 0 && t.every((w) => hay.includes(w));
+}
+
+/**
+ * Text as search compares it: lowercase, accents off, apostrophes removed, other punctuation a
+ * space. "Kai'Sa", "Kai’Sa" (the iPhone's curly apostrophe) and "kaisa" all fold to "kaisa",
+ * "Pokémon" to "pokemon", "Ho-Oh" to "ho oh". Same rule as search_fold in
+ * 0023_forgiving_search.sql; change both together.
+ */
+export function fold(s: string | null | undefined): string {
+  return (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/['’‘`´ʼ]/g, '')
+    .replace(/[!-/:-@[-`{-~“”–—…·•\s]+/g, ' ')
+    .trim();
+}
+
+/**
+ * How well a card's name fits a search (lower is better), as in SQL search_hits: 0 the name typed
+ * exactly (without TCGplayer's " - 205/165" or " (Alternate Art)"), 1 the name starts with it,
+ * 2 the name holds it, 3 the words are found elsewhere too. Riftbound's ", Daughter of the Void"
+ * is dropped like TCGplayer's " - 205/165".
+ */
+export function nameTier(name: string, q: string): number {
+  const s = fold(q);
+  const n = fold(name);
+  const key = fold(name.split(' - ')[0].split(' (')[0].split(', ')[0]).replace(/ /g, '');
+  if (key === s.replace(/ /g, '')) return 0;
+  if (n.startsWith(s) || key.startsWith(s.replace(/ /g, ''))) return 1;
+  if (n.includes(s)) return 2;
+  return 3;
 }
 
 const cache = new Map<number, CatalogCard>();
@@ -101,7 +139,11 @@ export async function searchCards(q: string, game: Game | null): Promise<Catalog
   if (!terms(q).length) return [];
   let out: CatalogCard[];
   if (!supabase) {
-    out = mockCatalog.filter((c) => (!game || c.game === game) && matches(c, q));
+    out = mockCatalog
+      .filter((c) => (!game || c.game === game) && matches(c, q))
+      .map((c, i) => ({ c, i, t: nameTier(c.name, q) }))
+      .sort((a, b) => a.t - b.t || a.i - b.i)
+      .map((x) => x.c);
   } else {
     const { data, error } = await supabase.rpc('search_catalog', { q, game_filter: game, lim: 60 });
     if (error) throw error;
