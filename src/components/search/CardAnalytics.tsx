@@ -21,6 +21,7 @@ import type { Card } from '../../types';
 import { Hairline } from '../ui';
 import { buySignal, shortDay, signalGap, thinRead } from '../../pricing/buySignal';
 import { BuySignalDial } from './BuySignal';
+import { SaleList } from './SaleLines';
 import { GradeLadder, RangeMeter, SetRow } from './CardInsights';
 
 export type { Choice };
@@ -75,6 +76,7 @@ export function CardAnalyticsView({
     <>
       {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} /> : null}
       {quiet && price ? <ThinStats price={price} /> : null}
+      {graded && price ? <SaleList price={price} /> : null}
       {hist && price ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
       {price ? <BuySignalDial signal={sig} gap={sig ? undefined : signalGap(price, graded, quiet)} graded={graded} /> : null}
       {prices ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}

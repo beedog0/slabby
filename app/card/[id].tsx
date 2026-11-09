@@ -18,7 +18,7 @@ import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { TrendSentence } from '../../src/components/TrendSentence';
 import { CardAnalytics } from '../../src/components/search/CardAnalytics';
-import { SaleLines } from '../../src/components/search/SaleLines';
+import { priceCaption } from '../../src/components/search/SaleLines';
 import { BackIcon, Chevron, Hairline, IconButton } from '../../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../../src/lib/format';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../../src/lib/games';
@@ -109,10 +109,11 @@ export default function SlabDetail() {
             ) : card.paidCents != null ? (
               <Text style={[type.text, { color: color.secondary }]}>paid {money(card.paidCents)}</Text>
             ) : null}
+            {priceCaption(price, raw) ? (
+              <Text style={[type.secondary, { color: color.secondary, textAlign: 'right' }]}>{priceCaption(price, raw)}</Text>
+            ) : null}
           </View>
         </View>
-
-        {raw ? null : <SaleLines price={price} style={styles.gutter} />}
 
         {detail ? (
           <View style={styles.gutter}>

@@ -21,7 +21,7 @@ import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/compone
 import { money, pct } from '../../src/lib/format';
 import { lastReal } from '../../src/pricing/buySignal';
 import { canAutoPrice } from '../../src/pricing/lastSales';
-import { SaleLines } from '../../src/components/search/SaleLines';
+import { priceCaption } from '../../src/components/search/SaleLines';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
@@ -222,10 +222,11 @@ export default function SearchedCard() {
                 <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{pct(change)}</Text> {hist!.days}d
               </Text>
             ) : null}
+            {priceCaption(price, pick === 'raw') ? (
+              <Text style={[type.secondary, { color: color.secondary, textAlign: 'right' }]}>{priceCaption(price, pick === 'raw')}</Text>
+            ) : null}
           </View>
         </View>
-
-        {pick !== 'raw' ? <SaleLines price={price} style={styles.gutter} /> : null}
 
         {draft ? (
           <View style={[styles.gutter, { paddingTop: space.xl }]}>
