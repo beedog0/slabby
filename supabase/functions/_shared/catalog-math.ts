@@ -134,6 +134,13 @@ export type Summary = {
   /** First and last real data point in the window. */
   since?: string;
   lastReal?: string;
+  /** Up to 180 days of daily market, carried forward over gaps, starting histFrom (card-prices v2). */
+  histFrom?: string;
+  hist?: number[];
+  /** The latest day with a sale (graded only): that day's average and how many sold. */
+  lastSale?: LastSale | null;
+  /** Graded (v3): every day with a sale in the history, that day's average and count. */
+  saleDays?: LastSale[];
 };
 
 /** Days in the last `days` that have real data, oldest first. */
@@ -149,6 +156,45 @@ export function withPoints(s: Summary | null, days: string[]): Summary | null {
   if (!s) return s;
   return { ...s, points: days.length, since: days[0], lastReal: days[days.length - 1] };
 }
+
+export type LastSale = { day: string; cents: number; count: number };
+
+/**
+ * Daily rows → one value per calendar day from the first row to the last, carrying the last
+ * value over days with no row, so a chart can date every point from histFrom.
+ */
+export function denseHistory(rows: Daily[]): { histFrom: string; hist: number[] } | null {
+  if (!rows.length) return null;
+  const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day));
+  const by = new Map(sorted.map((r) => [r.day, r.market_cents]));
+  const from = sorted[0].day;
+  const to = sorted[sorted.length - 1].day;
+  const hist: number[] = [];
+  let last = sorted[0].market_cents;
+  for (let d = from; d <= to; d = nextDay(d)) {
+    last = by.get(d) ?? last;
+    hist.push(last);
+  }
+  return { histFrom: from, hist };
+}
+
+function nextDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** The most recent day with at least one sale, from PPT's daily {average, count}. */
+export function lastSale(sales: Record<string, { average: number; count: number }>): LastSale | null {
+  let best: string | null = null;
+  for (const [day, s] of Object.entries(sales)) if (s?.count > 0 && s.average > 0 && (!best || day > best)) best = day;
+  if (!best) return null;
+  const s = sales[best];
+  return { day: best.slice(0, 10), cents: Math.round(s.average * 100), count: s.count };
+}
+
+/** Bump when the card-prices answer gains fields, so cached answers are fetched again once. 3 adds saleDays. */
+export const ANSWER_VERSION = 3;
 
 export function summarize(rows: Daily[]): Summary | null {
   if (!rows.length) return null;
@@ -204,4 +250,40 @@ export function packPrice(products: TcgProduct[], prices: TcgPrice[]): { name: s
     .map((p) => ({ name: p.name.trim(), cents: market.get(p.productId)! }))
     .sort((a, b) => a.name.length - b.name.length || a.cents - b.cents);
   return packs[0] ?? null;
+}
+
+/** One product's weekly TCGplayer market (raw_price_weekly): cents[i] is week from_day + 7i. */
+export type Weekly = { from_day: string; cents: (number | null)[] };
+
+/**
+ * Raw history reaching back past PPT's 180 days: the weekly backfill (from Feb 2024), spread over
+ * every day by carrying each week forward, then the daily history from `histFrom` on. Leading
+ * empty weeks are dropped. Returns the daily history unchanged when there is no older weekly data.
+ */
+export function extendHistory(
+  daily: { histFrom: string; hist: number[] } | null,
+  weekly: Weekly | null,
+): { histFrom: string; hist: number[] } | null {
+  if (!weekly?.cents?.length) return daily;
+  const first = weekly.cents.findIndex((c) => c != null && c > 0);
+  if (first < 0) return daily;
+  const start = addDaysIso(weekly.from_day, first * 7);
+  const end = daily ? daily.histFrom : addDaysIso(weekly.from_day, (weekly.cents.length - 1) * 7 + 1);
+  if (start >= end) return daily;
+  const older: number[] = [];
+  let last = weekly.cents[first] as number;
+  let i = 0;
+  for (let d = start; d < end; d = nextDay(d), i++) {
+    const w = first + Math.floor(i / 7);
+    const c = i % 7 === 0 ? weekly.cents[w] : null;
+    if (c != null && c > 0) last = c;
+    older.push(last);
+  }
+  return { histFrom: start, hist: daily ? [...older, ...daily.hist] : older };
+}
+
+function addDaysIso(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }

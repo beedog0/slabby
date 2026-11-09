@@ -7,7 +7,8 @@
 
 import { router } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ebayCardListedUrl, ebayCardSoldUrl, type EbayCard } from '../../lib/ebay';
 import { money, pct } from '../../lib/format';
 import { gradingLine, gradingRead, history, liquidity, ratio, spread, spreadWord, trend } from '../../pricing/cardStats';
 import { catalogFor, choiceFor, type Choice } from '../../services/cardLink';
@@ -17,7 +18,7 @@ import type { Found } from '../../services/searchFilters';
 import { setCards } from '../../services/setCards';
 import { color, space, type } from '../../theme/tokens';
 import type { Card } from '../../types';
-import { Hairline } from '../ui';
+import { Chevron, Hairline } from '../ui';
 import { GradeLadder, RangeMeter, SetRow } from './CardInsights';
 
 export type { Choice };
@@ -49,6 +50,7 @@ export function CardAnalyticsView({
   onPick,
   onAll,
   con,
+  ebay,
 }: {
   pick: Choice;
   prices: SearchPrices | null | undefined;
@@ -57,6 +59,8 @@ export function CardAnalyticsView({
   onPick: (c: Choice) => void;
   onAll?: () => void;
   con?: boolean;
+  /** The card, for the eBay sold and listed links. */
+  ebay?: Omit<EbayCard, 'grade'>;
 }) {
   const price = !prices ? null : pick === 'raw' ? prices.raw : prices.grades[pick];
   const live = !!price && !!prices && (pick === 'raw' || !isQuiet(price, prices.fetchedAt));
@@ -65,6 +69,7 @@ export function CardAnalyticsView({
     <>
       {live && price && prices ? <KeyStats pick={pick} price={price} prices={prices} /> : null}
       {hist && price ? <RangeMeter low={hist.low} high={hist.high} now={price.marketCents} days={hist.days} /> : null}
+      {ebay ? <EbayLinks card={{ ...ebay, grade: pick }} /> : null}
       {prices ? <GradeLadder prices={prices} pick={pick} onPick={onPick} /> : null}
       <SetRow setName={setTitle(setName)} cards={more} onAll={onAll} con={con} />
     </>
@@ -131,6 +136,7 @@ export function CardAnalytics({ card, con }: { card: Card; con?: boolean }) {
         onPick={(g) => (g === pick ? undefined : open(g))}
         onAll={groupId != null ? () => openSetPage(cat, groupId) : undefined}
         con={con}
+        ebay={cat}
       />
     </View>
   );
@@ -233,7 +239,39 @@ export function KeyStats({ pick, price, prices }: { pick: Choice; price: CardPri
   );
 }
 
+/**
+ * Check the comps yourself: eBay sold and active listings for this card at the picked grade,
+ * searched by name, set, number and language. Quiet rows, opened in the browser.
+ */
+export function EbayLinks({ card }: { card: EbayCard }) {
+  const grade = card.grade === 'raw' ? 'raw' : `PSA ${card.grade.slice(3)}`;
+  const rows = [
+    { label: 'Sold on eBay', hint: `Opens eBay sold listings for this card, ${grade}`, url: ebayCardSoldUrl(card) },
+    { label: 'Listed on eBay', hint: `Opens eBay listings for this card, ${grade}, cheapest first`, url: ebayCardListedUrl(card) },
+  ];
+  return (
+    <View style={{ paddingTop: space.l }}>
+      {rows.map((r) => (
+        <View key={r.label}>
+          <Hairline />
+          <Pressable
+            accessibilityRole="link"
+            accessibilityHint={r.hint}
+            onPress={() => Linking.openURL(r.url).catch(() => {})}
+            style={({ pressed }) => [styles.link, pressed && { opacity: 0.5 }]}
+          >
+            <Text style={[type.text, { color: color.ink }]}>{r.label}</Text>
+            <Chevron />
+          </Pressable>
+        </View>
+      ))}
+      <Hairline />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  link: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: space.m },
   statRow: { flexDirection: 'row', gap: space.xl, paddingVertical: space.m },
   stat: { flex: 1, gap: 2 },
 });

@@ -27,6 +27,11 @@ export type CardPrice = {
   lastSaleDay?: string | null;
   /** Sales over 90 days: sales_30d on the last day, 30 and 60 days before it. */
   sales90d?: number;
+  /** Search card page only (card-prices v2): up to 180 days of daily market, one value per day from histFrom. */
+  histFrom?: string;
+  hist?: number[];
+  /** Search card page only: the latest day with a graded sale, its average and how many sold. */
+  lastSale?: { day: string; cents: number; count: number } | null;
 };
 
 const mock = pricesJson as Record<string, CardPrice>;
