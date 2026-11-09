@@ -19,6 +19,7 @@ import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { cardPrice, money, pct, promoTag, thinNote } from '../../src/lib/format';
+import { lastReal } from '../../src/pricing/buySignal';
 import { CardName } from '../../src/components/CardName';
 import { chartRanges, history, rangeLabel, rangeSeries, realPoints, type Range } from '../../src/pricing/cardStats';
 import { FindPriceRow } from '../../src/components/estimate/FindPriceRow';
@@ -477,7 +478,13 @@ function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string 
   if (prices.capped && prices.source === 'catalog') return 'Graded prices load again tomorrow.';
   if (prices.source === 'catalog') return 'Graded prices aren’t reachable right now.';
   // The price shown in the header for a quiet grade is the last 30-day median before it went quiet.
-  if (quiet) return lastSoldLine(quiet, pick) ?? `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
+  if (quiet)
+    return (
+      lastSoldLine(quiet, pick) ??
+      (lastReal(quiet)
+        ? `No ${gradeLabel(pick)} sales in 30 days. Last sale ${fmtDay(lastReal(quiet)!)}; ${money(quiet.marketCents)} is the median around it.`
+        : `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`)
+    );
   return `No ${gradeLabel(pick)} sales in the last 90 days.`;
 }
 

@@ -26,20 +26,25 @@ function arc(f1: number, f2: number) {
   return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${dial.r} ${dial.r} 0 0 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
 }
 
-export function BuySignalDial({ signal: s }: { signal: Signal }) {
+/**
+ * With no read (`s` null), the dial still shows, faded and without a needle, with `gap` saying
+ * what's missing, so a card with a price never just loses the section.
+ */
+export function BuySignalDial({ signal: s, gap, graded = true }: { signal: Signal | null; gap?: string; graded?: boolean }) {
   const color = useColors();
   const tint = useIsDark() ? signal.dark : signal.light;
-  const tip = at(s.needle, dial.r - dial.stroke - 6);
-  const word = verdictWord[s.verdict];
+  const tip = s ? at(s.needle, dial.r - dial.stroke - 6) : null;
+  const word = s ? verdictWord[s.verdict] : graded ? 'Not enough sales' : 'Not enough history';
+  const because = s ? s.because : (gap ?? '');
   return (
     <Section title="Buy signal" note="For buying at today’s market price">
-      <View style={styles.dial} accessible accessibilityLabel={`Buy signal: ${word}. ${s.because}`}>
-        <Svg width={dial.w} height={dial.h} viewBox={`0 0 ${dial.w} ${dial.h}`}>
+      <View style={styles.dial} accessible accessibilityLabel={`Buy signal: ${word}. ${because}`}>
+        <Svg opacity={s ? 1 : 0.45} width={dial.w} height={dial.h} viewBox={`0 0 ${dial.w} ${dial.h}`}>
           <Path d={arc(0, 1 / 3 - GAP)} stroke={tint.buy} strokeWidth={dial.stroke} strokeLinecap="round" fill="none" />
           <Path d={arc(1 / 3 + GAP, 2 / 3 - GAP)} stroke={tint.fair} strokeWidth={dial.stroke} fill="none" />
           <Path d={arc(2 / 3 + GAP, 1)} stroke={tint.hold} strokeWidth={dial.stroke} strokeLinecap="round" fill="none" />
-          <Line x1={cx} y1={cy} x2={tip.x} y2={tip.y} stroke={color.ink} strokeWidth={3} strokeLinecap="round" />
-          <Circle cx={cx} cy={cy} r={7} fill={color.ink} />
+          {tip ? <Line x1={cx} y1={cy} x2={tip.x} y2={tip.y} stroke={color.ink} strokeWidth={3} strokeLinecap="round" /> : null}
+          {tip ? <Circle cx={cx} cy={cy} r={7} fill={color.ink} /> : null}
           <SvgText x={cx - dial.r - dial.stroke / 2} y={dial.h} fontSize={12} fill={color.secondary}>
             Buy
           </SvgText>
@@ -48,23 +53,37 @@ export function BuySignalDial({ signal: s }: { signal: Signal }) {
           </SvgText>
         </Svg>
       </View>
-      <Text style={[type.section, styles.verdict, { color: color.ink }]}>{word}</Text>
-      <Text style={[type.text, { color: color.secondary, textAlign: 'center', paddingTop: space.xs }]}>{s.because}</Text>
-      <View style={{ paddingTop: space.l }}>
-        {s.factors.map((f) => (
-          <View key={f.key}>
-            <Hairline />
-            <View style={styles.row} accessible accessibilityLabel={`${f.label}, ${f.word}, ${f.detail}`}>
-              <View style={styles.line}>
-                <Text style={[type.text, { color: color.ink, flexShrink: 1 }]}>{f.label}</Text>
-                <Text style={[type.text, { color: color.ink, fontWeight: '600', textAlign: 'right', flexShrink: 1 }]}>{f.word}</Text>
+      <Text style={[type.section, styles.verdict, { color: s ? color.ink : color.secondary }]}>{word}</Text>
+      <Text style={[type.text, { color: color.secondary, textAlign: 'center', paddingTop: space.xs }]}>{because}</Text>
+      {s ? (
+        <View style={{ paddingTop: space.l }}>
+          {s.factors.map((f) => (
+            <View key={f.key}>
+              <Hairline />
+              <View style={styles.row} accessible accessibilityLabel={`${f.label}, ${f.word}, ${f.detail}`}>
+                <View style={styles.line}>
+                  <Text style={[type.text, { color: color.ink, flexShrink: 1 }]}>{f.label}</Text>
+                  <Text
+                    style={[
+                      type.text,
+                      {
+                        color: color.ink,
+                        fontWeight: '600',
+                        textAlign: 'right',
+                        flexShrink: 1,
+                      },
+                    ]}
+                  >
+                    {f.word}
+                  </Text>
+                </View>
+                <Text style={[type.secondary, { color: color.secondary }]}>{f.detail}</Text>
               </View>
-              <Text style={[type.secondary, { color: color.secondary }]}>{f.detail}</Text>
             </View>
-          </View>
-        ))}
-        <Hairline />
-      </View>
+          ))}
+          <Hairline />
+        </View>
+      ) : null}
     </Section>
   );
 }
@@ -73,5 +92,10 @@ const styles = StyleSheet.create({
   dial: { alignItems: 'center', paddingTop: space.s },
   verdict: { textAlign: 'center', paddingTop: space.s },
   row: { paddingVertical: space.m, gap: 2 },
-  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.m },
+  line: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: space.m,
+  },
 });
