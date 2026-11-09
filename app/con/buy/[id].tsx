@@ -318,10 +318,10 @@ export default function TheyreAsking() {
   const ticks: Tick[] = [];
   if (buy) {
     if (buy.target === buy.max)
-      ticks.push({ value: buy.target, label: 'Target · Max', color: color.loss, labelColor: color.loss, height: 14 });
+      ticks.push({ value: buy.target, label: 'Target · Max', color: color.ink, labelColor: color.ink, height: 14 });
     else {
       ticks.push({ value: buy.target, label: 'Target', color: color.ink });
-      ticks.push({ value: buy.max, label: 'Max', color: color.loss, labelColor: color.loss, height: 14 });
+      ticks.push({ value: buy.max, label: 'Max', color: color.ink, labelColor: color.ink, height: 14 });
     }
   }
   if (market) ticks.push({ value: market, label: estimated ? 'Estimate' : 'Market', color: color.secondary });

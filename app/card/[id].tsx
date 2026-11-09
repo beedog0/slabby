@@ -115,7 +115,13 @@ export default function SlabDetail() {
           <View style={{ gap: 2, flex: 1 }}>
             <Text style={[type.body, { color: color.ink, fontWeight: '400' }]}>Asking price</Text>
             <Text style={[type.secondary, { color: color.secondary }]}>
-              Lowest you'll take <Text style={{ color: color.loss }}>{money(row.floor)}</Text>
+              {row.askRaisedToPaid ? (
+                'Raised to what you paid'
+              ) : (
+                <>
+                  Lowest you'll take <Text style={{ color: color.ink }}>{money(row.floor)}</Text>
+                </>
+              )}
             </Text>
           </View>
           <View style={styles.priceLink}>
