@@ -8,7 +8,7 @@
 
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, type ComponentRef, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Avatar } from '../../src/components/Avatar';
@@ -65,7 +65,7 @@ export default function ProfileTab() {
         const p = useProfile.getState();
         p.save({ name: p.name, handle: p.handle, bio: p.bio, photo });
       })
-      .catch(() => {});
+      .catch((e: Error) => Alert.alert('Couldn’t open your photos', e?.message || 'Try again.'));
 
   const moreRef = useRef<ComponentRef<typeof View>>(null);
   const accountDetail = guest ? 'Not signed in' : saving ? 'Saving…' : syncError ? 'Not saved yet' : 'Saved';
