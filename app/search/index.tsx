@@ -90,6 +90,10 @@ export default function Search() {
     st.y = top;
     slide.setValue(-Math.min(top, topH + st.rowHidden));
   };
+  const settle = (y: number, velocity: number) => {
+    if (velocity !== 0 || y <= 0 || y >= topH) return;
+    listRef.current?.scrollToOffset({ offset: y < topH / 2 ? 0 : topH, animated: true });
+  };
   // Switching list and grid remounts the list at the top, without a scroll event.
   useEffect(() => {
     scrollState.current = { y: 0, rowHidden: 0 };
@@ -278,6 +282,9 @@ export default function Search() {
             listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => onListScroll(e.nativeEvent.contentOffset.y),
           })}
           scrollEventThrottle={16}
+          // Never leave the title and game tabs half under the status bar: settle shown or hidden.
+          onScrollEndDrag={(e) => settle(e.nativeEvent.contentOffset.y, e.nativeEvent.velocity?.y ?? 0)}
+          onMomentumScrollEnd={(e) => settle(e.nativeEvent.contentOffset.y, 0)}
           scrollIndicatorInsets={{ top: headerH }}
           style={{ paddingTop: insets.top }}
           ListEmptyComponent={
