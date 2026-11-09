@@ -33,6 +33,14 @@
         }
       ],
       [
+        "expo-media-library",
+        {
+          "photosPermission": "Slabby reads a photo you pick to find the card and its price.",
+          "savePhotosPermission": "Slabby saves the card images you make to your photos.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Slabby uses the camera to read the QR code on your PSA label.",

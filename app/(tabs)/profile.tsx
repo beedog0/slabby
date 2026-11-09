@@ -7,7 +7,7 @@
 // Settings (Edit profile, Account, Pricing rules, Appearance) live in the … menu at the top.
 
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useRef, type ComponentRef, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -15,11 +15,11 @@ import { Avatar } from '../../src/components/Avatar';
 import { SlabView } from '../../src/components/SlabView';
 import { openDropdown } from '../../src/components/menu/Dropdown';
 import { APPEARANCE_LABEL, openAppearance } from '../../src/components/menu/appearanceMenu';
-import { shareSlabs } from '../../src/components/share/ShareCard';
 import { IconButton, PrimaryButton } from '../../src/components/ui';
 import { changeText, money } from '../../src/lib/format';
 import { rowFor } from '../../src/pricing/portfolio';
 import { profileStats, showcase } from '../../src/pricing/profileStats';
+import { fetchFriends, publishShowcase } from '../../src/services/friends';
 import { pickProfilePhoto, publishProfile } from '../../src/services/profile';
 import { useAccount } from '../../src/store/account';
 import { useAppearance } from '../../src/store/appearance';
@@ -46,9 +46,17 @@ export default function ProfileTab() {
   const prices = usePrices((s) => s.byKey);
 
   // Signed in: make sure the public copy matches (a guest who just signed in, or an edit made offline).
+  // The showcase goes up after the profile: its row hangs off the profile's.
+  const [friendCount, setFriendCount] = useState<number | null>(null);
   useFocusEffect(
     useCallback(() => {
-      if (!guest) publishProfile(useProfile.getState()).catch(() => {});
+      if (!guest)
+        publishProfile(useProfile.getState())
+          .then(() => publishShowcase())
+          .catch(() => {});
+      fetchFriends()
+        .then((l) => setFriendCount(l.friends.length))
+        .catch(() => {});
     }, [guest]),
   );
 
@@ -71,7 +79,12 @@ export default function ProfileTab() {
   const accountDetail = guest ? 'Not signed in' : saving ? 'Saving…' : syncError ? 'Not saved yet' : 'Saved';
   const more = () =>
     openDropdown(moreRef, [
-      [{ label: 'Edit profile', onPress: edit }],
+      [
+        { label: 'Edit profile', onPress: edit },
+        { label: 'Find friends', onPress: () => router.push('/friends') },
+        { label: 'Sharing', onPress: () => router.push('/settings/sharing') },
+        { label: 'See your profile as others do', onPress: () => router.push('/preview-profile') },
+      ],
       [
         { label: 'Account', detail: accountDetail, onPress: () => router.push('/settings/account') },
         { label: 'Import collection', onPress: () => router.push('/import') },
@@ -119,6 +132,12 @@ export default function ProfileTab() {
             {profile.handle ? `@${profile.handle}` : 'Pick a handle so friends can find you'}
           </Text>
           {profile.bio ? <Text style={[type.text, styles.center, { color: color.ink, paddingTop: space.s }]}>{profile.bio}</Text> : null}
+        </Pressable>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/friends')} hitSlop={8}>
+          <Text style={[type.text, { color: color.ink }]}>
+            {friendCount ? `${friendCount} ${friendCount === 1 ? 'friend' : 'friends'}` : 'Find friends'}
+            <Text style={{ color: color.secondary }}> ›</Text>
+          </Text>
         </Pressable>
         {guest ? (
           <Pressable accessibilityRole="link" onPress={() => router.push('/settings/account')} hitSlop={8}>
@@ -215,7 +234,7 @@ export default function ProfileTab() {
 
       <View style={styles.share}>
         {hero ? (
-          <PrimaryButton title="Share profile" onPress={() => shareSlabs(shelf.map((r) => r.card))} />
+          <PrimaryButton title="Share profile" onPress={() => router.push('/share-profile')} />
         ) : (
           <PrimaryButton title="Scan a slab" onPress={() => router.push('/scan')} />
         )}
