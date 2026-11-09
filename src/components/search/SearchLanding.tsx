@@ -11,23 +11,30 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { cardPrice, money } from '../../lib/format';
-import { underBy, wishView } from '../../pricing/wishlistView';
+import { wishView } from '../../pricing/wishlistView';
 import { cachedLanding, EMPTY_LANDING, fetchLanding, type HotSet, type Landing } from '../../services/landing';
-import { displayName, gradeLabel } from '../../services/search';
+import { displayName } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
 import { useRecent } from '../../store/recent';
-import { useWishlist, type WishItem } from '../../store/wishlist';
+import { useWishlist } from '../../store/wishlist';
 import type { Game } from '../../types';
 import { radius, size, space, type } from '../../theme/tokens';
 import { themed, useColors } from '../../theme/theme';
 import { ArtImage, prefetchArt } from '../ArtImage';
 import { Hairline } from '../ui';
+import { WishTile } from '../WishTile';
 import { CatalogTile, ChangeText, cardH } from './CatalogTile';
 
-const POPULAR = ['Charizard', 'Umbreon', 'Pikachu', 'Mew', 'Gengar', 'Rayquaza'];
-const RAIL_W = 112;
+const POPULAR: Record<Game | 'all', string[]> = {
+  all: ['Charizard', 'Umbreon', 'Pikachu', 'Mew', 'Gengar', 'Rayquaza'],
+  pokemon: ['Charizard', 'Umbreon', 'Pikachu', 'Mew', 'Gengar', 'Rayquaza'],
+  onepiece: ['Luffy', 'Zoro', 'Shanks', 'Nami', 'Ace', 'Yamato'],
+  riftbound: ['Jinx', 'Ahri', 'Yasuo', 'Lux', 'Viktor', 'Teemo'],
+};
+/** Rail tiles: two and a half across, so the next one peeks in. */
+const railW = (screen: number) => Math.floor((screen - space.gutter - space.m * 2) / 2.6);
 const MOVERS_SHOWN = 4;
-const MOVERS_MORE = 10;
+const MOVERS_MORE = 12;
 const SEALED_SHOWN = 6;
 const SEALED_MORE = 12;
 
@@ -48,8 +55,10 @@ export function SearchLanding({
   const color = useColors();
   const styles = useStyles();
   const { width } = useWindowDimensions();
-  const { queries, viewed, clear } = useRecent();
-  const wished = useWishlist((s) => s.items);
+  const { queries, viewed: allViewed, clearQueries } = useRecent();
+  const viewed = useMemo(() => (game ? allViewed.filter((c) => c.game === game) : allViewed), [allViewed, game]);
+  const allWished = useWishlist((s) => s.items);
+  const wished = useMemo(() => (game ? allWished.filter((w) => w.game === game) : allWished), [allWished, game]);
   const wish = useMemo(() => wishView(wished), [wished]);
   const feed = useLanding(game);
   const [dir, setDir] = useState<'up' | 'down'>('up');
@@ -58,12 +67,13 @@ export function SearchLanding({
 
   const half = Math.floor((width - space.gutter * 2 - space.l) / 2);
   const third = Math.floor((width - space.gutter * 2 - space.m * 2) / 3);
-  const searches = queries.length ? queries : POPULAR;
+  const searches = queries.length ? queries : POPULAR[game ?? 'all'];
 
   // Up and Down: show whichever has cards; the toggle only when both do.
   const side = dir === 'up' ? (feed.up.length ? 'up' : 'down') : feed.down.length ? 'down' : 'up';
   const movers = (side === 'up' ? feed.up : feed.down).slice(0, moreMovers ? MOVERS_MORE : MOVERS_SHOWN);
-  const moverDays = movers.length ? Math.max(...movers.map((m) => m.days)) : 7;
+  const dayList = movers.map((m) => m.days);
+  const moverDays = dayList.length && Math.min(...dayList) === Math.max(...dayList) ? dayList[0] : null;
   const sealed = feed.sealedNew.slice(0, moreSealed ? SEALED_MORE : SEALED_SHOWN);
   const hot = feed.sets.length && feed.sets[0].why === 'hot';
 
@@ -82,7 +92,7 @@ export function SearchLanding({
         >
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail} keyboardShouldPersistTaps="handled">
             {[...wish.below, ...wish.watching].slice(0, 10).map((w) => (
-              <WishTile key={w.key} item={w} width={RAIL_W} />
+              <WishTile key={w.key} item={w} width={railW(width)} />
             ))}
           </ScrollView>
         </Section>
@@ -90,7 +100,7 @@ export function SearchLanding({
 
       <Section
         title={queries.length ? 'Recent searches' : 'Popular searches'}
-        action={queries.length ? { label: 'Clear', onPress: clear } : undefined}
+        action={queries.length ? { label: 'Clear', onPress: clearQueries } : undefined}
         first={!wished.length}
       >
         <View style={styles.chips}>
@@ -107,7 +117,7 @@ export function SearchLanding({
       {movers.length ? (
         <Section
           title="Top movers"
-          sub={`TCGplayer market · ${moverDays >= 7 ? 'last 7 days' : `last ${moverDays} ${moverDays === 1 ? 'day' : 'days'}`}`}
+          sub={`TCGplayer market · ${moverDays == null ? 'last few days' : moverDays >= 7 ? 'last 7 days' : `last ${moverDays} ${moverDays === 1 ? 'day' : 'days'}`}`}
           right={
             feed.up.length && feed.down.length ? (
               <View style={styles.toggle}>
@@ -135,7 +145,7 @@ export function SearchLanding({
       ) : null}
 
       {sealed.length ? (
-        <Section title="New sealed" sub="Boxes, ETBs and bundles from the newest sets">
+        <Section title="New sealed" sub="Boxes, ETBs, bundles and collections from the newest sets">
           <View style={[styles.grid, { rowGap: space.xl, columnGap: space.m }]}>
             {sealed.map((s) => (
               <CatalogTile key={s.productId} item={s} width={third} showKind change={s.change7d} onPress={() => onOpen(s)} />
@@ -147,12 +157,12 @@ export function SearchLanding({
 
       {feed.sealedPick.length ? (
         <Section title="Sealed pick of the day" sub="A different handful every day">
-          <Rail items={feed.sealedPick} width={RAIL_W} onOpen={onOpen} />
+          <Rail items={feed.sealedPick} width={railW(width)} onOpen={onOpen} />
         </Section>
       ) : null}
 
       {feed.sets.length ? (
-        <Section title={hot ? 'Sets moving' : 'Newest sets'} sub={hot ? 'Median move of each set’s $5+ cards' : undefined}>
+        <Section title={hot ? 'Sets rising' : 'Newest sets'} sub={hot ? 'Median move of each set’s $5+ cards · TCGplayer market' : undefined}>
           <View style={styles.gutter}>
             {feed.sets.slice(0, 6).map((s, i) => (
               <View key={s.groupId}>
@@ -166,7 +176,7 @@ export function SearchLanding({
 
       {viewed.length ? (
         <Section title="Recently viewed">
-          <Rail items={viewed} width={RAIL_W} onOpen={onOpen} />
+          <Rail items={viewed} width={railW(width)} onOpen={onOpen} />
         </Section>
       ) : null}
 
@@ -283,38 +293,6 @@ function SetRow({ set }: { set: HotSet }) {
   );
 }
 
-/** A wishlist card: picture, name, grade, market price, and your price under it (green when the
- *  market is at or under it). Opens the card's wishlist price page. */
-function WishTile({ item: w, width }: { item: WishItem; width: number }) {
-  const color = useColors();
-  const styles = useStyles();
-  const under = underBy(w);
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={displayName(w.name)}
-      onPress={() => router.push({ pathname: '/con/want/[id]', params: { id: String(w.productId), grade: w.grade } })}
-      style={({ pressed }) => [{ width }, pressed && { opacity: 0.85 }]}
-    >
-      <View style={[styles.wishArt, { width, height: cardH(width) }]}>
-        <ArtImage uri={w.imageUrl} label={w.name} recyclingKey={w.key} style={{ flex: 1 }} />
-      </View>
-      <View style={{ paddingTop: space.s, gap: space.xs / 2 }}>
-        <Text numberOfLines={2} style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>
-          {displayName(w.name)}
-        </Text>
-        <Text style={[type.caption, { color: color.secondary }]}>{gradeLabel(w.grade)}</Text>
-        <Text style={[type.numberM, { color: w.marketCents != null ? color.ink : color.secondary }]}>
-          {w.marketCents != null ? cardPrice(w.marketCents) : '—'}
-        </Text>
-        <Text style={[type.caption, { color: under != null ? color.gain : color.secondary }]}>
-          {under != null ? `Under your ${money(w.targetCents)}` : `You pay ${money(w.targetCents)}`}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
 const useStyles = themed((color) =>
   StyleSheet.create({
     gutter: { paddingHorizontal: space.gutter },
@@ -340,7 +318,6 @@ const useStyles = themed((color) =>
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: space.gutter },
     more: { alignSelf: 'center', minHeight: size.touch, justifyContent: 'center', paddingTop: space.m },
     rail: { paddingHorizontal: space.gutter, gap: space.m },
-    wishArt: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
     setRow: { minHeight: size.rowVault, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingVertical: space.s },
     thumb: { width: size.thumbW, height: size.thumbH, borderRadius: radius.thumb, overflow: 'hidden', backgroundColor: color.well },
   }),

@@ -23,3 +23,11 @@ export function wishView(items: WishItem[]): WishView {
   const watching = items.filter((w) => underBy(w) == null);
   return { below, watching, count: items.length, totalCents: items.reduce((t, w) => t + w.targetCents, 0) };
 }
+
+/** Move over the last `days` of a daily price series (oldest first), or null when too short. */
+export function seriesChange(series: number[] | null | undefined, days = 7): number | null {
+  if (!series || series.length <= days) return null;
+  const from = series[series.length - 1 - days];
+  const to = series[series.length - 1];
+  return from > 0 ? to / from - 1 : null;
+}

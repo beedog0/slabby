@@ -10,6 +10,7 @@ import { useMemo, useRef, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../src/components/ArtImage';
+import { ChangeText } from '../src/components/search/CatalogTile';
 import { openDropdown } from '../src/components/menu/Dropdown';
 import { Hairline, IconButton, MoreIcon, PrimaryButton } from '../src/components/ui';
 import { cardPrice, langTag, money, savedAgo } from '../src/lib/format';
@@ -30,7 +31,7 @@ export default function Wishlist() {
   const view = useMemo(() => wishView(items), [items]);
   const moreRef = useRef<ComponentRef<typeof View>>(null);
 
-  const add = () => router.push('/search');
+  const add = () => router.push('/search?want=1');
   const more = () =>
     openDropdown(moreRef, [
       [
@@ -47,7 +48,7 @@ export default function Wishlist() {
       <View style={styles.bar}>
         <View style={styles.grabber} />
         <View style={styles.barRow}>
-          <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10} style={styles.done}>
+          <Pressable accessibilityRole="button" onPress={() => (router.canGoBack() ? router.back() : router.replace('/find'))} hitSlop={10} style={styles.done}>
             <Text style={[type.text, { color: color.ink }]}>Done</Text>
           </Pressable>
           {items.length ? (
@@ -141,21 +142,28 @@ function WishRow({ item: w }: { item: WishItem }) {
           {displayName(w.name)}
           {tag ? <Text style={[type.secondary, { color: color.secondary }]}>{`  ${tag}`}</Text> : null}
         </Text>
-        <Text numberOfLines={1} style={[type.secondary, { color: color.secondary }]}>
+        <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
           {gradeLabel(w.grade)} · {w.setName}
         </Text>
         {checked ? <Text style={[type.caption, { color: color.secondary }]}>Checked {checked}</Text> : null}
       </View>
       <View style={styles.right}>
         <Text style={[type.numberM, { color: w.marketCents != null ? color.ink : color.secondary }]}>
-          {w.marketCents != null ? cardPrice(w.marketCents) : '—'}
+          {w.marketCents != null ? cardPrice(w.marketCents) : 'No price yet'}
         </Text>
-        <Text style={[type.secondary, { color: under != null ? color.gain : color.secondary }]}>
-          {under != null
-            ? under
-              ? `${money(under)} under ${money(w.targetCents)}`
-              : `At your ${money(w.targetCents)}`
-            : `You pay ${money(w.targetCents)}`}
+        {w.change7d != null ? <ChangeText fraction={w.change7d} suffix=" 7d" style={type.secondary} /> : null}
+        <Text style={[type.secondary, { color: color.secondary }]}>
+          {under != null ? (
+            under ? (
+              <>
+                <Text style={{ color: color.gain }}>{money(under)}</Text> under {money(w.targetCents)}
+              </>
+            ) : (
+              `At your ${money(w.targetCents)}`
+            )
+          ) : (
+            `You pay ${money(w.targetCents)}`
+          )}
         </Text>
       </View>
     </Pressable>
@@ -196,6 +204,6 @@ const useStyles = themed((color) =>
       overflow: 'hidden',
       backgroundColor: color.well,
     },
-    right: { alignItems: 'flex-end', gap: 2, maxWidth: '42%' },
+    right: { alignItems: 'flex-end', gap: 2 },
   }),
 );

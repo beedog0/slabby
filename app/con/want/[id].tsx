@@ -26,6 +26,7 @@ import {
   type SearchPrices,
 } from '../../../src/services/search';
 import { useRules } from '../../../src/store/rules';
+import { seriesChange } from '../../../src/pricing/wishlistView';
 import { useWishlist, wishKey, type WishGrade } from '../../../src/store/wishlist';
 import { size, space, type } from '../../../src/theme/tokens';
 import { useColors } from '../../../src/theme/theme';
@@ -63,6 +64,13 @@ export default function WishlistPrice() {
   }, [productId]);
 
   const price = prices === undefined ? undefined : grade === 'raw' ? prices?.raw : prices?.grades[grade];
+  // Opening a wished card keeps its stored market fresh, so the Wishlist never says "under" on a
+  // price this page has just shown to be stale.
+  const seeMarket = useWishlist((s) => s.seeMarket);
+  useEffect(() => {
+    if (existing && price) seeMarket(existing.key, price.marketCents, price.asOf, seriesChange(price.series90));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [price?.marketCents, existing?.key]);
   const market = price?.marketCents ?? null;
   // A last-sold headline (under 5 sales) never fills in a target or max.
   const buy = canAutoPrice(price) ? buyPrices(market, rules) : null;
@@ -100,6 +108,7 @@ export default function WishlistPrice() {
       autoTarget: !has,
       marketCents: market,
       marketAsOf: price?.asOf ?? null,
+      change7d: seriesChange(price?.series90),
       addedAt: existing?.addedAt ?? new Date().toISOString(),
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

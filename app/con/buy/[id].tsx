@@ -40,6 +40,7 @@ import {
   type SearchPrices,
 } from '../../../src/services/search';
 import { useCon } from '../../../src/store/con';
+import { seriesChange } from '../../../src/pricing/wishlistView';
 import { useWishlist, wishKey, type WishGrade } from '../../../src/store/wishlist';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
@@ -89,7 +90,7 @@ export default function TheyreAsking() {
   const price = prices === undefined ? undefined : grade === 'raw' ? prices?.raw : prices?.grades[grade];
   // A wishlist card keeps the latest market it was seen at, so the wishlist rating stays current.
   useEffect(() => {
-    if (wish && price) seeMarket(wish.key, price.marketCents, price.asOf);
+    if (wish && price) seeMarket(wish.key, price.marketCents, price.asOf, seriesChange(price.series90));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [price?.marketCents, wish?.key]);
   // No real price for this grade: a "Find a price" estimate (or your own price) stands in, labelled.

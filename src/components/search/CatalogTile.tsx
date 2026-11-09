@@ -6,12 +6,15 @@ import { cardPrice, langTag, pct, pctSign } from '../../lib/format';
 import { sealedLabel } from '../../lib/sealed';
 import { displayName } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
-import { radius, size, space, type } from '../../theme/tokens';
+import { radius, space, type } from '../../theme/tokens';
 import { themed, useColors } from '../../theme/theme';
 import { ArtImage } from '../ArtImage';
 
 /** Card art height for a width: TCGplayer card scans are 63 × 88. */
 export const cardH = (w: number) => Math.round((w * 88) / 63);
+
+/** Two lines of a tile's name, held even when the name fits on one, so prices line up across a row. */
+export const NAME_LINES_H = Math.round(type.secondary.fontSize * 1.3) * 2;
 
 /** "+18%" in gain, "−7%" in loss, "0%" in gray. */
 export function ChangeText({ fraction, suffix, style }: { fraction: number; suffix?: string; style?: TextStyle | TextStyle[] }) {
@@ -63,7 +66,7 @@ export function CatalogTile({
         />
       </View>
       <View style={styles.text}>
-        <Text numberOfLines={2} style={[type.secondary, { color: color.ink, fontWeight: '500' }]}>
+        <Text numberOfLines={2} style={[type.secondary, { color: color.ink, fontWeight: '500', minHeight: NAME_LINES_H }]}>
           {name}
           {tag ? <Text style={{ color: color.secondary }}>{`  ${tag}`}</Text> : null}
         </Text>
@@ -84,6 +87,6 @@ const useStyles = themed((color) =>
     art: { borderRadius: radius.thumb * 2, backgroundColor: color.well, overflow: 'hidden' },
     sealed: { overflow: 'hidden' },
     text: { paddingTop: space.s, gap: space.xs / 2 },
-    priceLine: { flexDirection: 'row', alignItems: 'baseline', gap: space.s, flexWrap: 'wrap', minHeight: size.skeletonBar },
+    priceLine: { flexDirection: 'row', alignItems: 'baseline', gap: space.s, flexWrap: 'wrap' },
   }),
 );

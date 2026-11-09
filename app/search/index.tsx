@@ -58,7 +58,9 @@ export default function Search() {
   const insets = useSafeAreaInsets();
   // Con mode opens search with ?con=1: each result also shows what to pay, from the buying rules.
   // The trade calculator opens it with ?trade=1: a card opens with "Add to their side".
-  const params = useLocalSearchParams<{ con?: string; q?: string; trade?: string }>();
+  const params = useLocalSearchParams<{ con?: string; q?: string; trade?: string; want?: string }>();
+  // From the Wishlist's "Add a card": search, then the card page, where you add it at a grade.
+  const want = params.want === '1';
   const con = params.con === '1';
   const trade = params.trade === '1';
   const asTab = useSegments()[0] === '(tabs)';
@@ -186,7 +188,7 @@ export default function Search() {
           )}
           <View style={styles.gutter}>
             {/* The tab bar already says Search; the tab keeps its header slim. */}
-            {asTab ? null : <Text style={[type.title, { color: color.ink, paddingBottom: space.m }]}>{con ? 'Search to buy' : 'Search'}</Text>}
+            {asTab ? null : <Text style={[type.title, { color: color.ink, paddingBottom: space.m }]}>{con ? 'Search to buy' : want ? 'Add to wishlist' : 'Search'}</Text>}
             <GameTabs
               value={f.game ?? 'all'}
               onChange={(g) =>
@@ -298,7 +300,7 @@ export default function Search() {
           // Last results stay reachable above the keyboard instead of hiding behind it.
           automaticallyAdjustKeyboardInsets
           ListEmptyComponent={
-            state === 'idle' && !con && !trade ? (
+            state === 'idle' && !con && !trade && !want ? (
               <SearchLanding
                 onQuery={(q) => set({ q })}
                 onOpen={(c) => openCard(c, false)}

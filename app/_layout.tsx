@@ -22,7 +22,10 @@ export default function RootLayout() {
             to go back a step) instead of full pages. */}
         <Stack.Screen
           name="search/index"
-          options={({ route }) => ({ presentation: (route.params as { con?: string } | undefined)?.con === '1' ? 'modal' : 'card' })}
+          options={({ route }) => {
+            const p = route.params as { con?: string; want?: string } | undefined;
+            return { presentation: p?.con === '1' || p?.want === '1' ? 'modal' : 'card' };
+          }}
         />
         <Stack.Screen name="con/buy/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="con/want/[id]" options={{ presentation: 'modal' }} />

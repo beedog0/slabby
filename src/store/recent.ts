@@ -15,6 +15,8 @@ type RecentState = {
   addQuery: (q: string) => void;
   addViewed: (card: Found) => void;
   clear: () => void;
+  /** Recent searches only; Recently viewed stays. */
+  clearQueries: () => void;
 };
 
 /** Pure: newest first, case-insensitively unique, capped. */
@@ -37,6 +39,7 @@ export const useRecent = create<RecentState>()(
       addQuery: (q) => set((s) => ({ queries: pushQuery(s.queries, q) })),
       addViewed: (card) => set((s) => ({ viewed: pushViewed(s.viewed, card) })),
       clear: () => set({ queries: [], viewed: [] }),
+      clearQueries: () => set({ queries: [] }),
     }),
     { name: 'slabby.recent', storage: createJSONStorage(() => AsyncStorage) },
   ),

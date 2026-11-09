@@ -8,6 +8,7 @@
 //   and the market for the grade you want is saved on the wishlist item.
 // - Photos for both lists go into the image cache.
 
+import { seriesChange } from '../pricing/wishlistView';
 import { prefetchArt } from '../components/ArtImage';
 import type { Card } from '../types';
 import type { WishItem } from '../store/wishlist';
@@ -24,7 +25,7 @@ export function tableCards(cards: Card[]): Card[] {
 export async function prepCon(
   cards: Card[],
   wish: WishItem[],
-  seeMarket: (key: string, marketCents: number, asOf: string) => void,
+  seeMarket: (key: string, marketCents: number, asOf: string, change7d?: number | null) => void,
 ): Promise<PrepResult> {
   const table = tableCards(cards);
   prefetchArt([...table.map((c) => c.imageFrontUrl), ...wish.map((w) => w.imageUrl)]);
@@ -42,7 +43,7 @@ export async function prepCon(
             continue;
           }
           const price = w.grade === 'raw' ? p.raw : p.grades[w.grade];
-          if (price) seeMarket(w.key, price.marketCents, price.asOf);
+          if (price) seeMarket(w.key, price.marketCents, price.asOf, seriesChange(price.series90));
         }
       };
       await Promise.all([worker(), worker(), worker()]);

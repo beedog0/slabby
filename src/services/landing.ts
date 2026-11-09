@@ -149,7 +149,7 @@ export async function fetchLanding(game: Game | null): Promise<Landing> {
 type MockRow = Omit<Found, 'change7d' | 'change30d' | 'sealedType' | 'aka'> & { sealedType?: string | null };
 
 function mockLanding(game: Game | null): Landing {
-  const all = (catalogJson as MockRow[]).filter((c) => !game || c.game === game);
+  const all = (catalogJson as MockRow[]).filter((c) => (!game || c.game === game) && !c.sealedType && (c.marketCents ?? 0) >= 2000);
   const asFound = (c: MockRow): Found => ({ ...c, change7d: null, change30d: null, sealedType: sealedOf(c.sealedType ?? null), aka: [] });
   // Fixed, made-up moves so the sections render the same every time.
   const moves = all.map((c, i) => ({ ...asFound(c), change: [0.18, -0.12, 0.09, -0.07, 0.31, -0.04, 0.05][i % 7], days: 7, thenCents: null }));
