@@ -140,11 +140,6 @@ export function trendOf(series: number[], threshold = 0): 'up' | 'down' | 'flat'
 }
 
 /**
- * Daily value of the owned cards over the last `days` days, oldest first: each card's market
- * series summed by day, aligned on today. A card with a shorter history counts at its first
- * known value before that, so new comps don't read as a jump in the collection.
- */
-/**
  * The line where the value chart would be when there's nothing to draw. It only claims prices are
  * loading while they are; cards with a price but under two days of history get a plain note, and
  * the sold view (no sales in 30 days) keeps its own line.
@@ -154,6 +149,11 @@ export function chartNote(o: { cards: number; sold: boolean; loading: boolean; e
   return o.loading ? 'Prices are loading.' : 'Chart starts once we have a few days of prices.';
 }
 
+/**
+ * Daily value of the owned cards over the last `days` days, oldest first: each card's market
+ * series summed by day, aligned on today. A card with a shorter history counts at its first
+ * known value before that, so new comps don't read as a jump in the collection.
+ */
 export function collectionSeries(rows: CardRow[], days = 30): number[] {
   const series = rows
     .filter((r) => r.card.status === 'owned' && r.price && r.price.series90.length)
