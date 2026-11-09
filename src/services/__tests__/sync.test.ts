@@ -23,7 +23,9 @@ describe('row mapping', () => {
     expect(fromRow({ ...toRow(mew, 'u'), grade: '9.5' as unknown as number }).grade).toBe(9.5);
   });
   it('round-trips rules', () => {
-    expect(rulesFromRow(rulesToRow(DEFAULT_RULES, 'u'))).toEqual(DEFAULT_RULES);
+    // Last-day prices stay on the phone; everything else syncs.
+    const { lastDayCutPct: _cut, lastDayUntil: _until, ...synced } = DEFAULT_RULES;
+    expect(rulesFromRow(rulesToRow(DEFAULT_RULES, 'u'))).toEqual(synced);
   });
 });
 
@@ -36,10 +38,41 @@ describe('mergeVault', () => {
     expect(toPush).toEqual([localOnly]);
     expect(merged.map((c) => c.id)).toEqual([localOnly.id, mew.id]);
   });
+  it('keeps phone-only fields (con buys) on the server copy, with the server columns winning', () => {
+    const local = { ...mew, name: 'Old name', boughtConId: 'con-1', boughtMarketCents: 1000 };
+    const remote = { ...mew, name: 'Fixed name' };
+    const { merged } = mergeVault([local], [remote]);
+    expect(merged[0]).toMatchObject({ name: 'Fixed name', boughtConId: 'con-1', boughtMarketCents: 1000 });
+  });
   it('keeps slabs removed on this phone out, even while the server still has them', () => {
     const other = { ...mew, id: uuid() };
     const { merged, toPush } = mergeVault([], [mew, other], [mew.id]);
     expect(merged.map((c) => c.id)).toEqual([other.id]);
     expect(toPush).toEqual([]);
+  });
+});
+
+describe('sealed product', () => {
+  const box: Card = {
+    ...(cards[0] as unknown as Card),
+    id: uuid(),
+    grader: 'raw',
+    grade: null,
+    certNumber: null,
+    number: null,
+    name: 'Evolving Skies Booster Box',
+    sealed: 'booster_box',
+    productId: 9100001,
+  };
+  it('keys sealed by product id and round-trips its kind', () => {
+    const row = toRow(box, 'u1');
+    expect(row.card_key).toBe('sealed:9100001');
+    expect(row.sealed_type).toBe('booster_box');
+    const back = fromRow(row);
+    expect(back.sealed).toBe('booster_box');
+    expect(back.productId).toBe(9100001);
+  });
+  it('leaves the column off card rows', () => {
+    expect('sealed_type' in toRow(cards[0] as unknown as Card, 'u1')).toBe(false);
   });
 });

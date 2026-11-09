@@ -2,7 +2,8 @@ import ExpoModulesCore
 import UIKit
 import Vision
 
-/// On-device text recognition for slab labels (Apple Vision, no network).
+/// On-device text recognition and card finding (Apple Vision, no network). The Vision work
+/// itself is in CardFinder.swift, shared with the backtest.
 /// recognize(uri) -> [{ text, x, y }], one entry per recognized line, top to bottom.
 /// x is the line's left edge and y its vertical centre, both 0..1 from the top-left of the photo.
 public class LabelReaderModule: Module {
@@ -15,43 +16,53 @@ public class LabelReaderModule: Module {
       if url.isFileURL { try? FileManager.default.removeItem(at: url) }
     }
 
-    AsyncFunction("recognize") { (uri: String, promise: Promise) in
+    // options.minTextHeight: smallest text to read, as a share of the photo's height. Vision's
+    // default (1/32) skips a card's set code and number in a photo of the whole card, so Photo
+    // mode asks for much smaller text. Leaving it out keeps the default (live scan).
+    AsyncFunction("recognize") { (uri: String, options: [String: Any]?, promise: Promise) in
       guard let image = Self.loadImage(uri), let cgImage = image.cgImage else {
         promise.reject("E_IMAGE", "Couldn't open the photo")
         return
       }
 
-      let request = VNRecognizeTextRequest { request, error in
-        if let error = error {
-          promise.reject("E_RECOGNIZE", error.localizedDescription)
-          return
-        }
-        let observations = (request.results as? [VNRecognizedTextObservation]) ?? []
-        let lines: [[String: Any]] = observations.compactMap { obs in
-          guard let text = obs.topCandidates(1).first?.string else { return nil }
-          // Vision's boxes are normalized with the origin at the bottom-left.
-          let box = obs.boundingBox
-          return ["text": text, "x": Double(box.minX), "y": Double(1 - box.midY)]
-        }
-        let sorted = lines.sorted { a, b in
-          let ay = a["y"] as! Double, by = b["y"] as! Double
-          if abs(ay - by) > 0.015 { return ay < by }
-          return (a["x"] as! Double) < (b["x"] as! Double)
-        }
-        promise.resolve(sorted)
-      }
-      request.recognitionLevel = .accurate
-      // Labels are codes and names, not prose: autocorrect would "fix" SV2a or ex.
-      request.usesLanguageCorrection = false
-      request.recognitionLanguages = ["en-US"]
-
-      let handler = VNImageRequestHandler(cgImage: cgImage, orientation: Self.orientation(image.imageOrientation))
+      let orientation = Self.orientation(image.imageOrientation)
+      let minHeight = options?["minTextHeight"] as? Double
       DispatchQueue.global(qos: .userInitiated).async {
         do {
-          try handler.perform([request])
+          promise.resolve(try CardFinder.lines(cgImage, orientation: orientation, minTextHeight: minHeight))
         } catch {
           promise.reject("E_RECOGNIZE", error.localizedDescription)
         }
+      }
+    }
+
+    // The card in a photo, straightened, as pixels for its art fingerprint (CardFinder.card).
+    // options.region: { x, y, width, height } 0..1 from the top-left, the on-screen frame in live
+    // scan. Resolves { rgb: base64 RGB, width, height, found, quad: [[x, y] ×4] } or null.
+    AsyncFunction("findCard") { (uri: String, options: [String: Any]?, promise: Promise) in
+      guard let image = Self.loadImage(uri), let cgImage = image.cgImage else {
+        promise.reject("E_IMAGE", "Couldn't open the photo")
+        return
+      }
+      var region: CGRect? = nil
+      if let r = options?["region"] as? [String: Any],
+         let x = r["x"] as? Double, let y = r["y"] as? Double,
+         let w = r["width"] as? Double, let h = r["height"] as? Double, w > 0, h > 0 {
+        region = CGRect(x: x, y: y, width: w, height: h)
+      }
+      let orientation = Self.orientation(image.imageOrientation)
+      DispatchQueue.global(qos: .userInitiated).async {
+        guard let found = CardFinder.card(cgImage, orientation: orientation, region: region) else {
+          promise.resolve(nil)
+          return
+        }
+        promise.resolve([
+          "rgb": found.rgb.base64EncodedString(),
+          "width": CardFinder.outW,
+          "height": CardFinder.outH,
+          "found": found.found,
+          "quad": CardFinder.quadJSON(found.quad),
+        ])
       }
     }
   }

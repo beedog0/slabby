@@ -2,8 +2,14 @@
 // With Supabase configured, `refreshPrices` loads 90 days per card_key into the price store;
 // without it, mocks are used. `priceFor` is synchronous so lists render instantly from cache.
 
+import catalogJson from '../mocks/catalog.json';
+import { LOOKBACK_DAYS, withHeadline, type Basis, type SaleDay } from '../pricing/lastSales';
 import pricesJson from '../mocks/prices.json';
+import { catalogSummary } from '../../supabase/functions/_shared/catalog-math';
 import { cardKey } from '../pricing/cardKey';
+import { fallbackPrice } from '../pricing/estimate';
+import { useEstimates } from '../store/estimates';
+import type { Estimate } from '../../supabase/functions/_shared/estimate-math';
 import { nameFromMatch } from './psa';
 import { usePrices } from '../store/prices';
 import { useVault } from '../store/vault';
@@ -27,14 +33,37 @@ export type CardPrice = {
   lastSaleDay?: string | null;
   /** Sales over 90 days: sales_30d on the last day, 30 and 60 days before it. */
   sales90d?: number;
+  /**
+   * Set only on a card with no price source: 'estimate' = the AI search of sold listings
+   * ("Find a price"), 'own' = the price you typed. Never a comp; screens label it.
+   */
+  source?: 'estimate' | 'own';
+  /** The estimate and its sales, when there is one (also under your own price). */
+  estimate?: Estimate;
+  /** Search card page only (card-prices v2): up to 180 days of daily market, one value per day from histFrom. */
+  histFrom?: string;
+  hist?: number[];
+  /** Search card page only: the latest day with a graded sale, its average and how many sold. */
+  lastSale?: { day: string; cents: number; count: number } | null;
+  // Headline (src/pricing/lastSales.ts). Graded only; missing on answers without sale days.
+  /** Every day with a sale in the server's history (card-prices v3), any order. */
+  saleDays?: SaleDay[];
+  /** How marketCents was set: median of the last 5 sales, or the last sale when there are fewer. */
+  basis?: Basis;
+  /** The sales behind the headline, newest first, one line per day. */
+  recent?: SaleDay[];
+  /** The rolling 30-day median before the headline replaced it. */
+  median30Cents?: number;
 };
 
 const mock = pricesJson as Record<string, CardPrice>;
 
 export function priceFor(card: Card): CardPrice | null {
   const key = cardKey(card);
-  if (!supabase) return mock[key] ?? null;
-  return usePrices.getState().byKey[key] ?? null;
+  const real = !supabase ? (card.sealed ? mockSealed(card) : mock[key]) : usePrices.getState().byKey[key];
+  if (real) return real;
+  const { ownByKey, byKey } = useEstimates.getState();
+  return fallbackPrice(ownByKey[key], byKey[key]);
 }
 
 type DailyRow = { card_key: string; day: string; market_cents: number; low_cents: number; high_cents: number; sales_30d: number };
@@ -65,9 +94,56 @@ function dayBefore(day: string, n: number): string {
 
 type Freshness = { card_key: string; comps_refreshed_at: string | null; last_sale_day: string | null };
 
-/** Load the last 90 days of price_daily for these cards into the price store. */
-export async function refreshPrices(cards: Card[]): Promise<void> {
+/** Sealed product in the vault: priced by product id from the catalog (no price_daily rows). */
+const isSealedCard = (c: Card) => !!c.sealed && !!c.productId;
+
+type SealedRow = { product_id: number; market_cents: number | null; low_cents: number | null; market_hist: number[] | null; updated_on: string };
+
+/** A sealed item's CardPrice from its catalog row: tonight's TCGplayer market, 31 nights of chart. */
+export function sealedPrice(r: SealedRow): CardPrice | null {
+  const s = catalogSummary(r);
+  if (!s) return null;
+  return {
+    marketCents: s.marketCents,
+    lowCents: s.lowCents,
+    highCents: s.highCents,
+    sales30d: 0,
+    asOf: s.asOf,
+    series90: s.series90,
+    // Written by tonight's catalog import; the latest market point is its day.
+    refreshedAt: `${r.updated_on}T21:00:00Z`,
+    lastSaleDay: r.updated_on,
+  };
+}
+
+/** Load sealed items' prices from the catalog into the price store. */
+async function refreshSealed(cards: Card[]): Promise<void> {
   if (!supabase || !cards.length) return;
+  const ids = [...new Set(cards.map((c) => c.productId!))];
+  const { data, error } = await supabase.from('catalog').select('product_id, market_cents, low_cents, market_hist, updated_on').in('product_id', ids);
+  if (error || !data) return;
+  const next: Record<string, CardPrice> = {};
+  for (const r of data as SealedRow[]) {
+    const p = sealedPrice(r);
+    if (p) next[`sealed:${r.product_id}`] = p;
+  }
+  usePrices.getState().merge(next);
+}
+
+function mockSealed(card: Card): CardPrice | null {
+  const c = (catalogJson as { productId: number; marketCents: number | null }[]).find((m) => m.productId === card.productId);
+  if (!c || c.marketCents == null) return null;
+  const s = catalogSummary({ market_cents: c.marketCents, low_cents: null, market_hist: [], updated_on: '2026-11-07' })!;
+  return { ...s, sales30d: 0 };
+}
+
+/** Load the last 90 days of price_daily for these cards into the price store. */
+export async function refreshPrices(all: Card[]): Promise<void> {
+  if (!supabase || !all.length) return;
+  const sealed = all.filter(isSealedCard);
+  const cards = all.filter((c) => !isSealedCard(c));
+  if (sealed.length) await refreshSealed(sealed).catch(() => {});
+  if (!cards.length) return;
   fillArt(cards).catch(() => {});
   const keys = [...new Set(cards.map(cardKey))];
   const since = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
@@ -83,14 +159,38 @@ export async function refreshPrices(cards: Card[]): Promise<void> {
   const fresh = await freshnessFor(keys);
   const grouped = new Map<string, DailyRow[]>();
   for (const r of data as DailyRow[]) grouped.set(r.card_key, [...(grouped.get(r.card_key) ?? []), r]);
+  const lastSales = await lastSalesFor(keys);
+  const today = new Date().toISOString().slice(0, 10);
   const next: Record<string, CardPrice> = {};
   for (const [k, rows] of grouped) {
-    const p = fromDaily(rows);
-    if (!p) continue;
+    const daily = fromDaily(rows);
+    if (!daily) continue;
     const f = fresh?.get(k);
-    next[k] = f ? { ...p, refreshedAt: f.comps_refreshed_at, lastSaleDay: f.last_sale_day } : p;
+    const p = f ? { ...daily, refreshedAt: f.comps_refreshed_at, lastSaleDay: f.last_sale_day } : daily;
+    // Graded keys only have sale days; raw keeps TCGplayer market.
+    next[k] = lastSales ? withHeadline(p, lastSales.get(k), today) : p;
   }
   usePrices.getState().merge(next);
+}
+
+type LastSaleRow = { card_key: string; day: string; sales: number; avg_cents: number };
+
+/**
+ * The last 5 sales per card (0027 last_sale_days, 180 days back) for the headline price. Null on
+ * any error, including a project without 0027, so prices still load on the rolling median.
+ */
+async function lastSalesFor(keys: string[]): Promise<Map<string, SaleDay[]> | null> {
+  if (!supabase) return null;
+  try {
+    const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const { data, error } = await supabase.rpc('last_sale_days', { keys, since });
+    if (error || !data) return null;
+    const out = new Map<string, SaleDay[]>();
+    for (const r of data as LastSaleRow[]) out.set(r.card_key, [...(out.get(r.card_key) ?? []), { day: r.day, cents: r.avg_cents, count: r.sales }]);
+    return out;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -165,6 +265,12 @@ export function refreshCard(card: Card, opts: RefreshOpts = {}): Promise<Refresh
 
 async function runRefresh(card: Card, key: string, { force = false, now = Date.now(), minAgeMs }: RefreshOpts, start: () => void): Promise<RefreshStatus> {
   if (!supabase) return 'skipped';
+  // Sealed prices are the catalog's nightly TCGplayer market: reload it, no comps call.
+  if (isSealedCard(card)) {
+    start();
+    await refreshSealed([card]).catch(() => {});
+    return 'refreshed';
+  }
   if (refreshUnavailable) {
     if (force) await refreshPrices([card]).catch(() => {});
     return 'skipped';
@@ -277,6 +383,11 @@ const retried = new Set<string>();
  */
 export async function matchNewCard(card: Card, tcgPlayerId?: string): Promise<CardRef | null> {
   if (!supabase) return null;
+  // Sealed product is already its catalog product: photo and price come from there.
+  if (isSealedCard(card)) {
+    await refreshSealed([card]).catch(() => {});
+    return null;
+  }
   const { data, error } = await supabase.functions.invoke<CardRef>('card-match', {
     body: {
       cardKey: cardKey(card),
@@ -307,7 +418,7 @@ export async function fillArt(cards: Card[]): Promise<void> {
   if (!supabase) return;
   // Before the guest session exists, RLS hides card_refs and card-match answers 401.
   if (!(await supabase.auth.getSession()).data.session) return;
-  const owned = cards.filter((c) => c.status === 'owned');
+  const owned = cards.filter((c) => c.status === 'owned' && !isSealedCard(c));
   if (!owned.length) return;
   const keys = [...new Set(owned.map(cardKey))];
   const named = await supabase.from('card_refs').select('card_key, tcgplayer_id, image_url, matched_name').in('card_key', keys);

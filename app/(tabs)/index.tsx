@@ -1,5 +1,7 @@
 // Home is the collection: what you own, shown on a shelf, one at a time, or as a grid.
-// Con mode starts from the … menu. Supersedes the 01-vault.png layout at Bryan's request (collection-first).
+// The Collection tab. Search, Scan, Con and Profile live in the bottom bar (src/components/TabBar);
+// the … menu only holds things you do to the collection. Supersedes the 01-vault.png layout at
+// Bryan's request (collection-first).
 
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
@@ -14,27 +16,31 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
-import { ValueChart } from '../src/components/MiniChart';
-import { ArrangeShelf, type PageScroll } from '../src/components/collection/ArrangeShelf';
-import { EmptyFilter, EmptyVault } from '../src/components/collection/EmptyVault';
-import { FilterTabs } from '../src/components/collection/FilterTabs';
-import { GridView } from '../src/components/collection/GridView';
-import { ScrollDisplay } from '../src/components/collection/ScrollDisplay';
-import { SearchSort } from '../src/components/collection/SearchSort';
-import type { SlabActions } from '../src/components/collection/actions';
-import { confirmRemoveMany, openMoveMany, statusItems } from '../src/components/collection/statusSheets';
-import { openDropdown } from '../src/components/menu/Dropdown';
-import { openSlabMenu } from '../src/components/menu/Menu';
-import { MAX_SHARE, shareSlab, shareSlabs } from '../src/components/share/ShareCard';
-import { arrange, stackCopies } from '../src/pricing/arrange';
-import { shareSellSheet } from '../src/services/sellSheet';
-import { DEFAULT_CON_NAME } from '../src/store/con';
-import { ShelfView } from '../src/components/collection/ShelfView';
-import { Segmented } from '../src/components/Segmented';
-import { ViewSwitch } from '../src/components/collection/ViewSwitch';
-import { IconButton, PrimaryButton, ScanIcon, SearchIcon } from '../src/components/ui';
-import { changeText, money, rowTitle } from '../src/lib/format';
+import { ValueChart } from '../../src/components/MiniChart';
+import { ArrangeShelf, type PageScroll } from '../../src/components/collection/ArrangeShelf';
+import { EmptyFilter, EmptyVault } from '../../src/components/collection/EmptyVault';
+import { FilterTabs } from '../../src/components/collection/FilterTabs';
+import { GridView } from '../../src/components/collection/GridView';
+import { ScrollDisplay } from '../../src/components/collection/ScrollDisplay';
+import { SearchSort } from '../../src/components/collection/SearchSort';
+import { effectivePick, filterMenu, GAMES, inPick, type CardPick } from '../../src/lib/games';
+import type { SlabActions } from '../../src/components/collection/actions';
+import { confirmRemoveMany, openMoveMany, statusItems } from '../../src/components/collection/statusSheets';
+import { openSoldTogether } from '../../src/components/collection/soldTogether';
+import { openDropdown } from '../../src/components/menu/Dropdown';
+import { openSlabMenu } from '../../src/components/menu/Menu';
+import { MAX_SHARE, shareSlab, shareSlabs } from '../../src/components/share/ShareCard';
+import { arrange, stackCopies } from '../../src/pricing/arrange';
+import { shareSellSheet } from '../../src/services/sellSheet';
+import { DEFAULT_CON_NAME } from '../../src/store/con';
+import { ShelfView } from '../../src/components/collection/ShelfView';
+import { Segmented } from '../../src/components/Segmented';
+import { ViewSwitch } from '../../src/components/collection/ViewSwitch';
+import { IconButton, PrimaryButton } from '../../src/components/ui';
+import { useHideTabBar } from '../../src/components/TabBar';
+import { changeText, money, rowTitle } from '../../src/lib/format';
 import {
+  chartNote,
   collection,
   collectionSeries,
   filterStats,
@@ -42,13 +48,14 @@ import {
   soldSeries,
   type CardRow,
   type CollectionFilter,
-} from '../src/pricing/portfolio';
-import { refreshPrices } from '../src/services/comps';
-import { useDisplay } from '../src/store/display';
-import { usePrices } from '../src/store/prices';
-import { useRules } from '../src/store/rules';
-import { useVault } from '../src/store/vault';
-import { color, size, space, type } from '../src/theme/tokens';
+} from '../../src/pricing/portfolio';
+import { refreshPrices } from '../../src/services/comps';
+import { useDisplay } from '../../src/store/display';
+import { usePrices } from '../../src/store/prices';
+import { useRules } from '../../src/store/rules';
+import { useVault } from '../../src/store/vault';
+import { size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 
 // Every filter fills the same header lines (value, one line, chart slot) so the tabs never move.
 const EMPTY: Record<CollectionFilter, { title: string; hint: string; chart: string }> = {
@@ -77,8 +84,17 @@ const VALUE_LABEL: Record<CollectionFilter, string> = {
   sell: 'For sale value',
   sold: 'Sold total',
 };
+// The same, for one game or set: "Pokémon value", "OP05 holds value".
+const GAME_VALUE_LABEL: Record<CollectionFilter, (game: string) => string> = {
+  all: (g) => `${g} value`,
+  hold: (g) => `${g} holds value`,
+  sell: (g) => `${g} for sale value`,
+  sold: (g) => `${g} sold total`,
+};
 
 export default function Home() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   // Where the display starts in the page; the swipe view sizes its slab to fit below it.
@@ -88,7 +104,7 @@ export default function Home() {
   const cards = useVault((s) => s.cards);
   const rules = useRules((s) => s.rules);
   const prices = usePrices((s) => s.byKey);
-  const { mode, filter, sort, order, pinnedId, perShelf, setMode, setFilter: saveFilter, setSort, setOrder, setPinned, setPerShelf } =
+  const { mode, filter, sort, order, pinnedId, perShelf, setMode, setFilter: saveFilter, setSort, setOrder, setPinned, setPerShelf, pick, setPick: savePick } =
     useDisplay();
   // Select mode: tap slabs to pick several, then share or remove them together.
   const [selecting, setSelecting] = useState(false);
@@ -98,18 +114,43 @@ export default function Home() {
     setSelected(new Set());
     saveFilter(f);
   };
+  // Same for the game and set filter.
+  const setPick = (p: CardPick) => {
+    setSelected(new Set());
+    savePick(p);
+  };
+  // What the filter button offers, counted over the whole vault so it never comes and goes between
+  // the All / Holds / For sale / Sold tabs.
+  const menu = useMemo(() => filterMenu(cards), [cards]);
+  const picked = effectivePick(pick, menu);
+  // "Base Set" or "One Piece": what the header and empty state call the pick.
+  const pickName = picked.set ?? (picked.game === 'all' ? null : GAMES[picked.game].name);
 
+  // True only while the price reload is really running; the chart placeholder says so from this.
+  const [pricesBusy, setPricesBusy] = useState(true);
   useEffect(() => {
-    refreshPrices(cards);
+    let current = true;
+    setPricesBusy(true);
+    refreshPrices(cards)
+      .catch(() => {})
+      .finally(() => {
+        if (current) setPricesBusy(false);
+      });
+    return () => {
+      current = false;
+    };
   }, [cards]);
 
   const all = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
-  const base = useMemo(() => collection(all, filter), [all, filter]);
+  // The pick narrows everything below it, header numbers included: "Pokémon value" counts only Pokémon.
+  const base = useMemo(() => collection(inPick(all, picked), filter), [all, filter, picked.game, picked.set]);
   const [query, setQuery] = useState('');
   // Holding the value chart: the big number and the line under it show that day instead.
   const [scrubbed, setScrubbed] = useState<{ cents: number; date?: string } | null>(null);
   // Arranging: hold a slab, drag it to its spot. Saves as "My order".
   const [arranging, setArranging] = useState(false);
+  // Selecting and arranging bring their own bottom bar (Done, Share), so the tabs step aside.
+  useHideTabBar(selecting || arranging);
   const [dragging, setDragging] = useState(false);
   // The page's scroll, so a slab held near the screen edge can scroll it while arranging.
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -193,26 +234,22 @@ export default function Home() {
       return next;
     });
 
-  // Grouped by when you'd reach for it: at the con, around the shelf, then settings.
+  // Only things you do to the collection. Con mode, search, scan and settings moved to the tab bar
+  // (Bryan: the … menu had grown too long); Price check lives in con mode's Buying.
   const moreRef = useRef<ComponentRef<typeof View>>(null);
   const more = () =>
     openDropdown(moreRef, [
-      [
-        { label: 'Con mode', onPress: () => router.push('/con') },
-        {
-          label: 'Sell sheet',
-          onPress: () =>
-            shareSellSheet(all, DEFAULT_CON_NAME).catch(() => Alert.alert('Couldn’t make the sell sheet')),
-        },
-      ],
       [
         { label: 'Select', onPress: () => startSelecting() },
         { label: 'Arrange shelf', onPress: startArranging },
         { label: 'Add by hand', onPress: () => router.push('/add') },
       ],
       [
-        { label: 'Pricing rules', onPress: () => router.push('/settings/pricing') },
-        { label: 'Back up', onPress: () => router.push('/settings/account') },
+        {
+          label: 'Sell sheet',
+          onPress: () =>
+            shareSellSheet(all, DEFAULT_CON_NAME).catch(() => Alert.alert('Couldn’t make the sell sheet')),
+        },
       ],
     ]);
 
@@ -237,6 +274,9 @@ export default function Home() {
   };
   const removeSelected = () => confirmRemoveMany(picks, doneSelecting);
   const moveSelected = () => openMoveMany(picks, doneSelecting);
+  // One price for the whole deal: the number you remember, split across them by market.
+  const canSellTogether = picks.length > 0 && picks.every((c) => c.status !== 'sold');
+  const sellSelected = () => openSoldTogether(picks, { after: doneSelecting });
 
   const actions: SlabActions = selecting
     ? { selected, onPress: (r) => toggle(r.card.id), onLongPress: (r) => toggle(r.card.id) }
@@ -245,7 +285,10 @@ export default function Home() {
   const count = list.rows.length;
   // The header counts the whole filter; a search only narrows the slabs below it.
   const total = base.rows.length;
-  const empty = EMPTY[filter];
+  const empty =
+    pickName === null
+      ? EMPTY[filter]
+      : { title: `No ${pickName} cards here`, hint: 'Use the filter button to see everything.', chart: '' };
   // "−$10 (−2.1%) this month", the numbers in gain or loss color, words in secondary.
   const change = changeText(stats.monthDeltaCents, stats.totalCents);
   const month = change ? (
@@ -268,7 +311,7 @@ export default function Home() {
     </>
   ) : null;
   // Line above the number: what it is, and how many slabs it counts.
-  const label = `${VALUE_LABEL[filter]} · ${plural(total, 'slab')}`;
+  const label = `${pickName === null ? VALUE_LABEL[filter] : GAME_VALUE_LABEL[filter](pickName)} · ${plural(total, 'slab')}`;
   // Line under the number: how that value moved (or, for sale and sold, the number that matters there).
   const subline: ReactNode =
     filter === 'sell' ? (
@@ -334,12 +377,6 @@ export default function Home() {
               <View style={{ height: size.touch }} />
             ) : (
               <>
-                <IconButton label="Search cards" onPress={() => router.push('/search')}>
-                  <SearchIcon />
-                </IconButton>
-                <IconButton label="Scan a slab" onPress={() => router.push('/scan')}>
-                  <ScanIcon />
-                </IconButton>
                 <View ref={moreRef} collapsable={false}>
                   <IconButton label="More" onPress={more}>
                     <MoreIcon />
@@ -374,7 +411,7 @@ export default function Home() {
                     onScrub={setScrubbed}
                   />
                 ) : (
-                  <ChartPlaceholder text={total ? 'Prices are loading.' : empty.chart} />
+                  <ChartPlaceholder text={chartNote({ cards: total, sold: filter === 'sold', loading: pricesBusy, empty: empty.chart })} />
                 )}
               </View>
             </View>
@@ -413,7 +450,13 @@ export default function Home() {
                   <Text style={[type.secondary, { color: color.secondary }]}>Hold a slab, then drag it to its spot.</Text>
                 </View>
               ) : (
-                <SearchSort query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
+                <SearchSort
+                  query={query}
+                  onQuery={setQuery}
+                  sort={sort}
+                  onSort={setSort}
+                  filter={{ menu, value: picked, onChange: setPick }}
+                />
               )}
             </View>
 
@@ -479,8 +522,13 @@ export default function Home() {
       ) : selecting && picks.length ? (
         <View style={[styles.dock, { paddingBottom: insets.bottom + space.s }]}>
           <PrimaryButton title={`Share ${plural(picks.length, 'slab')}`} onPress={shareSelected} />
-          {/* Quiet actions under the one black button: move them (status) or remove them. */}
+          {/* Quiet actions under the one black button: sold together, move them (status) or remove them. */}
           <View style={styles.quietRow}>
+            {canSellTogether ? (
+              <Pressable accessibilityRole="button" onPress={sellSelected} style={styles.quietHalf}>
+                <Text style={[type.text, { color: color.ink }]}>{picks.length === 1 ? 'Mark sold' : 'Sold together'}</Text>
+              </Pressable>
+            ) : null}
             <Pressable accessibilityRole="button" onPress={moveSelected} style={styles.quietHalf}>
               <Text style={[type.text, { color: color.ink }]}>Move…</Text>
             </Pressable>
@@ -500,6 +548,7 @@ function plural(n: number, word: string) {
 
 /** Holds the chart's place when there is nothing to draw: a baseline and one quiet line. */
 function ChartPlaceholder({ text }: { text: string }) {
+  const color = useColors();
   return (
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
       {text ? <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.s }]}>{text}</Text> : null}
@@ -514,6 +563,7 @@ function ChartPlaceholder({ text }: { text: string }) {
 }
 
 function MoreIcon() {
+  const color = useColors();
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill={color.ink}>
       <Circle cx={5.5} cy={12} r={1.6} />
@@ -523,7 +573,7 @@ function MoreIcon() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   header: {
     flexDirection: 'row',
@@ -568,4 +618,4 @@ const styles = StyleSheet.create({
     paddingTop: space.s,
     backgroundColor: color.canvas,
   },
-});
+}));

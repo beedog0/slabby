@@ -7,33 +7,47 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, Hairline, IconButton, Stepper, Toggle } from '../../src/components/ui';
 import { money, rulePct } from '../../src/lib/format';
+import { LAST_DAY_CUT_PCT } from '../../src/pricing/rules';
 import { useRules } from '../../src/store/rules';
-import { color, size, space, type } from '../../src/theme/tokens';
+import { size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 import type { PricingRules } from '../../src/types';
+import { clampPct, pctLimits, pctWord } from '../../src/pricing/rules';
 
 const STEP = 1; // percentage points per tap
 const ROUNDING = [100, 500, 1000, 2500]; // $1, $5, $10, $25
 
 export default function PricingRulesScreen() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const rules = useRules((s) => s.rules);
   const set = useRules((s) => s.set);
+  const cut = rules.lastDayCutPct ?? LAST_DAY_CUT_PCT;
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
-  const pctRow = (key: keyof PricingRules, title: string, sub: string) => {
-    const v = rules[key] as number;
+  // Steps stop where a rule would contradict another (ask under market, floor over ask, max over
+  // market, target over max); the line under each says above/below/at from the value's sign.
+  const pctRow = (key: 'askPct' | 'floorPct' | 'buyTargetPct' | 'buyMaxPct', title: string, of: string, note?: string) => {
+    const v = rules[key];
+    const { min, max } = pctLimits(rules, key);
     return (
       <>
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={[type.body, { color: color.ink }]}>{title}</Text>
-            <Text style={[type.secondary, { color: color.secondary }]}>{sub}</Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>
+              {pctWord(v, of)}
+              {note ? ` · ${note}` : ''}
+            </Text>
           </View>
           <Stepper
             label={title}
             value={rulePct(v)}
-            onMinus={() => set({ [key]: v - STEP })}
-            onPlus={() => set({ [key]: v + STEP })}
+            minusDisabled={v <= min}
+            plusDisabled={v >= max}
+            onMinus={() => set({ [key]: clampPct(rules, key, v - STEP) })}
+            onPlus={() => set({ [key]: clampPct(rules, key, v + STEP) })}
           />
         </View>
         <Hairline />
@@ -64,8 +78,8 @@ export default function PricingRulesScreen() {
         </Text>
 
         <Section title="Selling" />
-        {pctRow('askPct', 'Ask', 'above market')}
-        {pctRow('floorPct', 'Floor', 'below 30-day low sale')}
+        {pctRow('askPct', 'Ask', 'market')}
+        {pctRow('floorPct', 'Floor', '30-day low sale', rules.floorPct >= rules.askPct ? 'can’t go over the ask' : undefined)}
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={[type.body, { color: color.ink }]}>Never sell at a loss</Text>
@@ -74,13 +88,26 @@ export default function PricingRulesScreen() {
           <Toggle label="Never sell at a loss" value={rules.neverBelowPaid} onChange={(v) => set({ neverBelowPaid: v })} />
         </View>
         <Hairline />
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={[type.body, { color: color.ink }]}>Last-day prices</Text>
+            <Text style={[type.secondary, { color: color.secondary }]}>floor cut in con mode</Text>
+          </View>
+          <Stepper
+            label="Last-day prices"
+            value={rulePct(-cut)}
+            onMinus={() => set({ lastDayCutPct: Math.min(50, cut + STEP) })}
+            onPlus={() => set({ lastDayCutPct: Math.max(1, cut - STEP) })}
+          />
+        </View>
+        <Hairline />
 
         <Section title="Buying" />
-        {pctRow('buyTargetPct', 'Target', 'below market')}
-        {pctRow('buyMaxPct', 'Max', 'walk away above')}
+        {pctRow('buyTargetPct', 'Target', 'market', rules.buyTargetPct >= rules.buyMaxPct ? 'can’t go over your max' : undefined)}
+        {pctRow('buyMaxPct', 'Max', 'market', 'walk away above')}
 
         <Section title="Market price" />
-        <ValueRow title="Graded cards" value="eBay sold, 30 days" />
+        <ValueRow title="Graded cards" value="Median of last 5 eBay sales" />
         <ValueRow title="Raw cards" value="TCGplayer market" />
         <ValueRow title="Round to" value={money(rules.roundToCents)} onPress={nextRounding} />
       </ScrollView>
@@ -89,6 +116,7 @@ export default function PricingRulesScreen() {
 }
 
 function Section({ title }: { title: string }) {
+  const color = useColors();
   return (
     <View style={{ paddingTop: space.section, paddingBottom: space.m }}>
       <Text style={[type.section, { color: color.ink }]}>{title}</Text>
@@ -100,6 +128,8 @@ function Section({ title }: { title: string }) {
 }
 
 function ValueRow({ title, value, onPress }: { title: string; value: string; onPress?: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <>
       <Pressable accessibilityRole={onPress ? 'button' : 'text'} onPress={onPress} disabled={!onPress} style={styles.valueRow}>
@@ -114,7 +144,7 @@ function ValueRow({ title, value, onPress }: { title: string; value: string; onP
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   nav: {
     height: size.touch + space.l,
     flexDirection: 'row',
@@ -127,4 +157,4 @@ const styles = StyleSheet.create({
   intro: { color: color.secondary, paddingTop: space.s },
   row: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingVertical: space.m, gap: space.m },
   valueRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-});
+}));

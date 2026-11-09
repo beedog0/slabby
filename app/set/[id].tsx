@@ -9,11 +9,12 @@ import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDime
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
 import { BackIcon, Hairline, IconButton } from '../../src/components/ui';
-import { money, pct } from '../../src/lib/format';
+import { cardPrice, money, pct } from '../../src/lib/format';
 import { cardNumber, displayName, type Game } from '../../src/services/search';
 import type { Found } from '../../src/services/searchFilters';
-import { arrangeSet, cardsInSet, rarities, SET_SORTS, setMeta, type SetMeta, type SetSort } from '../../src/services/setCards';
-import { color, radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { arrangeSet, cardsInSet, companionSets, rarities, SET_SORTS, setMeta, type Companion, type SetMeta, type SetSort } from '../../src/services/setCards';
+import { radius, shadow, size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 
 const COLS = 3;
 const GAP = space.m;
@@ -21,7 +22,9 @@ const fmtDate = (d: string) => new Date(d.replace(/\//g, '-') + 'T12:00:00').toL
 const titleOf = (name: string) => name.replace(/^[A-Za-z0-9.\- ]{1,10}:\s+/, '');
 
 export default function SetPage() {
-  const p = useLocalSearchParams<{ id: string; name?: string; language?: string; game?: string }>();
+  const color = useColors();
+  const styles = useStyles();
+  const p = useLocalSearchParams<{ id: string; name?: string; language?: string; game?: string; trade?: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [cards, setCards] = useState<Found[] | null | 'error'>(null);
@@ -62,12 +65,23 @@ export default function SetPage() {
     };
   }, [setName, language, game]);
 
+  const [companions, setCompanions] = useState<Companion[]>([]);
+  useEffect(() => {
+    let live = true;
+    if (setName) companionSets(Number(p.id), setName, game).then((c) => live && setCompanions(c)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [p.id, setName, game]);
+
   const shown = useMemo(() => arrangeSet(list, sort, picked), [list, sort, picked]);
   const kinds = useMemo(() => rarities(list), [list]);
   const priced = list.filter((c) => c.marketCents != null);
   const value = priced.reduce((t, c) => t + (c.marketCents ?? 0), 0);
   const up = list.filter((c) => (c.change7d ?? 0) > 0.03).length;
   const down = list.filter((c) => (c.change7d ?? 0) < -0.03).length;
+  // No card with a week of prices yet (the nightly copy is new): say so instead of a false 0.
+  const weekKnown = list.some((c) => c.change7d != null);
   const cellW = Math.floor((width - space.gutter * 2 - GAP * (COLS - 1)) / COLS);
 
   const facts = [
@@ -102,13 +116,31 @@ export default function SetPage() {
           </Text>
         )}
         {facts ? <Text style={[type.text, { color: color.secondary, paddingTop: space.s }]}>{facts}</Text> : null}
+        {/* The other half of a set TCGplayer files in two (main set + Classic Collection). */}
+        {companions.map((c) => (
+          <Pressable
+            key={c.groupId}
+            accessibilityRole="link"
+            onPress={() => router.push({ pathname: '/set/[id]', params: { id: String(c.groupId), name: c.setName, language, game } })}
+            style={styles.companion}
+          >
+            <Text style={[type.text, { color: color.ink }]}>
+              {c.label} <Text style={{ color: color.secondary }}>· {c.count} cards ›</Text>
+            </Text>
+          </Pressable>
+        ))}
 
         {priced.length ? (
           <View style={styles.stats}>
             <Stat label="Raw set value" value={money(value)} />
-            <Stat label="Up this week" value={String(up)} tint={up ? color.gain : undefined} />
-            <Stat label="Down this week" value={String(down)} tint={down ? color.loss : undefined} />
+            <Stat label="Up this week" value={weekKnown ? String(up) : '—'} tint={up ? color.gain : undefined} />
+            <Stat label="Down this week" value={weekKnown ? String(down) : '—'} tint={down ? color.loss : undefined} />
           </View>
+        ) : null}
+        {priced.length && !weekKnown ? (
+          <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.l }]}>
+            Weekly moves start once there’s a full week of TCGplayer prices.
+          </Text>
         ) : null}
         <Hairline />
 
@@ -135,7 +167,7 @@ export default function SetPage() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: color.canvas }}>
       <FlatList
         data={shown}
         key={COLS}
@@ -143,13 +175,14 @@ export default function SetPage() {
         keyExtractor={(c) => String(c.productId)}
         ListHeaderComponent={header}
         columnWrapperStyle={{ gap: GAP, paddingHorizontal: space.gutter }}
-        contentContainerStyle={{ paddingBottom: insets.bottom + space.xl, gap: space.l }}
+        // Cards scroll up under the status bar instead of stopping at a blank white band (Bryan).
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom + space.xl, gap: space.l }}
         ListEmptyComponent={
           <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>
             {cards === null ? 'Loading the set…' : cards === 'error' ? 'Can’t load this set right now.' : sort === 'rising' || sort === 'falling' ? 'No price moves this week yet.' : picked.length ? 'No cards with those rarities.' : 'No cards here.'}
           </Text>
         }
-        renderItem={({ item }) => <Tile card={item} w={cellW} />}
+        renderItem={({ item }) => <Tile card={item} w={cellW} trade={p.trade === '1'} />}
       />
       <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setSortOpen(false)} accessibilityLabel="Close" />
@@ -176,6 +209,7 @@ export default function SetPage() {
 }
 
 function Stat({ label, value, tint }: { label: string; value: string; tint?: string }) {
+  const color = useColors();
   return (
     <View style={{ flex: 1, gap: 2 }}>
       <Text style={[type.secondary, { color: color.secondary }]}>{label}</Text>
@@ -185,6 +219,8 @@ function Stat({ label, value, tint }: { label: string; value: string; tint?: str
 }
 
 function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, on && { backgroundColor: color.ink }]}>
       <Text style={[type.secondary, { color: on ? color.onInk : color.ink, fontWeight: on ? '600' : '400' }]}>{label}</Text>
@@ -192,23 +228,24 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
   );
 }
 
-function Tile({ card, w }: { card: Found; w: number }) {
+function Tile({ card, w, trade }: { card: Found; w: number; trade?: boolean }) {
+  const color = useColors();
   const no = cardNumber(card.number);
   return (
     <Pressable
       style={{ width: w }}
-      onPress={() => router.push(`/search/${card.productId}`)}
+      onPress={() => router.push(`/search/${card.productId}${trade ? '?trade=1' : ''}`)}
       accessibilityRole="button"
-      accessibilityLabel={`${displayName(card.name)}${no ? ` number ${no}` : ''}, ${card.marketCents != null ? money(card.marketCents) : 'no price'}`}
+      accessibilityLabel={`${displayName(card.name)}${no ? ` number ${no}` : ''}, ${card.marketCents != null ? cardPrice(card.marketCents) : 'no price'}`}
     >
       <View style={[{ width: w, height: Math.round(w * (88 / 63)), borderRadius: radius.thumb * 2, backgroundColor: color.well }, shadow.thumb]}>
-        {card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} fit="contain" style={{ flex: 1, borderRadius: radius.thumb * 2 }} /> : null}
+        <ArtImage uri={card.imageUrl} label={card.name} recyclingKey={String(card.productId)} fit="contain" style={{ flex: 1, borderRadius: radius.thumb * 2 }} />
       </View>
-      <Text numberOfLines={1} style={[type.secondary, { color: color.ink, paddingTop: space.s }]}>
+      <Text numberOfLines={2} style={[type.secondary, { color: color.ink, paddingTop: space.s }]}>
         {displayName(card.name)}
       </Text>
       <Text numberOfLines={1} style={[type.secondary, { color: color.ink, fontWeight: '600' }]}>
-        {card.marketCents != null ? money(card.marketCents) : '—'}
+        {card.marketCents != null ? cardPrice(card.marketCents) : '—'}
         {card.change7d != null && Math.abs(card.change7d) >= 0.005 ? (
           <Text style={{ color: card.change7d > 0 ? color.gain : color.loss, fontWeight: '400' }}> {pct(card.change7d)}</Text>
         ) : null}
@@ -218,15 +255,16 @@ function Tile({ card, w }: { card: Found; w: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   logo: { width: '70%', height: 76, marginTop: space.s },
+  companion: { minHeight: size.touch, justifyContent: 'center' },
   stats: { flexDirection: 'row', gap: space.l, paddingTop: space.xl, paddingBottom: space.l },
   controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: space.s },
   control: { minHeight: size.touch - 12, justifyContent: 'center' },
-  menu: { position: 'absolute', right: space.gutter, width: 230, borderRadius: radius.field, backgroundColor: color.canvas, paddingVertical: space.xs, ...shadow.menu },
+  menu: { position: 'absolute', right: space.gutter, width: 230, borderRadius: radius.field, backgroundColor: color.sheet, paddingVertical: space.xs, ...shadow.menu },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: space.s, paddingHorizontal: space.gutter, minHeight: size.touch },
   chips: { paddingHorizontal: space.gutter, gap: space.s, paddingTop: space.s, paddingBottom: space.m },
   chip: { height: 32, paddingHorizontal: space.m, borderRadius: 16, backgroundColor: color.well, justifyContent: 'center' },
-});
+}));

@@ -109,3 +109,30 @@ describe('keys and sync', () => {
     expect(fromRow(row)).toEqual(card);
   });
 });
+
+describe('One Piece and Riftbound set on the line under the brand', () => {
+  it('reads a Riftbound label whose set sits under "LEAGUE OF LEGENDS"', () => {
+    const r = parseLabel(['2026 RIFTBOUND: LEAGUE OF LEGENDS', 'SFD-SPIRITFORGED #225*', 'IRELIA - FERVENT', 'SIGNATURE OVERNUMBER', 'GEM MT 10', '81234570'])!;
+    expect(r.payload.PSACert).toMatchObject({ Brand: 'RIFTBOUND: LEAGUE OF LEGENDS SFD-SPIRITFORGED', CardNumber: '225*', Subject: 'IRELIA - FERVENT', Variety: 'SIGNATURE OVERNUMBER' });
+    const card = cardFromCert(r.payload, { paidCents: null, plan: 'hold' });
+    expect(card).toMatchObject({ game: 'riftbound', setCode: 'SFD', number: '225*', grade: 10 });
+  });
+
+  it('reads the set when the number is on its own line', () => {
+    const r = parseLabel(['2025 RIFTBOUND LEAGUE OF LEGENDS', 'OGN-ORIGINS', '#299*', "KAI'SA - DAUGHTER OF THE VOID", 'SIGNATURE OVERNUMBER', 'GEM MT 10', '81234571'])!;
+    const card = cardFromCert(r.payload, { paidCents: null, plan: 'hold' });
+    expect(card).toMatchObject({ setCode: 'OGN', number: '299*' });
+    expect(card.name.toUpperCase()).toBe("KAI'SA - DAUGHTER OF THE VOID");
+  });
+
+  it('reads a One Piece set on the line under the brand', () => {
+    const r = parseLabel(['2026 ONE PIECE', "OP14-THE AZURE SEA'S SEVEN #006", 'SHACHI & PENGUIN', 'SPECIAL ALTERNATE ART', 'GEM MT 10', '81234572'])!;
+    const card = cardFromCert(r.payload, { paidCents: null, plan: 'hold' });
+    expect(card).toMatchObject({ game: 'onepiece', setCode: 'OP14', number: '6', name: 'Shachi & Penguin' });
+  });
+
+  it('leaves a brand that already has its set alone', () => {
+    const r = parseLabel(['2025 RIFTBOUND: LEAGUE OF LEGENDS OGN-ORIGINS #050', 'TEEMO', 'MINT 9', '81234569'])!;
+    expect(r.payload.PSACert).toMatchObject({ Brand: 'RIFTBOUND: LEAGUE OF LEGENDS OGN-ORIGINS', Subject: 'TEEMO' });
+  });
+});

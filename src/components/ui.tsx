@@ -2,10 +2,13 @@
 
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View, type ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-import { color, radius, size, space, type } from '../theme/tokens';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { radius, size, space, type } from '../theme/tokens';
+import { themed, useColors } from '../theme/theme';
 
 export function PrimaryButton({ title, onPress, style }: { title: string; onPress: () => void; style?: ViewStyle }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -19,10 +22,13 @@ export function PrimaryButton({ title, onPress, style }: { title: string; onPres
 
 /** Inset hairline: starts at the text edge, never full-bleed. */
 export function Hairline({ inset = 0 }: { inset?: number }) {
+  const color = useColors();
   return <View style={{ height: StyleSheet.hairlineWidth * 2, backgroundColor: color.hairline, marginLeft: inset }} />;
 }
 
 export function SectionHeader({ title, right }: { title: string; right?: ReactNode }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.sectionHeader}>
       <Text style={[type.section, { color: color.ink }]}>{title}</Text>
@@ -46,6 +52,7 @@ export function IconButton({ label, onPress, children }: { label: string; onPres
 }
 
 export function ScanIcon({ s = 24 }: { s?: number }) {
+  const color = useColors();
   return (
     <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={1.75} strokeLinecap="round">
       <Path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3" />
@@ -54,6 +61,7 @@ export function ScanIcon({ s = 24 }: { s?: number }) {
 }
 
 export function PlusIcon({ s = 24 }: { s?: number }) {
+  const color = useColors();
   return (
     <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={1.75} strokeLinecap="round">
       <Path d="M12 5v14M5 12h14" />
@@ -61,7 +69,19 @@ export function PlusIcon({ s = 24 }: { s?: number }) {
   );
 }
 
+export function MoreIcon() {
+  const color = useColors();
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color.ink}>
+      <Circle cx={5.5} cy={12} r={1.6} />
+      <Circle cx={12} cy={12} r={1.6} />
+      <Circle cx={18.5} cy={12} r={1.6} />
+    </Svg>
+  );
+}
+
 export function BackIcon() {
+  const color = useColors();
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M15 5l-7 7 7 7" />
@@ -70,6 +90,7 @@ export function BackIcon() {
 }
 
 export function Chevron() {
+  const color = useColors();
   return <Text style={[type.text, { color: color.secondary }]}> ›</Text>;
 }
 
@@ -80,6 +101,7 @@ export function Stepper({
   onPlus,
   label,
   minusDisabled,
+  plusDisabled,
 }: {
   value: string;
   onMinus: () => void;
@@ -87,17 +109,22 @@ export function Stepper({
   label: string;
   /** At the lowest allowed value: the − glyph goes secondary and does nothing. */
   minusDisabled?: boolean;
+  /** At the highest allowed value, the same for +. */
+  plusDisabled?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.stepper}>
       <StepButton glyph={'−'} onPress={onMinus} label={`Decrease ${label}`} disabled={minusDisabled} />
       <Text style={[type.rowPrice, styles.stepValue]}>{value}</Text>
-      <StepButton glyph="+" onPress={onPlus} label={`Increase ${label}`} />
+      <StepButton glyph="+" onPress={onPlus} label={`Increase ${label}`} disabled={plusDisabled} />
     </View>
   );
 }
 
 function StepButton({ glyph, onPress, label, disabled }: { glyph: string; onPress: () => void; label: string; disabled?: boolean }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -113,6 +140,7 @@ function StepButton({ glyph, onPress, label, disabled }: { glyph: string; onPres
 }
 
 export function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
+  const color = useColors();
   return (
     <Switch
       accessibilityLabel={label}
@@ -125,7 +153,7 @@ export function Toggle({ value, onChange, label }: { value: boolean; onChange: (
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   primary: {
     height: size.button,
     borderRadius: radius.button,
@@ -149,9 +177,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepValue: { minWidth: 72, textAlign: 'center', color: color.ink },
-});
+}));
 
 export function SlidersIcon() {
+  const color = useColors();
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={1.75} strokeLinecap="round">
       <Path d="M4 8h9M19 8h1M4 16h1M11 16h9" />
@@ -160,7 +189,9 @@ export function SlidersIcon() {
   );
 }
 
-export function SearchIcon({ s = 24, tint = color.ink }: { s?: number; tint?: string }) {
+export function SearchIcon({ s = 24, tint: tintProp }: { s?: number; tint?: string }) {
+  const color = useColors();
+  const tint = tintProp ?? color.ink;
   return (
     <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={tint} strokeWidth={1.75} strokeLinecap="round">
       <Path d="M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15ZM16 16l4.5 4.5" />

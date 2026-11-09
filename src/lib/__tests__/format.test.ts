@@ -1,4 +1,4 @@
-import { saleDay, saleLine, salesWord } from '../format';
+import { cardPrice, centsFromTyped, dollarsTyped, pct, pctSign, saleDay, saleLine, salesWord, thinNote } from '../format';
 
 const NOW = Date.parse('2026-11-06T12:00:00Z');
 
@@ -17,4 +17,51 @@ it('sale lines name the source and how it sold', () => {
 it('counts sales', () => {
   expect(salesWord(1)).toBe('1 sale');
   expect(salesWord(3)).toBe('3 sales');
+});
+
+describe('cardLabel for sealed', () => {
+  it('names the kind instead of a grade', () => {
+    const { cardLabel } = require('../format');
+    expect(cardLabel({ language: 'ja', grader: 'raw', grade: null, sealed: 'booster_box' })).toBe('JP · Booster box');
+    expect(cardLabel({ language: 'en', grader: 'raw', grade: null, sealed: 'etb' })).toBe('Elite Trainer Box');
+    expect(cardLabel({ language: 'en', grader: 'raw', grade: null })).toBe('Raw');
+  });
+});
+
+test('thinNote flags graded prices from 1 to 5 sales', () => {
+  expect(thinNote(0)).toBeNull();
+  expect(thinNote(1)).toBe('Only 1 sale in 30 days');
+  expect(thinNote(5)).toBe('Only 5 sales in 30 days');
+  expect(thinNote(6)).toBeNull();
+  expect(thinNote(null)).toBeNull();
+});
+
+test('cardPrice never rounds a sub-dollar card to $0', () => {
+  expect(cardPrice(25)).toBe('$0.25');
+  expect(cardPrice(49)).toBe('$0.49');
+  expect(cardPrice(110)).toBe('$1.10');
+  expect(cardPrice(1250)).toBe('$13');
+});
+
+describe('pctSign', () => {
+  it('matches what pct() shows, so a rounded 0% is never colored', () => {
+    expect(pct(-0.004)).toBe('0%');
+    expect(pctSign(-0.004)).toBe(0);
+    expect(pctSign(0.004)).toBe(0);
+    expect(pctSign(0.006)).toBe(1);
+    expect(pctSign(-0.02)).toBe(-1);
+  });
+});
+
+describe('typed dollars', () => {
+  it('keeps cents instead of turning 12.50 into 1250 dollars', () => {
+    expect(dollarsTyped('$12.50')).toBe('12.50');
+    expect(dollarsTyped('12.505')).toBe('12.50');
+    expect(dollarsTyped('1.2.3')).toBe('1.23');
+    expect(dollarsTyped('1234567')).toBe('123456');
+    expect(centsFromTyped('12.50')).toBe(1250);
+    expect(centsFromTyped('12.5')).toBe(1250);
+    expect(centsFromTyped('95')).toBe(9500);
+    expect(centsFromTyped('')).toBeNull();
+  });
 });

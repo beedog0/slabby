@@ -36,7 +36,8 @@ describe('mock search with filters', () => {
     const sir = await findCards(q({ q: 'ex', rarities: ['Special Illustration Rare'] }));
     expect(sir.length).toBe(3);
     const evs = await findCards(q({ sets: [{ id: setId('SWSH07: Evolving Skies'), name: 'SWSH07: Evolving Skies' }] }));
-    expect(evs.length).toBe(2);
+    // The set's two singles and its booster box.
+    expect(evs.length).toBe(3);
   });
   it('offers the sets and rarities that match', async () => {
     const f = await findFacets(q({ q: 'umbreon' }));
@@ -60,5 +61,61 @@ describe('multi-select', () => {
     expect(filterCount(withoutChip(f, chips(f)[2]))).toBe(2);
     expect(toggle(['a'], 'b')).toEqual(['a', 'b']);
     expect(toggle(['a', 'b'], 'a')).toEqual(['b']);
+  });
+});
+
+describe('sealed product', () => {
+  it('filters by type: cards, all sealed, one kind', async () => {
+    const evs = { sets: [{ id: setId('SWSH07: Evolving Skies'), name: 'SWSH07: Evolving Skies' }] };
+    expect((await findCards(q({ ...evs, types: ['card'] }))).map((c) => c.sealedType ?? null)).toEqual([null, null]);
+    expect((await findCards(q({ ...evs, types: ['sealed'] }))).map((c) => c.name)).toEqual(['Evolving Skies Booster Box']);
+    expect((await findCards(q({ q: 'box', types: ['etb'] }))).map((c) => c.productId)).toEqual([9100002]);
+    expect((await findCards(q({ q: 'box', types: ['etb', 'booster_box'] }))).length).toBe(2);
+  });
+  it('offers Cards and each sealed kind as type facets, cards first', async () => {
+    const f = await findFacets(q({ q: 'evolving' }));
+    expect(f.types.map((t) => t.key)).toEqual(['card', 'booster_box']);
+    expect(facetsFrom([{ kind: 'type', key: 'etb', label: 'etb', n: 1 }, { kind: 'type', key: 'card', label: 'card', n: 9 }, { kind: 'type', key: 'mystery', label: 'x', n: 1 }]).types).toEqual([
+      { key: 'card', n: 9 },
+      { key: 'etb', n: 1 },
+    ]);
+  });
+  it('shows a type chip that removes', () => {
+    const f = q({ types: ['booster_box'] });
+    expect(chips(f).map((c) => c.label)).toEqual(['Booster box']);
+    expect(filterCount(withoutChip(f, chips(f)[0]))).toBe(0);
+  });
+});
+
+describe('art type', () => {
+  it('filters by art type across games, OR within the group', async () => {
+    const alt = await findCards(q({ q: 'umbreon', arts: ['alt_art'] }));
+    expect(alt.map((c) => c.name).sort()).toEqual(['Umbreon V (Alternate Art)', 'Umbreon VMAX (Alternate Art Secret)']);
+    const sir = await findCards(q({ q: 'ex', arts: ['special_illustration'] }));
+    expect(sir.length).toBe(3);
+    expect((await findCards(q({ q: 'ex', arts: ['special_illustration', 'secret'] }))).length).toBe(4);
+    expect((await findCards(q({ q: 'luffy', arts: ['alt_art'] }))).length).toBe(1);
+    expect((await findCards(q({ q: 'jinx', arts: ['alt_art'] }))).length).toBe(1);
+  });
+  it('never matches sealed product', async () => {
+    const evs = q({ sets: [{ id: setId('SWSH07: Evolving Skies'), name: 'SWSH07: Evolving Skies' }] });
+    expect((await findCards(q({ ...evs, arts: ['standard', 'alt_art', 'secret'] }))).every((c) => !c.sealedType)).toBe(true);
+  });
+  it('offers art facets in their fixed order, not by count', async () => {
+    const f = await findFacets(q({ q: 'umbreon' }));
+    expect(f.arts).toEqual([
+      { key: 'alt_art', n: 2 },
+      { key: 'special_illustration', n: 1 },
+    ]);
+    expect(facetsFrom([{ kind: 'art', key: 'promo', label: 'promo', n: 9 }, { kind: 'art', key: 'holo', label: 'holo', n: 1 }, { kind: 'art', key: 'shiny?', label: 'x', n: 1 }]).arts).toEqual([
+      { key: 'holo', n: 1 },
+      { key: 'promo', n: 9 },
+    ]);
+  });
+  it('counts, chips and removes art types', () => {
+    const f = q({ q: 'ex', arts: ['alt_art', 'secret'] });
+    expect(filterCount(f)).toBe(2);
+    expect(chips(f).map((c) => c.label)).toEqual(['Alt art', 'Secret and gold']);
+    expect(withoutChip(f, chips(f)[0]).arts).toEqual(['secret']);
   });
 });

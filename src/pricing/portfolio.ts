@@ -22,6 +22,8 @@ export type CardRow = {
   /** 30-day trend, as a fraction. */
   trend30: number;
   ask: number | null;
+  /** The rule ask was under what you paid and "never sell at a loss" raised it. */
+  askRaisedToPaid?: boolean;
   floor: number | null;
   /** Why the floor is what it is. Null without comps. */
   floorBasis: FloorBasis | null;
@@ -137,6 +139,16 @@ export function trendOf(series: number[], threshold = 0): 'up' | 'down' | 'flat'
   const d = series[series.length - 1] - first;
   const limit = Math.abs(first) * threshold;
   return d > limit ? 'up' : d < -limit ? 'down' : 'flat';
+}
+
+/**
+ * The line where the value chart would be when there's nothing to draw. It only claims prices are
+ * loading while they are; cards with a price but under two days of history get a plain note, and
+ * the sold view (no sales in 30 days) keeps its own line.
+ */
+export function chartNote(o: { cards: number; sold: boolean; loading: boolean; empty: string }): string {
+  if (!o.cards || o.sold) return o.empty;
+  return o.loading ? 'Prices are loading.' : 'Chart starts once we have a few days of prices.';
 }
 
 /**

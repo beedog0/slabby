@@ -14,18 +14,23 @@ import { SoldState } from '../../../src/components/SoldState';
 import { TrendSentence } from '../../../src/components/TrendSentence';
 import { BackIcon, Chevron, Hairline, IconButton, PrimaryButton, SlidersIcon, Stepper } from '../../../src/components/ui';
 import { cardLabel, money, rowTitle, rulePct } from '../../../src/lib/format';
-import { minFloorOverride } from '../../../src/pricing/rules';
+import { LAST_DAY_CUT_PCT, floor as ruleFloor, minFloorOverride } from '../../../src/pricing/rules';
+import { inputsFor } from '../../../src/pricing/portfolio';
+import { sourceWord } from '../../../src/pricing/estimate';
 import { freshnessLine, freshnessWorthShowing, trendSentence, trendVerdict } from '../../../src/pricing/trend';
 import { useCardRow } from '../../../src/pricing/useCardRow';
 import { useCardRefresh } from '../../../src/services/useRefresh';
 import { useCon, type ConMode } from '../../../src/store/con';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
-import { color, size, space, type } from '../../../src/theme/tokens';
+import { size, space, type } from '../../../src/theme/tokens';
+import { themed, useColors } from '../../../src/theme/theme';
 
 type Mode = ConMode;
 
 export default function BeforeTheTable() {
+  const color = useColors();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const row = useCardRow(id);
@@ -118,13 +123,13 @@ export default function BeforeTheTable() {
   const ticks: Tick[] = selling
     ? [
         ...(card.paidCents ? [{ value: card.paidCents, label: 'Paid', color: color.ink }] : []),
-        { value: row.floor, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 },
+        { value: row.floor, label: 'Floor', color: color.ink, labelColor: color.ink, height: 14 },
         { value: price.marketCents, label: 'Market', color: color.secondary },
         { value: row.ask, label: 'Ask', color: 'transparent', labelColor: color.ink, pin: true },
       ]
     : [
         { value: row.buyTarget, label: 'Target', color: 'transparent', labelColor: color.ink, pin: true },
-        { value: row.buyMax, label: 'Max', color: color.loss, labelColor: color.loss, height: 14 },
+        { value: row.buyMax, label: 'Max', color: color.ink, labelColor: color.ink, height: 14 },
         { value: price.marketCents, label: 'Market', color: color.secondary },
       ];
 
@@ -133,6 +138,10 @@ export default function BeforeTheTable() {
   const overridden = card.floorOverrideCents != null;
   const minFloor = minFloorOverride({ paidCents: card.paidCents, rules });
   const atMin = row.floor <= minFloor;
+  // A per-card floor is never cut by last-day prices, so the stepper starts from the uncut floor:
+  // otherwise one tap would keep the cut past midnight.
+  const stepFrom =
+    row.floorBasis === 'lastDay' ? ruleFloor(inputsFor(card, price, { ...rules, lastDayUntil: null })) : row.floor!;
   const setFloor = (v: number) => update(card.id, { floorOverrideCents: Math.max(minFloor, Math.min(v, row.ask!)) });
   const raw = card.grader === 'raw';
   const em = (s: string) => <Text style={{ color: color.ink, fontWeight: '600' }}>{s}</Text>;
@@ -143,6 +152,10 @@ export default function BeforeTheTable() {
       <>floor = what you paid</>
     ) : row.floorBasis === 'ask' ? (
       <>floor = ask</>
+    ) : row.floorBasis === 'lastDay' ? (
+      <>
+        floor = {raw ? 'low' : '30d low'} {em(rulePct(rules.floorPct))}, last day {em(rulePct(-(rules.lastDayCutPct ?? LAST_DAY_CUT_PCT)))}
+      </>
     ) : (
       <>
         floor = {raw ? 'low' : '30d low'} {em(rulePct(rules.floorPct))}
@@ -166,7 +179,7 @@ export default function BeforeTheTable() {
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xl }]}>
             {selling ? 'Walk away under' : 'Walk away over'}
           </Text>
-          <Text style={[type.displayS, { color: color.loss, fontSize: 44 }]}>{money(limit)}</Text>
+          <Text style={[type.displayS, { color: color.ink, fontSize: 44 }]}>{money(limit)}</Text>
         </View>
 
         <View style={styles.gutter}>
@@ -183,11 +196,17 @@ export default function BeforeTheTable() {
             <Text style={[type.text, { color: color.secondary, flex: 1 }]}>
               {selling ? (
                 <>
-                  Ask = {raw ? 'TCGplayer' : 'market'} {em(rulePct(rules.askPct))} · {floorWhy}
+                  {row.askRaisedToPaid ? (
+                    <>Raised to what you paid · never sell at a loss</>
+                  ) : (
+                    <>
+                      Ask = {sourceWord(price, raw)} {em(rulePct(rules.askPct))} · {floorWhy}
+                    </>
+                  )}
                 </>
               ) : (
                 <>
-                  Target = {raw ? 'TCGplayer' : 'market'} {em(rulePct(rules.buyTargetPct))} · max = {raw ? 'TCGplayer' : 'market'}{' '}
+                  Target = {sourceWord(price, raw)} {em(rulePct(rules.buyTargetPct))} · max = {sourceWord(price, raw)}{' '}
                   {em(rulePct(rules.buyMaxPct))}
                 </>
               )}
@@ -238,8 +257,8 @@ export default function BeforeTheTable() {
                 <Stepper
                   label="floor for this card"
                   value={money(row.floor)}
-                  onMinus={() => setFloor(row.floor! - step)}
-                  onPlus={() => setFloor(row.floor! + step)}
+                  onMinus={() => setFloor(stepFrom - step)}
+                  onPlus={() => setFloor(stepFrom + step)}
                   minusDisabled={atMin}
                 />
               </View>
@@ -260,7 +279,7 @@ export default function BeforeTheTable() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   page: { flex: 1, backgroundColor: color.canvas },
   gutter: { paddingHorizontal: space.gutter },
   center: { alignItems: 'center', paddingHorizontal: space.gutter },
@@ -275,4 +294,4 @@ const styles = StyleSheet.create({
   formula: { minHeight: 56, flexDirection: 'row', alignItems: 'center' },
   trend: { minHeight: 56, justifyContent: 'center' },
   override: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: space.m },
-});
+}));

@@ -12,9 +12,11 @@ import { BackIcon, IconButton, PrimaryButton } from '../src/components/ui';
 import { gradeLabel, money, rowTitle } from '../src/lib/format';
 import { useRules } from '../src/store/rules';
 import { saveDraft, useSellDraft } from '../src/store/sellDraft';
-import { color, size, space, type } from '../src/theme/tokens';
+import { size, space, type } from '../src/theme/tokens';
+import { useColors } from '../src/theme/theme';
 
 export default function Sell() {
+  const color = useColors();
   const insets = useSafeAreaInsets();
   const draft = useSellDraft((s) => s.draft);
   const patch = useSellDraft((s) => s.patch);
@@ -29,7 +31,7 @@ export default function Sell() {
   );
   if (!draft) return <View style={{ flex: 1, backgroundColor: color.canvas }}>{back}</View>;
 
-  const grade = gradeLabel(draft.card.grader, draft.card.grade);
+  const grade = gradeLabel(draft.card.grader, draft.card.grade, undefined, draft.card.sealed);
   // A pull with no catalog card has no pack price to look up: it's rated as $0 cost.
   const putUp = () => {
     const saved = saveDraft(draft, { cost: draft.cost, marketCents: draft.marketCents, rules });

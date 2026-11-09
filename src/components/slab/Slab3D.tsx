@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useEffect, useReducer, useRef } from 'react';
 import { Animated, Platform, StyleSheet, View } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import { useIsDark } from '../../theme/theme';
 import type { Card } from '../../types';
 import { BackFace, EdgeStrip, FrontFace } from './SlabFaces';
 import { slabLayout, type SlabLayout } from './geometry';
@@ -69,6 +70,7 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
 export const Slab3D = memo(function Slab3D({ card, width, yaw: yawIn, pitch: pitchIn, perspective, shadow = true, sharp = false }: Props) {
   const [yaw, pitch] = useLive(yawIn, pitchIn);
+  const dark = useIsDark();
   const L = slabLayout(width, card.grader);
   const P = perspective ?? Math.max(900, width * 5);
   const f = faceMatrices(L, yaw, pitch, P);
@@ -118,6 +120,7 @@ export const Slab3D = memo(function Slab3D({ card, width, yaw: yawIn, pitch: pit
     return (
       <View key={key} {...FLATTEN} collapsable={false} style={[center(vertical ? L.depth : capLen, vertical ? sideLen : L.depth), { opacity: face.opacity, transform: m3d(face.matrix) }]}>
         <EdgeStrip length={vertical ? sideLen : capLen} depth={L.depth} vertical={vertical} />
+        {dark ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: DARK_LIGHT.edge }]} /> : null}
       </View>
     );
   };
@@ -157,6 +160,12 @@ export const Slab3D = memo(function Slab3D({ card, width, yaw: yawIn, pitch: pit
     </View>
   );
 });
+
+/**
+ * Dark mode only. On black a flat white case reads as a cut-out photo; shading the acrylic edges
+ * gives it thickness. The face itself stays evenly lit, so grader colors stay true.
+ */
+const DARK_LIGHT = { edge: 0.38 } as const;
 
 const FloorShadow = memo(function FloorShadow({ L, scale }: { L: SlabLayout; scale: number }) {
   return (

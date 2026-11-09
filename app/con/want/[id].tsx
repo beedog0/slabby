@@ -8,11 +8,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { sheetTop } from '../../../src/lib/sheetTop';
 import { Keypad } from '../../../src/components/Keypad';
 import { PriceChart } from '../../../src/components/PriceChart';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../../src/components/ui';
 import { money } from '../../../src/lib/format';
 import { BUY_RATING_LABEL, buyRating, ratingHistory, type BuyRatingKind } from '../../../src/pricing/rules';
+import { canAutoPrice } from '../../../src/pricing/lastSales';
 import {
   buyPrices,
   catalogCard,
@@ -24,13 +26,16 @@ import {
   type SearchPrices,
 } from '../../../src/services/search';
 import { useRules } from '../../../src/store/rules';
+import { seriesChange } from '../../../src/pricing/wishlistView';
 import { useWishlist, wishKey, type WishGrade } from '../../../src/store/wishlist';
-import { color, size, space, type } from '../../../src/theme/tokens';
+import { size, space, type } from '../../../src/theme/tokens';
+import { useColors } from '../../../src/theme/theme';
 
 const MAX_DIGITS = 6;
 const ORDER: BuyRatingKind[] = ['steal', 'good', 'fair', 'over'];
 
 export default function WishlistPrice() {
+  const color = useColors();
   const { id, grade: gradeParam } = useLocalSearchParams<{ id: string; grade?: string }>();
   const grade = (gradeParam || 'psa10') as WishGrade;
   const productId = Number(id);
@@ -59,8 +64,16 @@ export default function WishlistPrice() {
   }, [productId]);
 
   const price = prices === undefined ? undefined : grade === 'raw' ? prices?.raw : prices?.grades[grade];
+  // Opening a wished card keeps its stored market fresh, so the Wishlist never says "under" on a
+  // price this page has just shown to be stale.
+  const seeMarket = useWishlist((s) => s.seeMarket);
+  useEffect(() => {
+    if (existing && price) seeMarket(existing.key, price.marketCents, price.asOf, seriesChange(price.series90));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [price?.marketCents, existing?.key]);
   const market = price?.marketCents ?? null;
-  const buy = buyPrices(market, rules);
+  // A last-sold headline (under 5 sales) never fills in a target or max.
+  const buy = canAutoPrice(price) ? buyPrices(market, rules) : null;
   const typed = (parseInt(digits || '0', 10) || 0) * 100;
   const has = digits.length > 0;
   // Skipping the price fills in your buying max: the top of Good buy.
@@ -95,6 +108,7 @@ export default function WishlistPrice() {
       autoTarget: !has,
       marketCents: market,
       marketAsOf: price?.asOf ?? null,
+      change7d: seriesChange(price?.series90),
       addedAt: existing?.addedAt ?? new Date().toISOString(),
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -102,7 +116,7 @@ export default function WishlistPrice() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: sheetTop(insets.top) }}>
       <View style={styles.nav}>
         <IconButton label="Back" onPress={() => router.back()}>
           <BackIcon />

@@ -1,6 +1,8 @@
 // Add a slab by hand: used when PSA can't look the cert up, and for BGS/CGC slabs (v1 scans PSA
 // only). The card is matched to its price source after it's added, same as a scanned one.
 // Card search opens it prefilled (name, set, number, grade, photo) with the product already known.
+// Sealed product from search (?sealed=booster_box) gets its own short form: how many, what you
+// paid for each, hold or sell. Its photo and price come from the catalog by product id.
 
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
@@ -10,19 +12,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Segmented } from '../src/components/Segmented';
 import { SlabView } from '../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton, Stepper } from '../src/components/ui';
-import { ordinal } from '../src/lib/format';
+import { centsFromTyped, dollarsTyped, money, ordinal } from '../src/lib/format';
+import { isSealedType, sealedLabel } from '../src/lib/sealed';
+import { uuid } from '../src/services/sync';
 import { cardKey } from '../src/pricing/cardKey';
 import { matchNewCard, refreshPrices } from '../src/services/comps';
 import { GAMES, GAME_LIST, LANGUAGE_NAME } from '../src/lib/games';
 import { cardFromDetails } from '../src/services/psa';
-import type { Game } from '../src/types';
+import type { Game, SealedType } from '../src/types';
 import { useVault } from '../src/store/vault';
-import { color, size, space, type } from '../src/theme/tokens';
+import { size, space, type } from '../src/theme/tokens';
+import { themed, useColors } from '../src/theme/theme';
 import type { Card } from '../src/types';
 
 type Grader = 'psa' | 'bgs' | 'cgc' | 'raw';
 
 export default function AddByHand() {
+  const color = useColors();
+  const styles = useStyles();
   const p = useLocalSearchParams<{
     cert?: string;
     name?: string;
@@ -35,7 +42,145 @@ export default function AddByHand() {
     grade?: string;
     productId?: string;
     image?: string;
+    sealed?: string;
   }>();
+  if (isSealedType(p.sealed) && Number(p.productId) > 0) return <AddSealed p={{ ...p, sealed: p.sealed, productId: p.productId! }} />;
+  return <AddCard p={p} />;
+}
+
+type AddParams = {
+  cert?: string;
+  name?: string;
+  set?: string;
+  setCode?: string;
+  number?: string;
+  language?: string;
+  game?: string;
+  grader?: Grader;
+  grade?: string;
+  productId?: string;
+  image?: string;
+};
+
+/** A sealed item from search: count, paid each, plan. Adds one vault item per copy (they stack). */
+function AddSealed({ p }: { p: AddParams & { sealed: SealedType; productId: string } }) {
+  const color = useColors();
+  const styles = useStyles();
+  const insets = useSafeAreaInsets();
+  const add = useVault((s) => s.add);
+  const [paid, setPaid] = useState('');
+  const [count, setCount] = useState(1);
+  const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
+  const productId = Number(p.productId);
+  const base: Card = {
+    id: `add-preview-${productId}`,
+    game: p.game && p.game in GAMES ? (p.game as Game) : 'pokemon',
+    certNumber: null,
+    grader: 'raw',
+    grade: null,
+    name: (p.name ?? '').trim() || sealedLabel(p.sealed),
+    setName: p.set?.trim() || null,
+    setCode: p.setCode || null,
+    number: null,
+    language: p.language === 'ja' ? 'ja' : 'en',
+    year: null,
+    imageFrontUrl: p.image || null,
+    sealed: p.sealed,
+    productId,
+    paidCents: null,
+    paidAt: null,
+    plan,
+    floorOverrideCents: null,
+    askOverrideCents: null,
+    status: 'owned',
+    soldCents: null,
+    soldAt: null,
+    soldWhere: null,
+    createdAt: new Date(0).toISOString(),
+  };
+  const owned = useVault((s) => s.cards).filter((c) => c.status === 'owned' && c.sealed && c.productId === productId).length;
+  const paidCents = centsFromTyped(paid);
+
+  const save = () => {
+    const now = new Date().toISOString();
+    const saved: Card[] = Array.from({ length: count }, () => ({
+      ...base,
+      id: uuid(),
+      paidCents,
+      paidAt: now.slice(0, 10),
+      createdAt: now,
+    }));
+    for (const c of saved) add(c);
+    refreshPrices(saved.slice(0, 1)).catch(() => {});
+    router.dismissTo('/');
+    router.push(`/card/${saved[0].id}`);
+  };
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.canvas }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: insets.top, paddingBottom: space.xxl }}>
+        <View style={styles.nav}>
+          <IconButton label="Back" onPress={() => router.back()}>
+            <BackIcon />
+          </IconButton>
+        </View>
+        <View style={styles.gutter}>
+          <Text style={[type.title, { color: color.ink }]}>Add to vault</Text>
+          <Text style={[type.text, { color: color.secondary, paddingTop: 2, paddingBottom: space.l }]}>How many, and what you paid for each.</Text>
+          <View style={styles.preview}>
+            <SlabView card={base} width={size.heroW * 0.75} posed={false} />
+          </View>
+          <Text style={[type.body, { color: color.ink, fontWeight: '600' }]}>{base.name}</Text>
+          <Text style={[type.text, { color: color.secondary, paddingTop: 2, paddingBottom: space.m }]}>
+            {[sealedLabel(p.sealed), base.language === 'ja' ? 'Japanese' : null].filter(Boolean).join(' · ')}
+          </Text>
+          <Hairline />
+          <Field label="How many">
+            <Stepper label="how many" value={String(count)} onMinus={() => setCount((n) => Math.max(1, n - 1))} onPlus={() => setCount((n) => Math.min(99, n + 1))} />
+          </Field>
+          <Field label={count > 1 ? 'What you paid each' : 'What you paid'}>
+            <TextInput
+              value={paid ? `$${paid}` : ''}
+              onChangeText={(t) => setPaid(dollarsTyped(t))}
+              placeholder="$0"
+              placeholderTextColor={color.secondary}
+              keyboardType="decimal-pad"
+              inputAccessoryViewID={KEYBOARD_DONE}
+              style={[type.body, styles.input]}
+            />
+          </Field>
+          <Field label="Plan" last>
+            <Segmented
+              style={{ width: 150 }}
+              value={plan}
+              onChange={setPlan}
+              options={[
+                { value: 'hold', label: 'Hold' },
+                { value: 'sell', label: 'Sell' },
+              ]}
+            />
+          </Field>
+        </View>
+      </ScrollView>
+      <View style={[styles.gutter, { paddingBottom: insets.bottom + space.l, paddingTop: space.m }]}>
+        {owned ? (
+          <Text style={[type.secondary, { color: color.secondary, paddingBottom: space.m, textAlign: 'center' }]}>
+            {`You already have ${owned}. This would make ${owned + count}.`}
+          </Text>
+        ) : null}
+        <PrimaryButton
+          title={count > 1 ? `Add ${count} to vault${paidCents ? ` · ${money(paidCents * count)}` : ''}` : 'Add to vault'}
+          onPress={save}
+        />
+      </View>
+      <KeyboardDone />
+    </KeyboardAvoidingView>
+  );
+}
+
+function AddCard({ p }: { p: AddParams }) {
+  const color = useColors();
+  const styles = useStyles();
   const certParam = p.cert;
   const fromSearch = !!p.productId;
   const insets = useSafeAreaInsets();
@@ -109,7 +254,6 @@ export default function AddByHand() {
 
   const save = () => {
     if (!ready) return;
-    const dollars = parseInt(paid, 10);
     const card = cardFromDetails({
       game,
       cert: cert.trim() || null,
@@ -121,7 +265,7 @@ export default function AddByHand() {
       // Pokémon numbers are unique per printing; the other games reuse them for parallels.
       variety: game === 'pokemon' ? undefined : variety,
       language,
-      paidCents: Number.isFinite(dollars) ? dollars * 100 : null,
+      paidCents: centsFromTyped(paid),
       plan,
       // The set code only fits while the set is the one search picked.
       setCode: p.setCode && setTitle === p.set ? p.setCode : null,
@@ -269,10 +413,10 @@ export default function AddByHand() {
           <Field label="What you paid">
             <TextInput
               value={paid ? `$${paid}` : ''}
-              onChangeText={(t) => setPaid(t.replace(/[^0-9]/g, '').slice(0, 6))}
+              onChangeText={(t) => setPaid(dollarsTyped(t))}
               placeholder="$0"
               placeholderTextColor={color.secondary}
-              keyboardType="number-pad"
+              keyboardType="decimal-pad"
               inputAccessoryViewID={KEYBOARD_DONE}
               style={[type.body, styles.input]}
             />
@@ -304,6 +448,8 @@ export default function AddByHand() {
 }
 
 function Field({ label, children, last }: { label: string; children: ReactNode; last?: boolean }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <>
       <View style={styles.field}>
@@ -317,10 +463,10 @@ function Field({ label, children, last }: { label: string; children: ReactNode; 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   preview: { alignItems: 'center', paddingBottom: space.xl },
   nav: { flexDirection: 'row', paddingHorizontal: space.gutter - 10 },
   field: { minHeight: 56, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.l },
   input: { flex: 1, textAlign: 'right', color: color.ink, paddingVertical: space.m },
-});
+}));

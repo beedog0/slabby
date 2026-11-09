@@ -18,13 +18,15 @@ import { useCardRow } from '../../../src/pricing/useCardRow';
 import { DEFAULT_CON_NAME, useCon } from '../../../src/store/con';
 import { useRules } from '../../../src/store/rules';
 import { useVault } from '../../../src/store/vault';
-import { color, size, space, type } from '../../../src/theme/tokens';
+import { size, space, type } from '../../../src/theme/tokens';
+import { useColors } from '../../../src/theme/theme';
 
 const MAX_DIGITS = 6;
 
 type Confirm = { key: 'primary' | 'quiet'; message: string } | null;
 
 export default function Offer() {
+  const color = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const row = useCardRow(id);
@@ -143,7 +145,7 @@ export default function Offer() {
 
   const ticks: Tick[] = [];
   if (card.paidCents) ticks.push({ value: card.paidCents, label: 'Paid', color: color.ink });
-  if (floor != null) ticks.push({ value: floor, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 });
+  if (floor != null) ticks.push({ value: floor, label: 'Floor', color: color.ink, labelColor: color.ink, height: 14 });
   if (price) ticks.push({ value: price.marketCents, label: 'Market', color: color.secondary });
 
   // "Keeps $25 · beats eBay by $8": what this offer means against holding out for eBay.
@@ -273,6 +275,7 @@ export default function Offer() {
 }
 
 function Nav({ title }: { title: string }) {
+  const color = useColors();
   return (
     <View style={styles.nav}>
       <IconButton label="Back" onPress={() => router.back()}>

@@ -4,16 +4,18 @@
 
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { money, pct } from '../../lib/format';
+import { cardPrice, money, pct } from '../../lib/format';
 import type { CardPrice } from '../../services/comps';
 import { displayName, gradeLabel, isQuiet, SEARCH_GRADES, type SearchGrade, type SearchPrices } from '../../services/search';
 import type { Found } from '../../services/searchFilters';
-import { color, radius, shadow, space, type } from '../../theme/tokens';
+import { radius, shadow, space, type } from '../../theme/tokens';
+import { themed, useColors } from '../../theme/theme';
 import { ArtImage } from '../ArtImage';
 
 type Choice = 'raw' | SearchGrade;
 
 export function Section({ title, note, action, children }: { title: string; note?: string; action?: { label: string; onPress: () => void }; children: React.ReactNode }) {
+  const color = useColors();
   return (
     <View style={{ paddingTop: space.section }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -37,6 +39,8 @@ export function Section({ title, note, action, children }: { title: string; note
  * at a glance, and taps through to that grade. Grades with no sale in 30 days go gray.
  */
 export function GradeLadder({ prices, pick, onPick }: { prices: SearchPrices; pick: Choice; onPick: (c: Choice) => void }) {
+  const color = useColors();
+  const styles = useStyles();
   const rows: { key: Choice; p: CardPrice; quiet: boolean }[] = [];
   for (const g of SEARCH_GRADES) {
     const p = prices.grades[g];
@@ -47,7 +51,7 @@ export function GradeLadder({ prices, pick, onPick }: { prices: SearchPrices; pi
   const top = Math.max(...rows.map((r) => r.p.marketCents));
 
   return (
-    <Section title="Prices by grade" note="30-day median · sales in 30 days">
+    <Section title="Prices by grade" note={`${Object.values(prices.grades).some((g) => g?.basis) ? 'Median of last 5 sales, or last sale' : '30-day median'} · sales in 30 days`}>
       {rows.map(({ key, p, quiet }) => {
         const on = key === pick;
         const ink = quiet ? color.secondary : color.ink;
@@ -57,14 +61,14 @@ export function GradeLadder({ prices, pick, onPick }: { prices: SearchPrices; pi
             onPress={() => onPick(key)}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            accessibilityLabel={`${gradeLabel(key)} ${money(p.marketCents)}${key === 'raw' ? '' : `, ${p.sales30d} sales`}${quiet ? ', no recent sales' : ''}`}
+            accessibilityLabel={`${gradeLabel(key)} ${cardPrice(p.marketCents)}${key === 'raw' ? '' : `, ${p.sales30d} sales`}${quiet ? ', no recent sales' : ''}`}
             style={styles.ladderRow}
           >
             <Text numberOfLines={1} style={[type.text, styles.ladderLabel, { color: ink, fontWeight: on ? '600' : '400' }]}>{gradeLabel(key)}</Text>
             <View style={styles.track}>
               <View style={[styles.bar, { width: `${Math.max(2, (p.marketCents / top) * 100)}%`, backgroundColor: on ? color.ink : color.secondary, opacity: on ? 1 : quiet ? 0.15 : 0.3 }]} />
             </View>
-            <Text style={[type.text, styles.ladderPrice, { color: ink, fontWeight: on ? '600' : '500' }]}>{money(p.marketCents)}</Text>
+            <Text style={[type.text, styles.ladderPrice, { color: ink, fontWeight: on ? '600' : '500' }]}>{cardPrice(p.marketCents)}</Text>
             <Text style={[type.secondary, styles.ladderSales, { color: color.secondary }]}>{key === 'raw' ? '' : p.sales30d}</Text>
           </Pressable>
         );
@@ -75,6 +79,8 @@ export function GradeLadder({ prices, pick, onPick }: { prices: SearchPrices; pi
 
 /** Today against its 90-day low and high, drawn like the app's price line: hairline rule, ink dot. */
 export function RangeMeter({ low, high, now, days }: { low: number; high: number; now: number; days: number }) {
+  const color = useColors();
+  const styles = useStyles();
   if (!(high > low)) return null;
   const at = Math.min(1, Math.max(0, (now - low) / (high - low)));
   const word = at <= 0.2 ? 'Near its low' : at >= 0.8 ? 'Near its high' : 'Mid-range';
@@ -100,7 +106,9 @@ export function RangeMeter({ low, high, now, days }: { low: number; high: number
 }
 
 /** The set's priciest other singles, raw TCGplayer market with the 7-day move. */
-export function SetRow({ setName, cards, onAll, con }: { setName: string; cards: Found[]; onAll?: () => void; con?: boolean }) {
+export function SetRow({ setName, cards, onAll, con, trade }: { setName: string; cards: Found[]; onAll?: () => void; con?: boolean; trade?: boolean }) {
+  const color = useColors();
+  const styles = useStyles();
   if (!cards.length) return null;
   return (
     <Section title={`More from ${setName}`} note="Raw TCGplayer market · 7-day change" action={onAll ? { label: 'See all', onPress: onAll } : undefined}>
@@ -108,19 +116,19 @@ export function SetRow({ setName, cards, onAll, con }: { setName: string; cards:
         {cards.map((c) => (
           <Pressable
             key={c.productId}
-            onPress={() => router.push(`/search/${c.productId}${con ? '?con=1' : ''}`)}
+            onPress={() => router.push(`/search/${c.productId}${trade ? '?trade=1' : con ? '?con=1' : ''}`)}
             accessibilityRole="button"
-            accessibilityLabel={`${displayName(c.name)}, ${c.marketCents != null ? money(c.marketCents) : 'no price'}`}
+            accessibilityLabel={`${displayName(c.name)}, ${c.marketCents != null ? cardPrice(c.marketCents) : 'no price'}`}
             style={styles.setCard}
           >
             <View style={[styles.setArt, shadow.thumb]}>
-              {c.imageUrl ? <ArtImage uri={c.imageUrl} recyclingKey={String(c.productId)} style={{ flex: 1, borderRadius: radius.thumb * 2 }} /> : null}
+              <ArtImage uri={c.imageUrl} label={c.name} recyclingKey={String(c.productId)} style={{ flex: 1, borderRadius: radius.thumb * 2 }} />
             </View>
             <Text numberOfLines={1} style={[type.secondary, { color: color.ink, paddingTop: space.s }]}>
               {displayName(c.name)}
             </Text>
             <Text style={[type.secondary, { color: color.ink, fontWeight: '600' }]}>
-              {c.marketCents != null ? money(c.marketCents) : '—'}
+              {c.marketCents != null ? cardPrice(c.marketCents) : '—'}
               {c.change7d != null && Math.abs(c.change7d) >= 0.005 ? (
                 <Text style={{ color: c.change7d > 0 ? color.gain : color.loss, fontWeight: '400' }}> {pct(c.change7d)}</Text>
               ) : null}
@@ -134,7 +142,7 @@ export function SetRow({ setName, cards, onAll, con }: { setName: string; cards:
 
 const SET_W = 96;
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   ladderRow: { flexDirection: 'row', alignItems: 'center', height: 40, gap: space.m },
   ladderLabel: { width: 60 },
   track: { flex: 1, height: 6, justifyContent: 'center' },
@@ -149,4 +157,4 @@ const styles = StyleSheet.create({
   setRow: { paddingHorizontal: space.gutter, gap: space.l },
   setCard: { width: SET_W },
   setArt: { width: SET_W, height: Math.round(SET_W * (88 / 63)), borderRadius: radius.thumb * 2, backgroundColor: color.well },
-});
+}));

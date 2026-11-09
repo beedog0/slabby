@@ -17,12 +17,26 @@
 // catalog) with where that ask sits against market and a rating against what you paid. "What you
 // paid" also takes "Pulled it" (rated against the set's pack price, else $0) or "Not sure".
 // After an add the camera stays up for the next card, with a line at the top to open the one just added; X closes.
+//
+// Photo mode (Live / Photo under the button): tap the shutter, or pick a photo from the camera
+// roll, and the whole still is read once (src/services/photoScan.ts), no frame and no second read.
+// When the text reader can't place it and "AI backup read" is on (off by default, under the
+// switch), card-vision reads the photo (src/services/vision.ts) and
+// its transcription goes through the same parsers and catalog match, so names and prices still
+// come from the matched card. A slab read without a grade can't be added from either sheet.
+//
+// Price check (check=1, from Buying mode's scan button or the home menu): the same reads, but the
+// sheet comps someone else's card instead of adding it (src/components/scan/PriceCheck.tsx): grade
+// ladder, how many sales the price rests on, and "They're asking" rated against your buying rules.
+// "Bought for" saves it as a buy; "Add to vault instead" falls back to the normal sheet.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
+import { handleFromLink } from '../src/profile/publicProfile';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, AppState, Easing, Image, Keyboard, Linking, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { backToCon } from '../src/components/conStatusMenu';
@@ -34,28 +48,41 @@ import { CostField, EMPTY_COST, paidCentsOf, toCost, type CostInput } from '../s
 import { ask as ruleAsk } from '../src/pricing/rules';
 import { useRules } from '../src/store/rules';
 import { useSellDraft, type SellDraft } from '../src/store/sellDraft';
-import { ScanPills } from '../src/components/scan/ScanPills';
+import { GradePrices } from '../src/components/scan/GradePrices';
+import { ScanPills, type PillState, type ScanPill } from '../src/components/scan/ScanPills';
+import { PriceCheck, type CheckGrade } from '../src/components/scan/PriceCheck';
+import type { CardPrice } from '../src/services/comps';
 import { Segmented } from '../src/components/Segmented';
 import { Hairline, PrimaryButton } from '../src/components/ui';
 import { CON_STATUSES, CON_STATUS_LABEL, planPatch, type ConStatus } from '../src/lib/conStatus';
 import { DEFAULT_CON_NAME, useCon } from '../src/store/con';
-import { cardPrice, gradeLabel, money, rowTitle } from '../src/lib/format';
+import { cardPrice, gradeLabel, money, promoTag, rowTitle } from '../src/lib/format';
+import { CardName } from '../src/components/CardName';
 import { GAMES, LANGUAGE_NAME, gameOf } from '../src/lib/games';
-import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
-import { cardSteadyKey, findScannedCard, isConfident, looksLikeSlab, correctionKey, findSimilarCards, missReason, parseCardText, printedNumber, printName, printOptions, similarForSlab, withCorrection, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { cardFromCert, cardFromDetails, gradeFrom, lookupCert, nameFromMatch, parseCertFromQr, titleName, type CertResult } from '../src/services/psa';
+import { productName } from '../supabase/functions/_shared/comps-math';
+import { cardSteadyKey, findScannedCard, looksLikeSlab, correctionKey, findSimilarCards, missReason, parseCardText, printedNumber, printName, printOptions, readName, similarForSlab, withCorrection, type CardMatch, type ParsedCard } from '../src/services/cardScan';
+import { artRead, combine, identifyByArt, matchArt, printsOf, type ArtHit, type FoundCard, type Identified } from '../src/services/artMatch';
 import { useCorrections } from '../src/store/corrections';
-import { cardNumber, displayName, mockProductId, nameAndVariant, type CatalogCard } from '../src/services/search';
+import { cardNumber, displayName, mockProductId, nameAndVariant, searchCards, type CatalogCard } from '../src/services/search';
 import { artFor, matchNewCard, priceFor, refreshPrices, type CardRef } from '../src/services/comps';
 import { supabase } from '../src/services/supabase';
 import { cardKey } from '../src/pricing/cardKey';
 import { usePrices } from '../src/store/prices';
-import { autoProgress, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type ParsedLabel } from '../src/services/label';
+import { autoProgress, frameInPhoto, linesInFrame, parseLabel, stepAutoRead, withVotes, type AutoProgress, type AutoRead, type LabelLine, type ParsedLabel } from '../src/services/label';
 import { useVault } from '../src/store/vault';
+import { readPhoto } from '../src/services/photoScan';
+import { readPhotoWithVision } from '../src/services/vision';
+import { PHOTO_MIN_TEXT, readInTiles } from '../src/services/photoTiles';
+import { useScanPrefs } from '../src/store/scanPrefs';
 import { LabelReader } from '../modules/label-reader';
 import type { Card } from '../src/types';
-import { color, radius, size, space, type } from '../src/theme/tokens';
+import { light, radius, size, space, type } from '../src/theme/tokens';
+import { themed, useColors } from '../src/theme/theme';
 
 const SCAN_BG = '#2A2A2C'; // camera chrome only; never used on app UI
+/** Camera chrome looks the same in light and dark: white on the picture, white buttons. Sheets follow the theme. */
+const cam = light;
 const AUTO_START_MS = 700; // let exposure and focus settle first
 const AUTO_GAP_MS = 350; // between auto reads; each read itself takes ~0.5–1 s
 const NAV_H = 44;
@@ -73,15 +100,30 @@ const readId = (p: ParsedLabel) => {
 };
 
 export default function Scan() {
+  const color = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const [result, setResult] = useState<CertResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState('');
+  // A typed number that can't be a PSA cert (7–10 digits): said under the field, not ignored.
+  const [manualBad, setManualBad] = useState(false);
+  const lookUpTyped = () => {
+    if (!parseCertFromQr(manual)) return setManualBad(true);
+    setManualBad(false);
+    lastCert.current = null;
+    handle(manual);
+  };
   const [cost, setCost] = useState<CostInput>(EMPTY_COST);
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
-  const fromCon = useLocalSearchParams<{ con?: string }>().con === '1';
+  const params = useLocalSearchParams<{ con?: string; check?: string }>();
+  const fromCon = params.con === '1';
+  const priceCheck = params.check === '1';
+  // "Add to vault instead" on a price check: this card gets the normal sheet.
+  const [checkOff, setCheckOff] = useState(false);
+  const checking = priceCheck && !checkOff;
   const [conStatus, setConStatusChoice] = useState<ConStatus>('sale');
   const [soldFor, setSoldFor] = useState('');
   const [lossConfirm, setLossConfirm] = useState(false);
@@ -107,7 +149,14 @@ export default function Scan() {
   const [active, setActive] = useState(AppState.currentState === 'active');
   // A label was read once and we're waiting for a second matching read.
   const [spotted, setSpotted] = useState(false);
-  const [progress, setProgress] = useState<AutoProgress>(autoProgress(null));
+  const [progress, setProgressState] = useState<AutoProgress>(autoProgress(null));
+  /** A loose card's read so far (Number · Set pills), in place of the slab pills. */
+  const [cardPills, setCardPills] = useState<ScanPill[] | null>(null);
+  // Every slab-pill update or reset also clears the loose-card pills.
+  const setProgress = (p: AutoProgress) => {
+    setProgressState(p);
+    setCardPills(null);
+  };
   // The read succeeded: the frame closes solid with a check for a beat, then the sheet rises.
   const [locked, setLocked] = useState(false);
   const sheetIn = useRef(new Animated.Value(0)).current;
@@ -118,14 +167,47 @@ export default function Scan() {
   const [raw, setRaw] = useState<RawRead | null>(null);
   // What auto-read has gathered so far for the card in frame (fields merge across frames).
   const auto = useRef<AutoRead>(null);
+  // Live scan by art: the card the last frame's art was sure of (two frames in a row add it).
+  const lastArt = useRef<number | null>(null);
+  // What the last missed photo read, so "Type it in" starts from it.
+  const missLines = useRef<LabelLine[]>([]);
   // The last card read. Once it's in the vault, auto-read ignores it, so the slab just added (and
   // still in frame after the sheet closes) isn't read again. A tap still reads it.
   const lastRead = useRef<string | null>(null);
+  /** Price check: the loose card just checked, so it isn't read again while it's still in frame. */
+  const lastLoose = useRef<string | null>(null);
   // Where the frame sits on screen, for keeping only the text inside it.
   const frameRect = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const win = useWindowDimensions();
   // Label reading is the scan. QR decoding and PSA lookups are off while it's available.
   const labelMode = !!LabelReader;
+  // Live reads frames on its own; Photo reads one still when you tap (or one from the camera roll).
+  const [mode, setMode] = useState<'live' | 'photo'>('live');
+  const photoMode = labelMode && mode === 'photo';
+  // Photo mode: the still being read, shown in place of the camera until the sheet is put away.
+  const [still, setStill] = useState<string | null>(null);
+  // Photo mode's second and third tries: reading the photo in enlarged pieces, then the AI backup.
+  const [looking, setLooking] = useState<'closer' | 'ai' | null>(null);
+  // AI backup read: off unless switched on, so the on-device read can be judged by itself.
+  const aiBackup = useScanPrefs((s) => s.aiBackup);
+  // The AI backup read didn't answer (slow, offline, not set up): the miss says so.
+  const [aiMiss, setAiMiss] = useState(false);
+  const setAiBackup = useScanPrefs((s) => s.setAiBackup);
+  const stillOwned = useRef(false);
+
+  // A friend's profile code opens their profile, whether or not label reading is on.
+  const openedProfile = useRef(false);
+  const onCode = (data: string) => {
+    const friend = handleFromLink(data);
+    if (friend) {
+      if (openedProfile.current) return;
+      openedProfile.current = true;
+      Haptics.selectionAsync().catch(() => {});
+      router.replace(`/u/${friend}`);
+      return;
+    }
+    if (!labelMode) handle(data);
+  };
 
   const handle = async (data: string) => {
     const cert = parseCertFromQr(data);
@@ -139,6 +221,11 @@ export default function Scan() {
     if (r.status === 'found') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
 
+  // A cert PSA didn't confirm that's already in the vault (status owned).
+  const ownedCert =
+    result && result.status !== 'found' && result.cert
+      ? (existing.find((c) => c.certNumber === result.cert && c.status === 'owned') ?? null)
+      : null;
   const preview = result?.status === 'found' ? cardFromCert(result.payload, { paidCents: null, plan }) : null;
   const previewKey = preview ? cardKey(preview) : null;
   // Re-render when this card's comps land in the store.
@@ -149,7 +236,8 @@ export default function Scan() {
   const price = preview && !gradeMissing ? (livePrice ?? priceFor(preview)) : null;
 
   // Match the scanned card right away: photo, then prices. One card-match call per scan; Add reuses it.
-  const [matched, setMatched] = useState<{ key: string; art: string | null; productId: number | null } | null>(null);
+  // name: the matched catalog card's name when the label read differs from it ("SHIONG MAGIKARP").
+  const [matched, setMatched] = useState<{ key: string; art: string | null; productId: number | null; name: string | null } | null>(null);
   const [matching, setMatching] = useState(false);
   const match = useRef<{ key: string; done: Promise<CardRef | null> } | null>(null);
   useEffect(() => {
@@ -166,11 +254,12 @@ export default function Scan() {
       match.current = { key: previewKey, done };
     }
     let live = true;
+    const labelName = preview.name;
     setMatching(true);
     match.current.done.then((ref) => {
       if (!live) return;
       const pid = ref?.tcgplayer_id ? Number(ref.tcgplayer_id) : NaN;
-      setMatched({ key: previewKey, art: artFor(ref), productId: Number.isFinite(pid) ? pid : null });
+      setMatched({ key: previewKey, art: artFor(ref), productId: Number.isFinite(pid) ? pid : null, name: nameFromMatch(labelName, ref?.matched_name) });
       setMatching(false);
     });
     return () => {
@@ -191,7 +280,8 @@ export default function Scan() {
     if (!preview || !previewKey) return;
     const card = preview;
     setSimilar(null);
-    setMatched({ key: previewKey, art: c.imageUrl, productId: c.productId });
+    const picked = nameFromMatch(card.name, productName(c.name));
+    setMatched({ key: previewKey, art: c.imageUrl, productId: c.productId, name: picked });
     setMatching(true);
     // An explicit product replaces the server's match for this card (card-match), for every device.
     const done = matchNewCard(card, String(c.productId))
@@ -204,12 +294,14 @@ export default function Scan() {
     done.then((ref) => {
       if (match.current?.done !== done) return;
       // The picked card's photo, even if an older server still answers with its first match.
-      setMatched({ key: previewKey, art: ref && String(ref.tcgplayer_id) === String(c.productId) ? (artFor(ref) ?? c.imageUrl) : c.imageUrl, productId: c.productId });
+      setMatched({ key: previewKey, art: ref && String(ref.tcgplayer_id) === String(c.productId) ? (artFor(ref) ?? c.imageUrl) : c.imageUrl, productId: c.productId, name: picked });
       setMatching(false);
     });
   };
   const art = matched && matched.key === previewKey ? matched.art : null;
-  const shown = preview && art ? { ...preview, imageFrontUrl: art } : preview;
+  // The card's name comes from the matched card, not the label read: glare turns "SHINING" into "SHIONG".
+  const matchName = matched && matched.key === previewKey ? matched.name : null;
+  const shown = preview ? { ...preview, ...(art ? { imageFrontUrl: art } : {}), ...(matchName ? { name: matchName } : {}) } : preview;
   const owned = preview?.certNumber ? existing.find((c) => c.certNumber === preview.certNumber && c.status === 'owned') : undefined;
   const already = !!owned;
   // Copies of this card (same card, grader and grade) already in the vault, whatever their cert.
@@ -217,7 +309,7 @@ export default function Scan() {
   // The same cert twice is almost always a re-scan, so Add asks once before saving it again.
   const [confirmAgain, setConfirmAgain] = useState(false);
   /** The last slab added on this visit, and how many so far. */
-  const [added, setAdded] = useState<{ id: string; title: string; count: number } | null>(null);
+  const [added, setAdded] = useState<{ id: string; title: string; count: number; verb?: string } | null>(null);
   useEffect(() => setConfirmAgain(false), [previewKey]);
 
   // Con mode: what you paid from the cost field, else what the vault already has for this cert.
@@ -235,9 +327,10 @@ export default function Scan() {
   };
 
   const addToVault = () => {
-    if (result?.status !== 'found') return;
+    if (result?.status !== 'found' || gradeMissing) return;
     const card = cardFromCert(result.payload, { paidCents: paidCentsOf(cost), plan });
     if (art) card.imageFrontUrl = art;
+    if (matchName) card.name = matchName;
     add(card);
     afterSave(card);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -248,12 +341,39 @@ export default function Scan() {
 
   const startSell = useSellDraft((s) => s.start);
   const toSell = (askCents: number) => {
-    if (result?.status !== 'found') return;
+    if (result?.status !== 'found' || gradeMissing) return;
     const card = cardFromCert(result.payload, { paidCents: paidCentsOf(cost), plan: 'sell' });
     if (art) card.imageFrontUrl = art;
+    if (matchName) card.name = matchName;
     const productId = (matched?.key === previewKey ? matched.productId : null) ?? mockProductId(card);
     openSell({ card, productId, marketCents: price?.marketCents ?? null, askCents, cost: toCost(cost), afterSave }, startSell);
   };
+
+  /** Price check: bought at this price. Saved as a hold with what you paid, then the camera is back up. */
+  const boughtSlab = (cents: number, marketCents: number | null) => {
+    if (result?.status !== 'found') return;
+    Keyboard.dismiss();
+    const card = { ...cardFromCert(result.payload, { paidCents: cents, plan: 'hold' }), boughtConId: session?.id, boughtMarketCents: marketCents };
+    if (art) card.imageFrontUrl = art;
+    if (matchName) card.name = matchName;
+    add(card);
+    afterSave(card);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setAdded((a) => ({ id: card.id, title: `${rowTitle(card)} · ${money(cents)}`, count: (a?.count ?? 0) + 1, verb: 'Bought' }));
+    setManual('');
+    rescan();
+  };
+  const boughtRaw = (card: Card, cents: number) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setAdded((a) => ({ id: card.id, title: `${card.name} · ${money(cents)}`, count: (a?.count ?? 0) + 1, verb: 'Bought' }));
+    rescan();
+  };
+  // The PSA grade to rate a slab at: whole PSA grades only (BGS/CGC halves have no PSA price).
+  const checkGrade: CheckGrade | null =
+    preview && preview.grader === 'psa' && preview.grade != null && Number.isInteger(preview.grade) && preview.grade >= 1 && preview.grade <= 10
+      ? (`psa${preview.grade}` as CheckGrade)
+      : null;
+  const checkProduct = preview ? ((matched?.key === previewKey ? matched.productId : null) ?? mockProductId(preview)) : null;
 
   const rescan = () => {
     lastCert.current = null;
@@ -270,6 +390,19 @@ export default function Scan() {
     setSoldFor('');
     setLossConfirm(false);
     setRaw(null);
+    setCheckOff(false);
+    dropStill();
+  };
+  const dropStill = () => {
+    setStill((uri) => {
+      if (uri && stillOwned.current) {
+        try {
+          LabelReader?.discard?.(uri);
+        } catch {}
+      }
+      stillOwned.current = false;
+      return null;
+    });
   };
 
   // Pull either result sheet down, from anywhere on it, to put it away: same as Scan again.
@@ -290,29 +423,40 @@ export default function Scan() {
     if (rawOpen) sheet.reset();
   }, [rawOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const acceptCard = (read: ParsedCard) => {
+  // A loose card. The number read finds its candidates (exact), the art photographed reorders them
+  // or, with no number, finds them itself (src/services/artMatch.ts). `known` is an answer already
+  // worked out from the art, so the sheet opens on it straight away.
+  const acceptCard = (read: ParsedCard, art: Promise<ArtFound> = Promise.resolve(null), known?: Identified) => {
     lastKey.current = null;
+    lastArt.current = null;
     setSpotted(false);
     setLabelMiss(false);
-    setRaw({ read, matches: null, pick: 0, choosing: false });
+    setRaw({ read, matches: known?.matches ?? null, pick: 0, choosing: !!known && known.matches.length > 1 && !known.confident, byArt: known?.byArt });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    findScannedCard(read)
-      .catch(() => [] as CardMatch[])
-      // A card corrected before ("Not this card?") comes first, so it's never wrong twice.
-      .then((found) => withCorrection(found, useCorrections.getState().byKey[correctionKey(read)]))
-      .then((matches) => {
-        setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !isConfident(matches), similar: matches.length ? undefined : null } : r));
-        // No card with this number (a promo with no set, a print the catalog lacks): offer cards with the same name.
-        if (!matches.length)
-          findSimilarCards(read)
-            .catch(() => [] as CatalogCard[])
-            .then((similar) => setRaw((r) => (r && r.read === read ? { ...r, similar } : r)));
-      });
+    // Kept for "Type it in": typed matches that look like the photo come first.
+    art.then((a) => a?.hits.length && setRaw((r) => (r && r.read === read ? { ...r, art: a.hits } : r))).catch(() => {});
+    if (known) return;
+    const byNumber = read.numbers.length
+      ? findScannedCard(read)
+          .catch(() => [] as CardMatch[])
+          // A card corrected before ("Not this card?") comes first, so it's never wrong twice.
+          .then((found) => withCorrection(found, useCorrections.getState().byKey[correctionKey(read)]))
+      : Promise.resolve([] as CardMatch[]);
+    Promise.all([byNumber, art.catch(() => null)]).then(([found, seen]) => {
+      const { matches, confident, byArt } = combine(found, seen, read);
+      setRaw((r) => (r && r.read === read ? { ...r, matches, choosing: matches.length > 1 && !confident, byArt, similar: matches.length ? undefined : null } : r));
+      // No card with this number (a promo with no set, a print the catalog lacks): offer cards with the same name.
+      if (!matches.length)
+        findSimilarCards(read)
+          .catch(() => [] as CatalogCard[])
+          .then((similar) => setRaw((r) => (r && r.read === read ? { ...r, similar } : r)));
+    });
   };
 
   /** Con mode: add (or re-mark) the slab with the chosen status. `again` keeps the camera up. */
   const addForCon = (again: boolean) => {
-    if (result?.status !== 'found') return;
+    // Never a slab without its grade: the sheet says so and offers Scan again.
+    if (result?.status !== 'found' || gradeMissing) return;
     if (conStatus === 'sold' && !soldCents) return;
     if (soldLoss > 0 && !lossConfirm) {
       setLossConfirm(true);
@@ -324,6 +468,7 @@ export default function Scan() {
     if (!owned) {
       const card = cardFromCert(result.payload, { paidCents, plan: conStatus === 'sold' ? 'sell' : planPatch(conStatus).plan });
       if (art) card.imageFrontUrl = art;
+    if (matchName) card.name = matchName;
       add(card);
       afterSave(card);
       id = card.id;
@@ -352,7 +497,9 @@ export default function Scan() {
   const close = () => (fromCon && lastAdded ? backToCon(lastAdded.status, lastAdded.id) : router.back());
 
   const accept = (parsed: ParsedLabel) => {
-    const cert = result?.cert ?? lastCert.current ?? parsed.payload.PSACert.CertNumber;
+    // The cert read off this slab wins. A cert remembered from the back's code only fills in when
+    // the label gave none, and never in label mode, where it would belong to the previous slab.
+    const cert = parsed.payload.PSACert.CertNumber || result?.cert || (labelMode ? null : lastCert.current);
     parsed.payload.PSACert.CertNumber = cert ?? '';
     lastCert.current = cert || null;
     auto.current = null;
@@ -389,7 +536,11 @@ export default function Scan() {
     try {
       const photo = await camera.current.takePictureAsync({ quality: manual ? 0.9 : 0.7, shutterSound: false });
       uri = photo?.uri;
+      // The card's art is found alongside the text (both on device), before the photo is dropped.
+      const region = photo ? frameInPhoto(photo, win, frameRect.current) : null;
+      const seenCard = uri && LabelReader.findCard ? LabelReader.findCard(uri, region ? { region } : undefined).catch(() => null) : Promise.resolve(null);
       const all = uri ? await LabelReader.recognize(uri) : [];
+      const cardPixels = await seenCard;
       // Only text inside the frame: a laptop screen or the next slab behind it never gets read.
       const inFrame = photo ? linesInFrame(all, photo, win, frameRect.current) : all;
       const lines = manual && !inFrame.length ? all : inFrame;
@@ -404,8 +555,15 @@ export default function Scan() {
       if (asked) {
         // A tap takes this frame, topped up with the grade or cert earlier frames read.
         const best = step.ready ?? withVotes(auto.current, parsed);
-        if (best?.payload.PSACert.Subject && (slabbed || !loose)) return accept(best);
-        if (loose) return acceptCard(loose);
+        if (best?.payload.PSACert.Subject && (slabbed || (!loose && best.payload.PSACert.CardGrade))) return accept(best);
+        if (loose) return acceptCard(loose, artOf(cardPixels));
+        // No label, no number: the art may still know the card.
+        if (!slabbed && cardPixels) {
+          const read = artRead(lines, readName);
+          const art = await artOf(cardPixels);
+          const id = combine([], art, read);
+          if (id.matches.length) return acceptCard(read, Promise.resolve(art), id);
+        }
         setSeen(lines.slice(0, 4).map((l) => l.text).join(' · '));
         setLabelMiss(true);
         auto.current = null;
@@ -418,11 +576,21 @@ export default function Scan() {
         // A loose card: two matching reads of its number in a row add it.
         auto.current = step.state;
         const key = cardSteadyKey(loose);
+        if (priceCheck && key && key === lastLoose.current) return;
+        const n = loose.numbers[0];
+        const steady = !!key && key === lastKey.current;
+        const pill = (has: boolean): PillState => (!has ? 'none' : steady ? 'done' : 'seen');
+        setProgressState(autoProgress(null));
+        setCardPills([
+          { key: 'number', label: 'Number', state: pill(!!n), value: n && steady ? printedNumber(n) : undefined },
+          { key: 'set', label: 'Set', state: pill(!!loose.codes[0]), value: loose.codes[0] && steady ? loose.codes[0] : undefined },
+        ]);
         if (!key) {
           lastKey.current = null;
           setSpotted(false);
         } else if (key === lastKey.current) {
-          acceptCard(loose);
+          lastLoose.current = key;
+          acceptCard(loose, artOf(cardPixels));
         } else {
           if (!lastKey.current) Haptics.selectionAsync().catch(() => {});
           lastKey.current = key;
@@ -432,6 +600,23 @@ export default function Scan() {
         return;
       }
       lastKey.current = null;
+      // Nothing to read yet, but a card in the frame: its art can name it. Sure twice in a row adds it.
+      if (!slabbed && !step.state && cardPixels?.found) {
+        const read = artRead(lines, readName);
+        const art = await artOf(cardPixels);
+        const id = combine([], art, read);
+        const top = id.confident ? id.matches[0].card.productId : null;
+        if (top && top === lastArt.current) return acceptCard(read, Promise.resolve(art), id);
+        if (top && top !== lastArt.current) {
+          if (!lastArt.current) Haptics.selectionAsync().catch(() => {});
+          setSpotted(true);
+          setLabelMiss(false);
+        }
+        lastArt.current = top;
+        if (top) return;
+      } else {
+        lastArt.current = null;
+      }
       if (step.ready && justAdded(step.ready)) {
         auto.current = null;
         setSpotted(false);
@@ -460,11 +645,106 @@ export default function Scan() {
   // The card auto-read just read, now owned (cert match), or with no cert to check by.
   const justAdded = (p: ParsedLabel) => {
     if (readId(p) !== lastRead.current) return false;
+    // A price check never adds the card, so the one just checked (still in frame) isn't read again.
+    if (priceCheck) return true;
     const cert = p.payload.PSACert.CertNumber;
     return !cert || useVault.getState().cards.some((c) => c.certNumber === cert && c.status === 'owned');
   };
   const captureRef = useRef(capture);
   captureRef.current = capture;
+
+  // Photo mode: read one still in full, no frame and no second read. The still stays on screen
+  // behind the sheet, the way you took it. A miss says what it saw and goes back to the camera.
+  const readStill = async (uri: string, owned: boolean) => {
+    if (!LabelReader) return;
+    stillOwned.current = owned;
+    setStill(uri);
+    setReading(true);
+    setLabelMiss(false);
+    setAiMiss(false);
+    let aiDown = false;
+    try {
+      const reader = LabelReader;
+      // The art is found and looked up while the text is read; it costs no extra wait.
+      const art = identifyByArt(reader, uri).catch(() => null);
+      // Small text on: Vision's default skips anything under 1/32 of the picture's height, which
+      // is where a card's set code and number sit when the whole card is in the photo.
+      const first = await reader.recognize(uri, { minTextHeight: PHOTO_MIN_TEXT }).catch(() => []);
+      let r = readPhoto(first);
+      let seenLines = first;
+      if (r.kind === 'card') return acceptCard(r.card, art);
+      // No number read: the art may settle it now, with no closer look and no AI.
+      let byArt: { read: ParsedCard; id: Identified; art: ArtFound } | null = null;
+      if (r.kind === 'miss') {
+        const seen = await art;
+        const read = artRead(first, readName);
+        const id = combine([], seen, read);
+        if (id.confident) return acceptCard(read, Promise.resolve(seen), id);
+        if (id.matches.length) byArt = { read, id, art: seen };
+      }
+      // A slab read without its grade can't be added, so it's worth a closer look too.
+      const short = (x: typeof r) => x.kind === 'miss' || (x.kind === 'slab' && !gradeFrom(x.label.payload.PSACert.CardGrade));
+      // No label, number or grade yet: read the photo again in enlarged pieces (the small print at arm's length).
+      if (short(r)) {
+        setLooking('closer');
+        const pieces = await readInTiles(uri).catch(() => []);
+        seenLines = [...first, ...pieces];
+        const again = [readPhoto(pieces), readPhoto(seenLines)].find((x) => !short(x)) ?? readPhoto(seenLines);
+        if (r.kind === 'miss' ? again.kind !== 'miss' : !short(again)) r = again.kind === 'card' ? { ...again, card: { ...again.card, closeLook: true } } : again;
+      }
+      // The art's best guesses, to pick from, beat asking the AI or a miss.
+      if (r.kind === 'miss' && byArt) return acceptCard(byArt.read, Promise.resolve(byArt.art), byArt.id);
+      // Still short, and the AI backup read is on: it looks at the whole card. Same parsers
+      // and catalog match after that.
+      if (short(r) && useScanPrefs.getState().aiBackup) {
+        setLooking('ai');
+        const seenByVision = await readPhotoWithVision(uri);
+        if (seenByVision === 'unavailable') aiDown = r.kind === 'miss';
+        else if (!short(seenByVision) || r.kind === 'miss') r = seenByVision.kind === 'miss' ? r : seenByVision;
+      }
+      if (r.kind === 'slab') return accept(r.label);
+      if (r.kind === 'card') return acceptCard(r.card, art);
+      // No number anywhere (an old promo prints none), but a name: the cards with that name to
+      // pick from, named the way TCGplayer and eBay list them ("Ancient Mew", "Birthday Pikachu").
+      const named = artRead(seenLines, readName);
+      if (named.name) return acceptCard(named);
+      missLines.current = seenLines;
+      setSeen(aiDown ? '' : r.seen);
+    } finally {
+      setReading(false);
+      setLooking(null);
+    }
+    setAiMiss(aiDown);
+    setLabelMiss(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    dropStill();
+  };
+  // From a missed photo: describe the card instead (name, number, set), then pick it.
+  const typeItIn = () => {
+    setLabelMiss(false);
+    setRaw({ read: artRead(missLines.current, readName), matches: [], pick: 0, choosing: false, typing: true, similar: [] });
+  };
+  const shoot = async () => {
+    if (!camera.current || reading || inFlight.current) return;
+    inFlight.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      const photo = await camera.current.takePictureAsync({ quality: 0.9, shutterSound: false });
+      if (photo?.uri) await readStill(photo.uri, true);
+    } catch {
+      setSeen('');
+      setLabelMiss(true);
+    } finally {
+      inFlight.current = false;
+    }
+  };
+  // A photo you already have: one taken at the table, or a screenshot of a listing.
+  const pickPhoto = async () => {
+    if (reading) return;
+    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 }).catch(() => null);
+    const uri = picked && !picked.canceled ? picked.assets[0]?.uri : null;
+    if (uri) await readStill(uri, true);
+  };
 
   // From a failed lookup: close the sheet but keep the cert, so the label read can use it.
   const toLabel = () => {
@@ -486,7 +766,7 @@ export default function Scan() {
   }, []);
 
   // Auto read: while the camera is up and no sheet is open, read a frame, pause, repeat.
-  const autoOn = labelMode && !!canUseCamera && cameraReady && active && !result && !raw && !locked;
+  const autoOn = labelMode && !photoMode && !!canUseCamera && cameraReady && active && !result && !raw && !locked;
 
   // The sheet slides up whenever a result arrives.
   useEffect(() => {
@@ -522,7 +802,8 @@ export default function Scan() {
   // Slab-shaped window, the same proportions as a PSA slab (83.9 × 134.6 mm), sized so the whole
   // slab fits between the nav and the button. The picture outside it is dimmed.
   const slabRatio = size.heroH / size.heroW;
-  const frameRoom = win.height - (insets.top + space.s + NAV_H + space.xl) - (insets.bottom + space.l + size.button + space.xxxl * 2 + space.xl);
+  // Below the frame: the hint, the button (or shutter) and the Live / Photo switch.
+  const frameRoom = win.height - (insets.top + space.s + NAV_H + space.xl) - (insets.bottom + space.l + size.button + space.xxxl * 2 + space.xl + size.touch + space.m) - (photoMode ? size.shutter - size.button + size.touch : 0);
   const frameW = labelMode ? Math.round(Math.min(win.width * 0.66, frameRoom / slabRatio)) : 240;
   const frameH = labelMode ? Math.round(frameW * slabRatio) : frameW;
   const labelH = Math.round(frameH * LABEL_SHARE);
@@ -532,10 +813,21 @@ export default function Scan() {
     ? 'Got it'
     : busy
     ? 'Checking with PSA'
+    : looking === 'ai'
+      ? 'Asking the AI backup'
+    : looking === 'closer'
+      ? 'Looking closer'
     : reading
       ? 'Reading'
       : labelMiss
-        ? seen
+        ? aiMiss
+          ? 'Couldn’t read the card, and the AI backup didn’t answer. Try again, or get closer to the number.'
+          : photoMode
+            // A photo miss is nearly always distance: say what to get closer to, not what was read.
+            ? looksLikeSlab([seen])
+              ? 'Move closer so the label fills the frame.'
+              : 'Move closer so the card’s number is readable.'
+          : seen
           ? `Couldn’t find a slab label or card number in “${seen.slice(0, 80)}”. Fit the slab or card in the frame and hold steady.`
           : 'Couldn’t read any text. Move closer so the slab or card fills the frame.'
         : spotted
@@ -543,7 +835,11 @@ export default function Scan() {
           : addedNote
             ? `${addedNote}. Scan the next slab`
             : added
-              ? `${added.count} added. Scan the next card`
+              ? `${added.count} ${added.verb === 'Bought' ? 'bought' : 'added'}. Scan the next card`
+              : checking
+                ? 'Fit their slab or card in the frame'
+              : photoMode
+                ? 'Take a photo of the slab or card'
             : labelMode
               ? 'Fit the slab or card in the frame'
               : 'Line up the QR or barcode on the back of the slab';
@@ -562,11 +858,25 @@ export default function Scan() {
           flash="off"
           onCameraReady={() => setCameraReady(true)}
           barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'code39'] }}
-          onBarcodeScanned={result || labelMode ? undefined : ({ data }) => handle(data)}
+          onBarcodeScanned={result ? undefined : ({ data }) => onCode(data)}
         />
       ) : null}
 
-      {/* Scrim: four flat panels around the label window, so the picture behind the hint is dimmed. */}
+      {still ? <Image source={{ uri: still }} resizeMode="cover" style={[StyleSheet.absoluteFill, { backgroundColor: SCAN_BG }]} /> : null}
+
+      {/* Scrim: four flat panels around the label window, so the picture behind the hint is dimmed.
+          Photo mode reads the whole picture, so there's no window: only the lock shows, full screen. */}
+      {photoMode ? (
+        locked ? (
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.frameDone, { borderColor: color.conFill }]}>
+            <View style={styles.check}>
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M5 12.5l4.5 4.5L19 7.5" />
+              </Svg>
+            </View>
+          </View>
+        ) : null
+      ) : (
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <View style={[styles.scrim, { height: frameTop }]} />
         <View style={{ flexDirection: 'row', height: frameH }}>
@@ -576,7 +886,7 @@ export default function Scan() {
             {spotted || locked ? <View style={[styles.frameLocked, locked && styles.frameDone]} /> : null}
             {locked ? (
               <View style={styles.check}>
-                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={cam.ink} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                   <Path d="M5 12.5l4.5 4.5L19 7.5" />
                 </Svg>
               </View>
@@ -589,16 +899,17 @@ export default function Scan() {
         </View>
         <View style={[styles.scrim, { flex: 1 }]} />
       </View>
+      )}
 
       <View style={[styles.nav, { paddingTop: insets.top + space.s }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} style={styles.navBtn}>
-          <Svg width={22} height={22} viewBox="0 0 24 24" stroke={color.onInk} strokeWidth={2} strokeLinecap="round">
+          <Svg width={22} height={22} viewBox="0 0 24 24" stroke={cam.onInk} strokeWidth={2} strokeLinecap="round">
             <Path d="M5 5l14 14M19 5L5 19" />
           </Svg>
         </Pressable>
-        <Text style={[type.body, { color: color.onInk }]}>Scan</Text>
+        <Text style={[type.body, { color: cam.onInk }]}>Scan</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Flashlight" onPress={() => setTorch((t) => !t)} style={styles.navBtn}>
-          <Svg width={22} height={22} viewBox="0 0 24 24" fill={torch ? color.onInk : 'none'} stroke={color.onInk} strokeWidth={1.75} strokeLinejoin="round">
+          <Svg width={22} height={22} viewBox="0 0 24 24" fill={torch ? cam.onInk : 'none'} stroke={cam.onInk} strokeWidth={1.75} strokeLinejoin="round">
             <Path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
           </Svg>
         </Pressable>
@@ -607,12 +918,17 @@ export default function Scan() {
 
       <View style={[styles.below, { top: frameTop + frameH + space.xl }]}>
         <View style={styles.hint}>
-          <Text style={[type.text, { color: color.onInk, textAlign: 'center' }]}>{hint}</Text>
+          <Text style={[type.text, { color: cam.onInk, textAlign: 'center' }]}>{hint}</Text>
         </View>
-        {labelMode && canUseCamera && !result ? (
+        {photoMode && labelMiss && !reading ? (
+          <Pressable accessibilityRole="button" onPress={typeItIn} style={[styles.hint, { marginTop: space.s }]}>
+            <Text style={[type.text, { color: cam.onInk, textAlign: 'center' }]}>Type it in ›</Text>
+          </Pressable>
+        ) : null}
+        {labelMode && !photoMode && canUseCamera && !result ? (
           // What the read has so far: each pill lights up with its value once confirmed.
           <ScanPills
-            pills={[
+            pills={cardPills ?? [
               { key: 'name', label: 'Name', ...progress.name, value: progress.name.value && titleName(progress.name.value) },
               { key: 'grade', label: 'Grade', ...progress.grade, value: progress.grade.value && `PSA ${gradeFrom(progress.grade.value) ?? progress.grade.value}` },
               { key: 'cert', label: 'Cert', ...progress.cert },
@@ -622,14 +938,14 @@ export default function Scan() {
         {added ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Added ${added.title}. Open it`}
+            accessibilityLabel={`${added.verb ?? 'Added'} ${added.title}. Open it`}
             onPress={() => router.push(`/card/${added.id}`)}
             style={({ pressed }) => [styles.added, pressed && { opacity: 0.7 }]}
           >
-            <Text style={[type.text, { color: color.onInk, flexShrink: 1 }]}>
-              Added · {added.title}
+            <Text style={[type.text, { color: cam.onInk, flexShrink: 1 }]}>
+              {added.verb ?? 'Added'} · {added.title}
             </Text>
-            <Text style={[type.text, { color: color.onInk, fontWeight: '600' }]}>View</Text>
+            <Text style={[type.text, { color: cam.onInk, fontWeight: '600' }]}>View</Text>
           </Pressable>
         ) : null}
         {!canUseCamera ? (
@@ -640,13 +956,16 @@ export default function Scan() {
                 onPress={denied ? () => Linking.openSettings() : requestPermission}
                 style={({ pressed }) => [styles.lightButton, pressed && { opacity: 0.8 }]}
               >
-                <Text style={[type.button, { color: color.ink }]}>{denied ? 'Turn on camera in Settings' : 'Allow camera'}</Text>
+                <Text style={[type.button, { color: cam.ink }]}>{denied ? 'Turn on camera in Settings' : 'Allow camera'}</Text>
               </Pressable>
             ) : null}
             <TextInput
               value={manual}
-              onChangeText={setManual}
-              onSubmitEditing={() => handle(manual)}
+              onChangeText={(t) => {
+                setManual(t);
+                setManualBad(false);
+              }}
+              onSubmitEditing={lookUpTyped}
               placeholder="Or type the cert number"
               placeholderTextColor="rgba(255,255,255,0.5)"
               keyboardType="number-pad"
@@ -654,20 +973,97 @@ export default function Scan() {
               returnKeyType="search"
               style={[type.body, styles.manualInput]}
             />
+            {/* The iOS number pad has no return key, so typing needs its own button. */}
+            {manual.trim().length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={lookUpTyped}
+                style={({ pressed }) => [styles.lightButton, (pressed || busy) && { opacity: 0.8 }]}
+              >
+                <Text style={[type.button, { color: cam.ink }]}>{busy ? 'Looking up…' : 'Look up cert'}</Text>
+              </Pressable>
+            ) : null}
+            {manualBad ? (
+              <Text style={[type.text, { color: 'rgba(255,255,255,0.7)' }]}>That doesn’t look like a cert number. PSA certs are 7 to 10 digits.</Text>
+            ) : null}
           </View>
         ) : null}
       </View>
 
       {canUseCamera && LabelReader && !result && !raw ? (
         <View style={[styles.capture, { paddingBottom: insets.bottom + space.l }]}>
+          {photoMode ? (
+            <View style={styles.shutterRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Choose a photo"
+                onPress={pickPhoto}
+                disabled={reading || locked}
+                hitSlop={space.s}
+                style={({ pressed }) => [styles.library, pressed && { opacity: 0.7 }]}
+              >
+                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={cam.onInk} strokeWidth={1.75} strokeLinejoin="round">
+                  <Path d="M4 5h16v14H4z" />
+                  <Path d="M4 16l5-5 4 4 2.5-2.5L20 17" strokeLinecap="round" />
+                </Svg>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Take photo"
+                onPress={shoot}
+                disabled={reading || locked}
+                style={({ pressed }) => [styles.shutter, (pressed || reading) && { opacity: 0.6 }]}
+              >
+                <View style={styles.shutterDisc} />
+              </Pressable>
+              <View style={styles.library} />
+            </View>
+          ) : (
           <Pressable
             accessibilityRole="button"
             onPress={() => capture(true)}
             disabled={reading}
             style={({ pressed }) => [styles.lightButton, (pressed || reading) && { opacity: 0.7 }]}
           >
-            <Text style={[type.button, { color: color.ink }]}>{reading ? 'Reading…' : 'Scan now'}</Text>
+            <Text style={[type.button, { color: cam.ink }]}>{reading ? 'Reading…' : 'Scan now'}</Text>
           </Pressable>
+          )}
+          <View style={styles.modes}>
+            {(['live', 'photo'] as const).map((m) => (
+              <Pressable
+                key={m}
+                accessibilityRole="button"
+                accessibilityState={{ selected: mode === m }}
+                disabled={reading || locked}
+                onPress={() => {
+                  setLabelMiss(false);
+                  setAiMiss(false);
+                  setMode(m);
+                }}
+                hitSlop={space.s}
+                style={styles.modeBtn}
+              >
+                <Text style={[type.text, { color: cam.onInk, opacity: mode === m ? 1 : 0.55, fontWeight: mode === m ? '600' : '400' }]}>
+                  {m === 'live' ? 'Live' : 'Photo'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {photoMode && supabase ? (
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: aiBackup }}
+              accessibilityLabel="AI backup read"
+              disabled={reading || locked}
+              onPress={() => setAiBackup(!aiBackup)}
+              style={styles.modeBtn}
+            >
+              <Text style={[type.secondary, { color: cam.onInk, opacity: 0.7, textAlign: 'center' }]}>
+                AI backup read · <Text style={{ fontWeight: '600', opacity: 1 }}>{aiBackup ? 'On' : 'Off'}</Text>
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -676,7 +1072,17 @@ export default function Scan() {
         <Pressable accessibilityLabel="Close keyboard" style={StyleSheet.absoluteFill} onPress={() => Keyboard.dismiss()} />
       ) : null}
 
-      {raw ? <RawSheet raw={raw} setRaw={setRaw} rescan={rescan} bottom={insets.bottom} keyboardH={keyboardH} sheet={sheet} /> : null}
+      {raw ? (
+        <RawSheet
+          raw={raw}
+          setRaw={setRaw}
+          rescan={rescan}
+          bottom={insets.bottom}
+          keyboardH={keyboardH}
+          sheet={sheet}
+          check={checking ? { conId: session?.id, onBought: boughtRaw, onAdd: () => setCheckOff(true) } : null}
+        />
+      ) : null}
 
       {result ? (
         <Animated.View
@@ -699,7 +1105,7 @@ export default function Scan() {
                   </Pressable>
                 </View>
               ) : (
-              <Text style={[type.text, { color: color.gain, fontWeight: '500' }]}>
+              <Text style={[type.text, { color: color.secondary, fontWeight: '500' }]}>
                 {result.source === 'mock'
                   ? `Cert ${result.cert} · sample data`
                   : result.source === 'label'
@@ -713,11 +1119,10 @@ export default function Scan() {
                 {/* The real slab, label and all (the 36×50 row thumb's grey strip read as a cut-off top). */}
                 <SlabView card={shown ?? preview} width={size.sheetSlabW} posed={false} />
                 <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={[type.title, { color: color.ink }]}>
-                    {rowTitle(preview)}
-                  </Text>
+                  {/* Long names wrap to a second line; never cut off ("Tm.Aqua's Kyogre EX"). */}
+                  <CardName name={rowTitle(shown ?? preview)} language={preview.language} numberOfLines={2} large style={[type.title, { color: color.ink }]} />
                   <Text style={[type.text, { color: color.secondary }]}>
-                    {[gameOf(preview) === 'pokemon' ? null : GAMES[gameOf(preview)].name, LANGUAGE_NAME[preview.language] ?? preview.language, gradeLabel(preview.grader, preview.grade)]
+                    {[gameOf(preview) === 'pokemon' ? null : GAMES[gameOf(preview)].name, promoTag(preview), gradeLabel(preview.grader, preview.grade)]
                       .filter(Boolean)
                       .join(' · ')}
                   </Text>
@@ -769,7 +1174,18 @@ export default function Scan() {
                 </>
               )}
               <Hairline />
-              {fromCon ? (
+              {checking ? (
+                <View style={{ paddingTop: space.m }}>
+                  <PriceCheck
+                    productId={checkProduct}
+                    grade={gradeMissing ? null : checkGrade}
+                    fallback={price}
+                    onBought={boughtSlab}
+                    onNext={rescan}
+                    onAdd={() => setCheckOff(true)}
+                  />
+                </View>
+              ) : fromCon ? (
                 <>
                   <CostField value={cost} onChange={setCost} />
                   <Hairline />
@@ -808,7 +1224,7 @@ export default function Scan() {
               ) : null}
                   <Hairline />
                   <PrimaryButton
-                    style={{ marginTop: space.l, opacity: conStatus === 'sold' && !soldCents ? 0.35 : 1 }}
+                    style={{ marginTop: space.l, opacity: gradeMissing || (conStatus === 'sold' && !soldCents) ? 0.35 : 1 }}
                     title={conButtonTitle(conStatus, soldCents, !!owned)}
                     onPress={() => addForCon(false)}
                   />
@@ -862,13 +1278,26 @@ export default function Scan() {
                     <PrimaryButton style={{ marginTop: space.l }} title="Set your price" onPress={() => setAsking(true)} />
                   ) : (
                     <PrimaryButton
-                      style={{ marginTop: space.l }}
+                      style={{ marginTop: space.l, opacity: gradeMissing ? 0.35 : 1 }}
                       title="Add to vault"
                       onPress={already ? () => setConfirmAgain(true) : addToVault}
                     />
                   )}
                 </>
               )}
+            </>
+          ) : ownedCert ? (
+            // PSA couldn't confirm it (or had no answer), but this cert is already in the vault:
+            // say so instead of inviting a duplicate by hand.
+            <>
+              <Text style={[type.section, { color: color.ink }]}>Already in your vault</Text>
+              <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
+                Cert {result.cert} is your {rowTitle(ownedCert)}.
+              </Text>
+              <PrimaryButton title="Open it" onPress={() => router.push(`/card/${ownedCert.id}`)} />
+              <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
+                <Text style={[type.text, { color: color.secondary }]}>Scan again</Text>
+              </Pressable>
             </>
           ) : (
             <>
@@ -916,7 +1345,23 @@ type RawRead = {
   similar?: CatalogCard[] | null;
   /** "Not this card?" opened the similar-cards list over a found card. */
   showSimilar?: boolean;
+  /** Found by the card's art, not its number (none was read). */
+  byArt?: boolean;
+  /** "Type it in": the user describes the card (name, number, set) and picks from the matches. */
+  typing?: boolean;
+  /** The photo's nearest catalog cards by art, to rank typed matches by. */
+  art?: ArtHit[];
 };
+
+type ArtFound = { hits: ArtHit[]; edge: boolean } | null;
+
+/** Look up the art of a card found in a frame (null when none was found or the lookup failed). */
+function artOf(found: FoundCard | null): Promise<ArtFound> {
+  if (!found) return Promise.resolve(null);
+  return matchArt(printsOf(found))
+    .then((hits) => ({ hits, edge: found.found }))
+    .catch(() => null);
+}
 
 /**
  * A loose card as it would be saved: raw, priced at TCGplayer market. A print the scan can't see
@@ -942,6 +1387,8 @@ function rawCard(c: CatalogCard, paidCents: number | null, plan: 'hold' | 'sell'
 
 /** Cards to pick from after "Not this card?" or a missed number: art, name, set · number, price. */
 function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: CatalogCard) => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <SheetScrollView style={{ maxHeight: size.rowVault * 4 }}>
       {cards.map((c, i) => (
@@ -950,11 +1397,9 @@ function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: Cat
           <Pressable accessibilityRole="button" onPress={() => onPick(c)} style={({ pressed }) => [styles.pickRow, pressed && { opacity: 0.6 }]}>
             <SlabView card={rawCard(c, null, 'hold')} width={size.thumbW} posed={false} />
             <View style={{ flex: 1 }}>
-              <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>
-                {nameAndVariant(c.name).name}
-              </Text>
+              <CardName name={nameAndVariant(c.name).name} language={c.language} numberOfLines={2} style={[type.body, { color: color.ink }]} />
               <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
-                {[nameAndVariant(c.name).variant, c.setName, c.number ? `#${cardNumber(c.number)}` : null, c.language === 'ja' ? 'Japanese' : null].filter(Boolean).join(' · ')}
+                {[nameAndVariant(c.name).variant, c.setName, c.number ? `#${cardNumber(c.number)}` : null, promoTag(c, { setShown: true })].filter(Boolean).join(' · ')}
               </Text>
             </View>
             <Text style={[type.rowPrice, { color: color.ink }]}>{c.marketCents ? cardPrice(c.marketCents) : '—'}</Text>
@@ -965,6 +1410,66 @@ function CardPickList({ cards, onPick }: { cards: CatalogCard[]; onPick: (c: Cat
   );
 }
 
+/**
+ * "Type it in": describe the card in one line (name, number, set, promo or event) and pick it.
+ * Search is our catalog (search_catalog, free); cards that look like the photo come first.
+ */
+function TypeItIn({ initial, art, onPick, onCancel }: { initial: string; art?: ArtHit[]; onPick: (c: CatalogCard) => void; onCancel: () => void }) {
+  const color = useColors();
+  const styles = useStyles();
+  const [q, setQ] = useState(initial);
+  const [found, setFound] = useState<CatalogCard[] | null>(null);
+  useEffect(() => {
+    if (!q.trim()) return setFound(null);
+    let live = true;
+    const t = setTimeout(() => {
+      searchCards(q, null)
+        .catch(() => [] as CatalogCard[])
+        .then((cards) => live && setFound(rankTyped(cards, art).slice(0, 12)));
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [q, art]);
+  return (
+    <>
+      <Text style={[type.section, { color: color.ink }]}>Type it in</Text>
+      <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
+        Name, number or set, as on the card or an eBay listing. Magnezone 5/100, Ancient Mew.
+      </Text>
+      <TextInput
+        value={q}
+        onChangeText={setQ}
+        autoFocus
+        autoCorrect={false}
+        autoCapitalize="words"
+        returnKeyType="search"
+        placeholder="Name, number or set"
+        placeholderTextColor={color.secondary}
+        style={[type.body, styles.typeInput]}
+      />
+      {found?.length ? (
+        <CardPickList cards={found} onPick={onPick} />
+      ) : (
+        <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>{found ? 'No cards match yet. Try fewer words.' : ' '}</Text>
+      )}
+      <Pressable accessibilityRole="button" onPress={onCancel} style={styles.quiet}>
+        <Text style={[type.text, { color: color.secondary }]}>Cancel</Text>
+      </Pressable>
+    </>
+  );
+}
+
+/** Typed matches, the ones that look like the photo first (nearest art), then search order. */
+function rankTyped(cards: CatalogCard[], art?: ArtHit[]): CatalogCard[] {
+  const d = new Map((art ?? []).map((h) => [h.card.productId, h.distance]));
+  return cards
+    .map((c, i) => ({ c, i, d: d.get(c.productId) ?? Infinity }))
+    .sort((a, b) => a.d - b.d || a.i - b.i)
+    .map((x) => x.c);
+}
+
 /** Result sheet for a loose card: the best catalog match, or a short pick list when it's unclear. */
 function RawSheet({
   raw,
@@ -973,6 +1478,7 @@ function RawSheet({
   bottom,
   keyboardH,
   sheet,
+  check,
 }: {
   raw: RawRead;
   setRaw: (f: (r: RawRead | null) => RawRead | null) => void;
@@ -981,7 +1487,11 @@ function RawSheet({
   keyboardH: number;
   /** The scan screen's pull-down: drag it anywhere, over the pick list too, to go back to the camera. */
   sheet: ReturnType<typeof useSheetDrag>;
+  /** Price check: comp the card and rate their price instead of adding it. */
+  check: { conId: string | undefined; onBought: (card: Card, cents: number) => void; onAdd: () => void } | null;
 }) {
+  const color = useColors();
+  const styles = useStyles();
   const [cost, setCost] = useState<CostInput>(EMPTY_COST);
   const [plan, setPlan] = useState<'hold' | 'sell'>('hold');
   const [asking, setAsking] = useState(false);
@@ -990,7 +1500,9 @@ function RawSheet({
   const rules = useRules((s) => s.rules);
   const startSell = useSellDraft((s) => s.start);
   const n = raw.read.numbers[0];
-  const printed = printedNumber(n);
+  const printed = n ? printedNumber(n) : null;
+  // What the sheet says it went by: the number read, or the art when no number was.
+  const source = printed ? `Read from the card · ${printed}` : 'Matched by the card’s art';
   const best = raw.matches?.[raw.pick]?.card ?? null;
   // Print: null is the catalog's own (base) printing. Holo vs reverse holo can't be told from a photo.
   const [print, setPrint] = useState<number | null>(null);
@@ -1014,7 +1526,8 @@ function RawSheet({
   const afterSave = (card: Card) => {
     if (!best) return;
     // The card saved is the right one for this read; the next scan of it picks it first.
-    remember(correctionKey(raw.read), best.productId);
+    // (Number reads only: an art match has no number to key the memory by.)
+    if (raw.read.numbers.length) remember(correctionKey(raw.read), best.productId);
     matchNewCard(card, String(best.productId))
       .then(() => refreshPrices([card]))
       .catch(() => {});
@@ -1026,6 +1539,18 @@ function RawSheet({
     afterSave(card);
     router.replace(`/card/${card.id}`);
   };
+  const buyRaw = (cents: number, marketCents: number | null) => {
+    if (!best || !check) return;
+    Keyboard.dismiss();
+    const card = { ...rawCard(best, cents, 'hold', printSuffix), boughtConId: check.conId, boughtMarketCents: marketCents };
+    add(card);
+    afterSave(card);
+    check.onBought(card, cents);
+  };
+  // The sheet's own price for the print picked, so the ladder's Raw matches the big number.
+  const rawPrice: CardPrice | null = priceCents
+    ? { marketCents: priceCents, lowCents: priceCents, highCents: priceCents, sales30d: 0, asOf: '', series90: [priceCents] }
+    : null;
   const toSell = (askCents: number) => {
     if (!best) return;
     const card = rawCard(best, paidCentsOf(cost), 'sell', printSuffix);
@@ -1048,6 +1573,17 @@ function RawSheet({
         .then((similar) => setRaw((r) => (r && r.read === raw.read ? { ...r, similar } : r)));
   };
   const remember = useCorrections((s) => s.remember);
+  const typeIt = () => setRaw((r) => (r ? { ...r, typing: true, showSimilar: false, choosing: false } : r));
+  // A typed pick is the right card for this read: remembered like any other correction.
+  const pickTyped = (c: CatalogCard) => {
+    if (raw.read.numbers.length) remember(correctionKey(raw.read), c.productId);
+    setRaw((r) => (r ? { ...r, matches: [{ card: c, score: Infinity }, ...(r.matches ?? []).filter((m) => m.card.productId !== c.productId)], pick: 0, choosing: false, showSimilar: false, typing: false } : r));
+  };
+  const typeLink = (
+    <Pressable accessibilityRole="button" onPress={typeIt} style={styles.quiet}>
+      <Text style={[type.text, { color: color.secondary }]}>Type it in</Text>
+    </Pressable>
+  );
   const again = (
     <Pressable accessibilityRole="button" onPress={rescan} style={styles.quiet}>
       <Text style={[type.text, { color: color.secondary }]}>Scan again</Text>
@@ -1065,14 +1601,21 @@ function RawSheet({
     >
       <SheetScope value={sheet.scope}>
       <View style={styles.grabber} />
-      {raw.matches === null ? (
+      {raw.typing ? (
+        <TypeItIn
+          initial={[raw.read.name, n ? printedNumber(n) : null].filter(Boolean).join(' ')}
+          art={raw.art}
+          onPick={pickTyped}
+          onCancel={() => (raw.matches?.length ? setRaw((r) => (r ? { ...r, typing: false } : r)) : rescan())}
+        />
+      ) : raw.matches === null ? (
         <>
-          <Text style={[type.text, { color: color.secondary }]}>Read from the card · {printed}</Text>
+          <Text style={[type.text, { color: color.secondary }]}>{printed ? source : 'Looking at the card'}</Text>
           <Text style={[type.body, { color: color.ink, paddingVertical: space.l }]}>Finding the card</Text>
         </>
       ) : !best || !preview || raw.showSimilar ? (
         <>
-          <Text style={[type.section, { color: color.ink }]}>{best && preview ? 'Which card is it?' : `Couldn’t find card ${printed}`}</Text>
+          <Text style={[type.section, { color: color.ink }]}>{best && preview ? 'Which card is it?' : printed ? `Couldn’t find card ${printed}` : 'Couldn’t place this card'}</Text>
           <Text style={[type.text, { color: color.secondary, paddingVertical: space.m }]}>
             {best && preview ? `Cards named ${raw.read.name ?? displayName(best.name)}. Slabby will remember the one you pick.` : missReason(raw.read)}
           </Text>
@@ -1082,14 +1625,12 @@ function RawSheet({
                 {best && preview ? 'Pick yours if it’s here.' : `Similar cards named ${raw.read.name}. Pick yours if it’s here.`}
               </Text>
               <CardPickList cards={raw.similar} onPick={pickSimilar} />
-              <Pressable accessibilityRole="button" onPress={() => router.replace({ pathname: '/search', params: raw.read.name ? { q: raw.read.name } : {} })} style={styles.quiet}>
-                <Text style={[type.text, { color: color.secondary }]}>Search cards</Text>
-              </Pressable>
+              {typeLink}
             </>
           ) : raw.similar === null ? (
             <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>Looking for similar cards</Text>
           ) : (
-            <PrimaryButton title="Search cards" onPress={() => router.replace({ pathname: '/search', params: raw.read.name ? { q: raw.read.name } : {} })} />
+            <PrimaryButton title="Type it in" onPress={typeIt} />
           )}
           {best && preview ? (
             <Pressable accessibilityRole="button" onPress={() => setRaw((r) => (r ? { ...r, showSimilar: false } : r))} style={styles.quiet}>
@@ -1131,7 +1672,7 @@ function RawSheet({
         <>
           <Text style={[type.section, { color: color.ink }]}>Which card is it?</Text>
           <Text style={[type.text, { color: color.secondary, paddingTop: space.xs, paddingBottom: space.s }]}>
-            {raw.matches.length} cards {oneSet ? `in ${oneSet} ` : ''}are numbered {printed}.
+            {printed ? `${raw.matches.length} cards ${oneSet ? `in ${oneSet} ` : ''}are numbered ${printed}.` : `${raw.matches.length} cards look like this one.`}
           </Text>
           <SheetScrollView style={{ maxHeight: size.rowVault * 5 }}>
             {raw.matches.map((m, i) => (
@@ -1144,15 +1685,13 @@ function RawSheet({
                 >
                   <SlabView card={rawCard(m.card, null, 'hold')} width={size.thumbW} posed={false} />
                   <View style={{ flex: 1 }}>
-                    <Text numberOfLines={2} style={[type.body, { color: color.ink }]}>
-                      {nameAndVariant(m.card.name).name}
-                    </Text>
+                    <CardName name={nameAndVariant(m.card.name).name} language={m.card.language} numberOfLines={2} style={[type.body, { color: color.ink }]} />
                     {/* The variant is what tells these apart, so it gets its own line; the set only when they differ. */}
                     <Text numberOfLines={2} style={[type.secondary, { color: color.secondary }]}>
                       {[
                         nameAndVariant(m.card.name).variant ?? 'Regular',
                         oneSet ? null : m.card.setName,
-                        m.card.language === 'ja' ? 'Japanese' : null,
+                        promoTag(m.card, { setShown: !oneSet }),
                       ]
                         .filter(Boolean)
                         .join(' · ')}
@@ -1163,18 +1702,19 @@ function RawSheet({
               </View>
             ))}
           </SheetScrollView>
+          {typeLink}
           {again}
         </>
       ) : (
         <>
-          <Text style={[type.text, { color: color.secondary }]}>Read from the card · {printed}</Text>
+          <Text style={[type.text, { color: color.secondary }]}>{source}</Text>
           <View style={styles.cardRow}>
             <SlabView card={preview} width={size.sheetSlabW} posed={false} />
             <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={[type.title, { color: color.ink }]}>
+              <Text numberOfLines={2} style={[type.title, { color: color.ink }]}>
                 {preview.name}
               </Text>
-              <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
+              <Text numberOfLines={2} style={[type.text, { color: color.secondary }]}>
                 {best.setName}
               </Text>
               <Text style={[type.text, { color: color.secondary }]}>
@@ -1186,6 +1726,7 @@ function RawSheet({
               <Text style={[type.secondary, { color: color.secondary }]}>{priceCents ? 'TCGplayer market' : 'no price for this print'}</Text>
             </View>
           </View>
+          <GradePrices productId={best.productId} />
           {copies ? (
             <Text style={[type.text, { color: color.secondary, paddingBottom: space.m }]}>
               You already have {copies} of this card raw. This would be your {ordinal(copies + 1)}.
@@ -1211,7 +1752,11 @@ function RawSheet({
             </>
           ) : null}
           <Hairline />
-          {asking ? (
+          {check ? (
+            <View style={{ paddingTop: space.m }}>
+              <PriceCheck productId={best.productId} grade="raw" fallback={rawPrice} onBought={buyRaw} onNext={rescan} onAdd={check.onAdd} />
+            </View>
+          ) : asking ? (
             <View style={{ paddingTop: space.l }}>
               <AskStep
                 marketCents={priceCents}
@@ -1287,15 +1832,29 @@ function conButtonTitle(s: ConStatus, soldCents: number, owned: boolean): string
   return s === 'hold' ? 'Add to holds' : s === 'sale' ? 'Add for sale' : 'Add as trade only';
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   lightButton: {
     height: size.button,
     borderRadius: radius.button,
-    backgroundColor: color.canvas,
+    backgroundColor: light.canvas,
     alignItems: 'center',
     justifyContent: 'center',
   },
   capture: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: space.gutter },
+  shutterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.xl },
+  shutter: {
+    width: size.shutter,
+    height: size.shutter,
+    borderRadius: size.shutter / 2,
+    borderWidth: 3,
+    borderColor: light.onInk,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shutterDisc: { width: size.shutter - 14, height: size.shutter - 14, borderRadius: (size.shutter - 14) / 2, backgroundColor: light.onInk },
+  library: { width: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
+  modes: { flexDirection: 'row', justifyContent: 'center', gap: space.xl, paddingTop: space.m },
+  modeBtn: { minHeight: size.touch, justifyContent: 'center' },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.s },
   added: {
     flexDirection: 'row',
@@ -1340,7 +1899,7 @@ const styles = StyleSheet.create({
     height: size.button,
     borderRadius: radius.field,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    color: color.onInk,
+    color: light.onInk,
     paddingHorizontal: space.l,
   },
   sheet: {
@@ -1348,7 +1907,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: color.canvas,
+    backgroundColor: color.sheet,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingHorizontal: space.gutter,
@@ -1360,4 +1919,5 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: space.l, paddingVertical: space.l },
   field: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   paidInput: { color: color.ink, textAlign: 'right', width: 120 },
-});
+  typeInput: { minHeight: 48, color: color.ink, borderBottomWidth: size.hairline, borderBottomColor: color.hairline },
+}));

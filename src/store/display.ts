@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { SortKey } from '../pricing/arrange';
 import type { CollectionFilter } from '../pricing/portfolio';
+import type { CardPick } from '../lib/games';
 
 export type DisplayMode = 'shelf' | 'scroll' | 'grid';
 /** Card search results: rows or a two-across grid of card photos. */
@@ -13,6 +14,9 @@ export type SearchLayout = 'list' | 'grid';
 type DisplayState = {
   mode: DisplayMode;
   filter: CollectionFilter;
+  /** Home's filter button: every card, or one game, or one set in a game. */
+  pick: CardPick;
+  setPick: (p: CardPick) => void;
   sort: SortKey;
   /** Card ids in the order the user arranged their shelf. */
   order: string[];
@@ -31,6 +35,9 @@ type DisplayState = {
   /** Con mode's Selling list: rows or two slabs across. */
   conLayout: SearchLayout;
   setConLayout: (l: SearchLayout) => void;
+  /** Wishlist sheet: card grid (default) or rows. */
+  wishLayout: SearchLayout;
+  setWishLayout: (l: SearchLayout) => void;
 };
 
 export const useDisplay = create<DisplayState>()(
@@ -38,6 +45,8 @@ export const useDisplay = create<DisplayState>()(
     (set) => ({
       mode: 'shelf',
       filter: 'all',
+      pick: { game: 'all', set: null },
+      setPick: (pick) => set({ pick }),
       sort: 'value',
       order: [],
       pinnedId: null,
@@ -51,6 +60,8 @@ export const useDisplay = create<DisplayState>()(
       searchLayout: 'grid',
       setSearchLayout: (searchLayout) => set({ searchLayout }),
       conLayout: 'grid',
+      wishLayout: 'grid',
+      setWishLayout: (wishLayout) => set({ wishLayout }),
       setConLayout: (conLayout) => set({ conLayout }),
     }),
     // New fields fall back to the defaults above when an older saved state is loaded.

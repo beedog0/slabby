@@ -194,7 +194,7 @@ export const FrontFace = memo(function FrontFace({ card, L, sharp = false }: { c
         ]}
       >
         {card.imageFrontUrl ? (
-          <ArtImage uri={card.imageFrontUrl} recyclingKey={card.id} sharp={sharp} style={[StyleSheet.absoluteFill, { borderRadius: L.card.r }]} />
+          <ArtImage uri={card.imageFrontUrl} label={card.name} recyclingKey={card.id} sharp={sharp} style={[StyleSheet.absoluteFill, { borderRadius: L.card.r }]} />
         ) : null}
         <View pointerEvents="none" style={[styles.abs, { inset: 0, borderRadius: L.card.r, borderWidth: hair, borderColor: 'rgba(0,0,0,0.18)' }]} />
       </View>

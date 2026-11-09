@@ -7,11 +7,13 @@ import { money } from '../lib/format';
 import type { CardRow } from '../pricing/portfolio';
 import { useVault } from '../store/vault';
 import { backToCon } from './conStatusMenu';
-import { color, size, space, type } from '../theme/tokens';
+import { size, space, type } from '../theme/tokens';
+import { useColors } from '../theme/theme';
 import { PriceLine, type Tick } from './PriceLine';
 import { PrimaryButton } from './ui';
 
 export function SoldState({ row, bottomInset }: { row: CardRow; bottomInset: number }) {
+  const color = useColors();
   const update = useVault((s) => s.update);
   const { card, price } = row;
   const sold = card.soldCents ?? 0;
@@ -19,7 +21,7 @@ export function SoldState({ row, bottomInset }: { row: CardRow; bottomInset: num
 
   const ticks: Tick[] = [];
   if (card.paidCents) ticks.push({ value: card.paidCents, label: 'Paid', color: color.ink });
-  if (row.floor != null) ticks.push({ value: row.floor, label: 'Floor', color: color.loss, labelColor: color.loss, height: 14 });
+  if (row.floor != null) ticks.push({ value: row.floor, label: 'Floor', color: color.ink, labelColor: color.ink, height: 14 });
   if (price) ticks.push({ value: price.marketCents, label: 'Market', color: color.secondary });
   ticks.push({ value: sold, label: 'Sold', color: 'transparent', labelColor: color.ink, pin: true });
 

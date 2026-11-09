@@ -36,6 +36,8 @@ const linkKey = (card: Card) => [card.setCode ?? '', card.number ?? '', card.lan
 
 /** The catalog card for a vault card, or null when it can't be found. Kept for the app run. */
 export async function catalogFor(card: Card): Promise<CatalogCard | null> {
+  // Sealed product knows its product id.
+  if (card.sealed && card.productId) return catalogCard(card.productId);
   const key = linkKey(card);
   if (linked.has(key)) {
     const id = linked.get(key);

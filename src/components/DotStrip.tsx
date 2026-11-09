@@ -8,7 +8,8 @@ import { View } from 'react-native';
 import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { money } from '../lib/format';
 import { stripScale } from '../pricing/sales';
-import { color, size } from '../theme/tokens';
+import { size } from '../theme/tokens';
+import { useColors } from '../theme/theme';
 
 type Props = {
   points: number[];
@@ -22,6 +23,7 @@ type Props = {
 const PAD = size.dot;
 
 export function DotStrip({ points, values = points, medianCents, floorCents, width }: Props) {
+  const color = useColors();
   const { lo, hi, flags } = stripScale(points, values);
   const span = width - PAD * 2;
   const x = (v: number) => PAD + Math.max(0, Math.min(1, (v - lo) / (hi - lo))) * span;
@@ -53,7 +55,7 @@ export function DotStrip({ points, values = points, medianCents, floorCents, wid
           <Rect x={x(medianCents) - 1} y={mid - size.medianTick / 2} width={2} height={size.medianTick} fill={color.ink} />
         ) : null}
         {showFloor ? (
-          <Rect x={x(floorCents!) - 1} y={mid - size.floorTick / 2} width={2} height={size.floorTick} fill={color.loss} />
+          <Rect x={x(floorCents!) - 1} y={mid - size.floorTick / 2} width={2} height={size.floorTick} fill={color.ink} />
         ) : null}
       </Svg>
     </View>

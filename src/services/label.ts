@@ -23,6 +23,27 @@ export type LabelLine = { text: string; x: number; y: number };
 const GRADE_WORDS = /(?:^|\s)(GEM MT|GEM MINT|MINT|NM-MT\+?|NM\+?|EX-MT\+?|EX\+?|VG-EX\+?|VG\+?|GOOD\+?|FAIR|PR|AUTHENTIC|AUTH)(?=\s|$|\d)/;
 // Grade words OCR may join onto the end of the name line. Not EX/NM/VG alone: "MEW EX" is a name.
 const JOINED_GRADE = /\s(GEM MT|GEM MINT|NM-MT\+?|EX-MT\+?|VG-EX\+?|MINT)$/;
+// PSA's scale: each grade number has one set of words.
+const PSA_WORDS: Record<string, string> = {
+  '10': 'GEM MT',
+  '9': 'MINT',
+  '8.5': 'NM-MT+',
+  '8': 'NM-MT',
+  '7.5': 'NM+',
+  '7': 'NM',
+  '6.5': 'EX-MT+',
+  '6': 'EX-MT',
+  '5.5': 'EX+',
+  '5': 'EX',
+  '4.5': 'VG-EX+',
+  '4': 'VG-EX',
+  '3.5': 'VG+',
+  '3': 'VG',
+  '2.5': 'GOOD+',
+  '2': 'GOOD',
+  '1.5': 'FAIR',
+  '1': 'PR',
+};
 const GRADE_NUM = /^\s*(10|[1-9](?:\.5)?)(?!\d)/;
 // The brand opens the set line: Pokémon (OCR reads O as 0, old labels print "P.M."), One Piece, Riftbound.
 const BRAND_START = String.raw`(?:P(?:OK[EÉ]M[O0]N|\.?M\.?)|[O0]NE\s?P[I1]ECE|R[I1]FTB[O0]UND)`;
@@ -32,6 +53,8 @@ const BRAND_ONLY = new RegExp(String.raw`^(${BRAND_START}(?:\b|:).*)$`, 'i');
 // Riftbound's brand is long and wraps: "2025 RIFTBOUND: LEAGUE OF" / "LEGENDS OGN-ORIGINS".
 const BRAND_WRAP = /^(?:LEAGUE OF LEGENDS|OF LEGENDS|LEGENDS)\b/i;
 const YEAR_ONLY = /^((?:19|20)\d{2})$/;
+/** A card's printed copyright line; never on a grader label. OCR often reads © as 9, @ or Q. */
+export const COPYRIGHT = /nintendo|creatures|game\s*freak|©/i;
 const CERT = /^\d{8,10}$/;
 const VARIETY = /^(HOLO|REVERSE HOLO|1ST EDITION|SHADOWLESS|FULL ART|ALT(?:ERNATE)? ART|SPECIAL ART RARE|ILLUSTRATION RARE|SPECIAL ILLUSTRATION RARE|SECRET|RAINBOW|GOLD|PROMO|STAFF|ART RARE|SUPER RARE|ULTRA RARE|HYPER RARE|PARALLEL|MANGA|SP|SPECIAL|1ST ANNIVERSARY|TREASURE RARE|SIGNATURE|OVERNUMBERED|SHOWCASE|FOIL)\b/i;
 
@@ -41,6 +64,14 @@ const SET_LINE = /\b(?:ANNIV(?:ERSARY)?|BOX|COLLECTION|PROMO|DECK|STMP|STAMP|PRO
 
 // Short words real card names use: "M CHARIZARD EX", "MR. MIME", "N", "PIKACHU V".
 const SHORT_WORDS = new Set(['EX', 'GX', 'V', 'M', 'MR', 'DR', 'JR', 'LV', 'X', 'Y', 'N', 'OF', 'UP', 'ON', 'TO', 'DE']);
+
+// A set code then its name: "SFD-SPIRITFORGED", "OP14-THE AZURE SEA'S SEVEN", "PRB02-PREMIUM BOOSTER".
+const SET_CODE_START = /^(?:[A-Z]{1,4}-?\d{1,2}[a-z]?|[A-Z]{3})-[A-Z]/i;
+/** The brand after the game's name and language: where a set code would start. */
+const brandRest = (b: string) =>
+  b
+    .replace(/^(?:[O0]NE\s?P[I1]ECE(?:\s+CARD\s+GAME)?|R[I1]FTB[O0]UND:?(?:\s*LEAGUE\s+OF\s+LEGENDS)?(?:\s+(?:TCG|TRADING\s+CARD\s+GAME))?)\s*/i, '')
+    .replace(/^(?:(?:SIMPLIFIED|TRADITIONAL)\s+)?(?:JAPANESE|CHINESE|ENGLISH|JPN?)\s*/i, '');
 
 /** A misread line: mostly one- and two-letter fragments ("TT TH AN NY - COLDEN BOX"). */
 function garbled(t: string): boolean {
@@ -73,8 +104,10 @@ export type ParsedLabel = {
 export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   const lines = input
     .map((l) => (typeof l === 'string' ? { text: l, x: 0, y: 0 } : l))
-    .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').trim() }))
-    .filter((l) => l.text.length > 0);
+    // OCR spells PSA's hyphens as dashes or with spaces: "EX – MT" is "EX-MT".
+    .map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').replace(/\s*[–—]\s*/g, '-').replace(/\b(EX|NM|VG) - ?(MT|EX)\b/g, '$1-$2').trim() }))
+    // A loose card's copyright line ("©2008 Pokémon/Nintendo") reads like a label's year and brand.
+    .filter((l) => l.text.length > 0 && !COPYRIGHT.test(l.text));
   if (!lines.length) return null;
 
   let year: string | undefined;
@@ -91,16 +124,16 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   lines.forEach((l, i) => {
     const t = l.text;
 
-    const num = t.match(/#\s*([A-Z0-9-]{1,8})\b/i);
+    const num = t.match(/#\s*([A-Z0-9-]{1,8}\*?)(?![A-Z0-9])/i);
     if (num && !number) number = num[1].replace(/^0+(?=\d)/, '');
 
     const yb = t.match(YEAR_BRAND);
     if (yb && !brand) {
       year = yb[1];
-      brand = yb[2].replace(/#\s*[A-Z0-9-]+.*$/i, '').trim();
+      brand = yb[2].replace(/#\s*[A-Z0-9-]+\*?.*$/i, '').trim();
       brandIndex = i;
       // Single-line labels carry the name after the number: "... #11 CHARIZARD-HOLO GEM MT 10 2647..."
-      const after = yb[2].match(/#\s*[A-Z0-9-]+\s+(.+)$/i)?.[1];
+      const after = yb[2].match(/#\s*[A-Z0-9-]+\*?\s+(.+)$/i)?.[1];
       if (after) {
         const nameOnly = after.split(GRADE_WORDS)[0].replace(/\b\d{8,10}\b/, '').trim();
         if (nameOnly && nameLike(nameOnly)) name = nameOnly;
@@ -127,7 +160,7 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   if (!brand) {
     const i = lines.findIndex((l) => BRAND_ONLY.test(l.text));
     if (i >= 0) {
-      brand = lines[i].text.replace(/#\s*[A-Z0-9-]+.*$/i, '').trim();
+      brand = lines[i].text.replace(/#\s*[A-Z0-9-]+\*?.*$/i, '').trim();
       brandIndex = i;
       year = lines.map((l) => l.text.match(YEAR_ONLY)?.[1]).find(Boolean);
     }
@@ -136,7 +169,17 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   if (brand && /RIFTB/i.test(brand)) {
     const next = lines[brandIndex + 1]?.text;
     if (next && BRAND_WRAP.test(next) && !/LEGENDS/i.test(brand)) {
-      brand = `${brand} ${next.replace(/#\s*[A-Z0-9-]+.*$/i, '').trim()}`;
+      brand = `${brand} ${next.replace(/#\s*[A-Z0-9-]+\*?.*$/i, '').trim()}`;
+      brandIndex += 1;
+    }
+  }
+  // One Piece and Riftbound labels often end the brand line at the game ("2026 RIFTBOUND: LEAGUE
+  // OF LEGENDS") and print the set on the next line ("SFD-SPIRITFORGED #225*"). That line is the
+  // set, not the card name; without it the slab has no set and can't be matched to a card.
+  if (brand && /^(?:[O0]NE\s?P[I1]ECE|R[I1]FTB[O0]UND)/i.test(brand) && !SET_CODE_START.test(brandRest(brand))) {
+    const next = lines[brandIndex + 1]?.text.replace(/#\s*[A-Z0-9*-]+.*$/i, '').trim();
+    if (next && SET_CODE_START.test(next)) {
+      brand = `${brand} ${next}`;
       brandIndex += 1;
     }
   }
@@ -162,6 +205,25 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
       .find(Boolean);
     if (tail) grade = tail;
   }
+  // No grade words found: OCR joined them where the parser won't trust them ("MEW-HOLO EX" is
+  // also how a Mew EX reads) and the number onto the left column ("TRIUMPHANT 5"). On a PSA label
+  // the grade number sits right above the cert, so take it from the line or two above the cert,
+  // and the words from PSA's scale (5 is always EX). Never from anywhere else: still no guessing.
+  let wordFromScale = false;
+  if (!grade && gradeWord !== 'AUTHENTIC' && gradeWord !== 'AUTH') {
+    const ci = lines.findIndex((l) => CERT.test(l.text) || /^(10|[1-9](?:\.5)?) \d{8,10}$/.test(l.text));
+    // The number joined onto the cert ("6 159213946"), else the end of a line just above it.
+    const near = [lines[ci]?.text.match(/^(10|[1-9](?:\.5)?) \d{8,10}$/)?.[1]];
+    for (let i = ci - 1; ci > 0 && i >= Math.max(brandIndex + 1, ci - 2); i--) near.push(lines[i].text.match(/(?:^|\s)(10|[1-9](?:\.5)?)$/)?.[1]);
+    const n = near.find((v): v is string => !!v && !!PSA_WORDS[v]);
+    if (n) {
+      grade = n;
+      if (!gradeWord) {
+        gradeWord = PSA_WORDS[n];
+        wordFromScale = true;
+      }
+    }
+  }
   if (gradeWord === 'AUTHENTIC' || gradeWord === 'AUTH') grade = undefined;
 
   // Pass 2: the name is the first free-text line after the year/brand line that isn't a grade,
@@ -169,10 +231,13 @@ export function parseLabel(input: (LabelLine | string)[]): ParsedLabel | null {
   // OCR can join the right column on: "SURFING PIKACHU VMAX GEM MT", "FULL ART 10".
   const freeText = (text: string) => {
     const t = text
-      .replace(/#\s*[A-Z0-9-]+/i, '')
+      .replace(/#\s*[A-Z0-9-]+\*?/i, '')
       .replace(JOINED_GRADE, '')
       .replace(/\s(10|[1-9](?:\.5)?)$/, '')
       .trim();
+    // The scale's short word joined onto the name line: "MEW-HOLO EX" on an EX 5 → "MEW-HOLO".
+    if (t && wordFromScale && gradeWord && /^(EX|NM|VG|GOOD|FAIR|PR)\+?$/.test(gradeWord) && t.endsWith(' ' + gradeWord))
+      return t.slice(0, -(gradeWord.length + 1)).trim() || null;
     const skip = !t || YEAR_ONLY.test(t) || t === gradeWord || (gradeWord && t.startsWith(gradeWord + ' ')) || CERT.test(t) || /^(10|[1-9](?:\.5)?)$/.test(t);
     return skip ? null : t;
   };
@@ -254,6 +319,19 @@ const SET_WAIT = 3;
 /** The fuller of two reads of the brand line (a tilted frame can cut it short). */
 const longer = (a?: string, b?: string) => ((b?.length ?? 0) > (a?.length ?? 0) ? b : a);
 
+/** Two reads of one name: equal, one inside the other, or a few letters apart (blur). */
+function sameName(a: string, b: string) {
+  if (!a || !b) return false;
+  if (a === b || a.includes(b) || b.includes(a)) return true;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length] <= Math.max(2, Math.floor(Math.max(a.length, b.length) * 0.34));
+}
+
 /** Frames without a label we tolerate (a glare, a wobble) before forgetting what we've read. */
 const MISS_LIMIT = 3;
 
@@ -288,6 +366,10 @@ export function stepAutoRead(state: AutoRead, next: ParsedLabel | null): { state
   }
   // A different cert and a different name: another slab came into frame, so start over.
   if (state?.cert && c.CertNumber && state.cert.value !== c.CertNumber && !state.names[norm(c.Subject)]) state = null;
+  // A name unlike any read so far, without the same cert to tie it to them, is another slab too
+  // (the next one slid in before its cert was read). Keeping the old cert would give it the
+  // previous slab's cert, set and number.
+  if (state && !(c.CertNumber && state.cert?.value === c.CertNumber) && !Object.keys(state.names).some((n) => sameName(n, norm(c.Subject)))) state = null;
   const key = norm(c.Subject);
   const prev = state?.names[key];
   const s: NonNullable<AutoRead> = {
@@ -353,4 +435,22 @@ export function linesInFrame<T extends LabelLine>(lines: T[], photo: { width: nu
     const y = l.y * photo.height * scale - dy;
     return x >= frame.x - mx && x <= frame.x + frame.width + mx && y >= frame.y - my && y <= frame.y + frame.height + my;
   });
+}
+
+/**
+ * The on-screen frame as a share of the photo (0..1 from the top-left), the inverse of
+ * linesInFrame's mapping: where to look for the card in a live frame.
+ */
+export function frameInPhoto(photo: { width: number; height: number }, view: { width: number; height: number }, frame: Rect): Rect | null {
+  if (!photo.width || !photo.height || !frame.width || !frame.height) return null;
+  if (photo.width > photo.height !== view.width > view.height) photo = { width: photo.height, height: photo.width };
+  const scale = Math.max(view.width / photo.width, view.height / photo.height);
+  const dx = (photo.width * scale - view.width) / 2;
+  const dy = (photo.height * scale - view.height) / 2;
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+  const x0 = clamp((frame.x + dx) / scale / photo.width);
+  const y0 = clamp((frame.y + dy) / scale / photo.height);
+  const x1 = clamp((frame.x + frame.width + dx) / scale / photo.width);
+  const y1 = clamp((frame.y + frame.height + dy) / scale / photo.height);
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }

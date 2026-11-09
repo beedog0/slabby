@@ -1,5 +1,5 @@
 import { DEFAULT_RULES, type PricingRules } from '../../types';
-import { ask, buyMax, buyTarget, ebayNet, floor, floorWithBasis, looksLikeTypo, minFloorOverride, roundTo, verdict, vsEbay, type Inputs } from '../rules';
+import { ask, askWithBasis, buyMax, buyTarget, ebayNet, floor, floorWithBasis, looksLikeTypo, minFloorOverride, quote, roundTo, verdict, vsEbay, type Inputs } from '../rules';
 
 const $ = (d: number) => d * 100;
 const base = (o: Partial<Inputs> = {}, r: Partial<PricingRules> = {}): Inputs => ({
@@ -65,8 +65,20 @@ describe('floor', () => {
     expect(minFloorOverride({ paidCents: $(95), rules: { ...DEFAULT_RULES, neverBelowPaid: false } })).toBe(0);
   });
   it('never exceeds ask', () => {
-    expect(floor(base({ paidCents: $(200) }))).toBe($(165));
     expect(floor(base({ overrides: { floor: $(500) } }))).toBe($(165));
+    expect(floor(base({ paidCents: $(200) }, { neverBelowPaid: false }))).toBe($(130));
+  });
+  it('raises the ask to paid too when paid is over the rule ask, so the floor stays at paid', () => {
+    const i = base({ paidCents: $(200) });
+    expect(askWithBasis(i)).toEqual({ cents: $(200), raisedToPaid: true });
+    expect(ask(i)).toBe($(200));
+    expect(floorWithBasis(i)).toEqual({ cents: $(200), basis: 'paid' });
+    expect(quote(i)).toMatchObject({ ask: $(200), askRaisedToPaid: true, floor: $(200) });
+  });
+  it('leaves the ask alone when the rule is off or the ask is set by hand', () => {
+    expect(askWithBasis(base({ paidCents: $(200) }, { neverBelowPaid: false }))).toEqual({ cents: $(165), raisedToPaid: false });
+    expect(askWithBasis(base({ paidCents: $(200), overrides: { ask: $(150) } }))).toEqual({ cents: $(150), raisedToPaid: false });
+    expect(askWithBasis(base({ paidCents: $(95) })).raisedToPaid).toBe(false);
   });
 });
 

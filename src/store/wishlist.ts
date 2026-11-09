@@ -26,6 +26,8 @@ export type WishItem = {
   /** Market for this grade when last checked, and the day. */
   marketCents: number | null;
   marketAsOf: string | null;
+  /** How market for this grade moved over the 7 days before marketAsOf (0.04 = +4%), when known. */
+  change7d?: number | null;
   addedAt: string;
 };
 
@@ -36,7 +38,7 @@ type WishState = {
   put: (item: WishItem) => void;
   remove: (key: string) => void;
   /** Record a fresh market price after a card page or price check loaded. */
-  seeMarket: (key: string, marketCents: number, asOf: string) => void;
+  seeMarket: (key: string, marketCents: number, asOf: string, change7d?: number | null) => void;
 };
 
 export const useWishlist = create<WishState>()(
@@ -45,8 +47,12 @@ export const useWishlist = create<WishState>()(
       items: [],
       put: (item) => set((s) => ({ items: [item, ...s.items.filter((i) => i.key !== item.key)] })),
       remove: (key) => set((s) => ({ items: s.items.filter((i) => i.key !== key) })),
-      seeMarket: (key, marketCents, asOf) =>
-        set((s) => ({ items: s.items.map((i) => (i.key === key ? { ...i, marketCents, marketAsOf: asOf } : i)) })),
+      seeMarket: (key, marketCents, asOf, change7d) =>
+        set((s) => ({
+          items: s.items.map((i) =>
+            i.key === key ? { ...i, marketCents, marketAsOf: asOf, ...(change7d !== undefined ? { change7d } : {}) } : i,
+          ),
+        })),
     }),
     { name: 'slabby.wishlist', version: 1, storage: createJSONStorage(() => AsyncStorage) },
   ),

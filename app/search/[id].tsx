@@ -18,8 +18,14 @@ import { PriceChart } from '../../src/components/PriceChart';
 import { Segmented } from '../../src/components/Segmented';
 import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
-import { money, pct } from '../../src/lib/format';
-import { chartable, history, realPoints } from '../../src/pricing/cardStats';
+import { cardPrice, money, pct, promoTag, thinNote } from '../../src/lib/format';
+import { lastReal } from '../../src/pricing/buySignal';
+import { CardName } from '../../src/components/CardName';
+import { chartRanges, history, rangeLabel, rangeSeries, realPoints, type Range } from '../../src/pricing/cardStats';
+import { FindPriceRow } from '../../src/components/estimate/FindPriceRow';
+import { cardForSearch } from '../../src/services/estimate';
+import { canAutoPrice } from '../../src/pricing/lastSales';
+import { headlineLabel, SaleLines } from '../../src/components/search/SaleLines';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
 import type { Found } from '../../src/services/searchFilters';
@@ -33,6 +39,7 @@ import {
   cardNumber,
   catalogCard,
   displayName,
+  nameAndVariant,
   firstLowGrade,
   gradeLabel,
   isQuiet,
@@ -44,9 +51,12 @@ import {
   type SearchPrices,
 } from '../../src/services/search';
 import { useRules } from '../../src/store/rules';
+import { useTrade } from '../../src/store/trade';
 import { useWishlist, wishKey, type WishGrade } from '../../src/store/wishlist';
-import { color, size, space, type } from '../../src/theme/tokens';
+import { size, space, type } from '../../src/theme/tokens';
+import { themed, useColors } from '../../src/theme/theme';
 import type { Card } from '../../src/types';
+import { sealedLabel } from '../../src/lib/sealed';
 
 type Choice = 'raw' | SearchGrade;
 type Tab = 'raw' | 'psa10' | 'psa9' | 'psa8' | 'low';
@@ -55,8 +65,13 @@ const isLow = (c: Choice) => (LOW_GRADES as readonly string[]).includes(c);
 const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 export default function SearchedCard() {
-  const { id, con, sell, grade } = useLocalSearchParams<{ id: string; con?: string; sell?: string; grade?: string }>();
+  const color = useColors();
+  const styles = useStyles();
+  const { id, con, sell, grade, trade } = useLocalSearchParams<{ id: string; con?: string; sell?: string; grade?: string; trade?: string }>();
   const buying = con === '1';
+  // From the trade calculator: the one action is putting this card, at the grade shown, on their side.
+  const trading = trade === '1';
+  const addTheirs = useTrade((s) => s.addTheirs);
   const draft = useSellDraft((s) => (sell === '1' ? s.draft : null));
   const patchDraft = useSellDraft((s) => s.patch);
   const selling = !!draft;
@@ -75,6 +90,8 @@ export default function SearchedCard() {
   const [tilting, setTilting] = useState(false);
   const wanted = useWishlist((s) => s.items.find((i) => i.key === wishKey(Number(id), pick as WishGrade)));
   const [attempt, setAttempt] = useState(0);
+  // Chart window; falls to the next one with a chart when this one has none.
+  const [range, setRange] = useState<Range>(90);
   const [more, setMore] = useState<Found[]>([]);
   const [groupId, setGroupId] = useState<number | null>(null);
 
@@ -160,16 +177,27 @@ export default function SearchedCard() {
   const price: CardPrice | null | undefined =
     prices === undefined ? undefined : pick === 'raw' ? prices?.raw : prices?.grades[pick];
   const quiet = pick !== 'raw' && !!prices && isQuiet(price, prices.fetchedAt);
-  const series = price?.series90 ?? [];
   // Only real prices make a chart; a single price carried forward is a flat line, not history.
-  const charted = chartable(price);
+  // A grade with no sale in 30 days still charts its older sales (up to 6 months).
+  const today = prices?.fetchedAt.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+  const ranges = chartRanges(price, today);
+  const shown = ranges.includes(range) ? range : (ranges.find((r) => r > range) ?? ranges[ranges.length - 1]);
+  const ranged = shown ? rangeSeries(price, shown, today) : null;
+  // SaleLines carries the last sale once the server sends sale days; until then this line does.
+  const sold = pick !== 'raw' && !(price && headlineLabel(price)) ? lastSoldLine(price, quiet ? pick : null) : null;
   const hist = history(price);
   const change = hist && !quiet ? hist.change : null;
+  // A graded price from a handful of sales is a guess; say so under the number.
+  const thin = !ready.sealedType && pick !== 'raw' && price && !quiet ? thinNote(price.sales30d) : null;
   const no = cardNumber(ready.number);
-  const detail = [no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
-  const openSet = () => openSetPage(ready, groupId);
+  // Sealed product: one TCGplayer market price with its nightly chart; no grades, no slab.
+  const sealed = ready.sealedType ?? null;
+  // The language is the badge beside the name.
+  const detail = (sealed ? [sealedLabel(sealed)] : [no && `#${no}`, promoTag(ready, { setShown: true })]).filter(Boolean).join(' · ');
+  const openSet = () => openSetPage(ready, groupId, { trade: trading });
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
-  const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
+  // A last-sold headline (under 5 sales) never fills in a buy target or max.
+  const buy = buying && price && !quiet && canAutoPrice(price) ? buyPrices(price.marketCents, rules) : null;
   // The sheet's market wins: for a raw card it's the print you picked.
   const sellMarket = draft ? (draft.marketCents ?? (price && !quiet ? price.marketCents : null)) : null;
   const sellCost = draft?.cost?.kind === 'pulled' ? { kind: 'pulled' as const, packCents: pack?.cents ?? null } : (draft?.cost ?? null);
@@ -186,15 +214,17 @@ export default function SearchedCard() {
       <Stack.Screen options={{ fullScreenGestureEnabled: false }} />
       <ScrollView scrollEnabled={!tilting} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: insets.top + space.s, paddingBottom: space.xl }}>
         <View style={[styles.hero, { height: heroH }]}>
-          <SlabView card={slab} width={slabW} interactive onDragChange={setTilting} />
+          <SlabView card={slab} width={slabW} interactive spotlight onDragChange={setTilting} />
         </View>
 
         <View style={styles.titleRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={2} style={[type.title, { color: color.ink }]}>
-              {displayName(ready.name)}
-            </Text>
-            <Text numberOfLines={1} style={[type.text, { color: color.secondary }]}>
+            {/* Name on its own line, the variant ("Alternate Art Secret") on the next: nothing truncates. A sealed product shows its full name. */}
+            <CardName name={sealed ? ready.name : nameAndVariant(ready.name).name} language={ready.language} numberOfLines={4} large style={[type.title, { color: color.ink }]} />
+            {!sealed && nameAndVariant(ready.name).variant ? (
+              <Text style={[type.text, { color: color.secondary }]}>{nameAndVariant(ready.name).variant}</Text>
+            ) : null}
+            <Text style={[type.text, { color: color.secondary }]}>
               {/* The set name opens the whole set. */}
               <Text onPress={openSet} accessibilityRole="link" style={{ color: color.ink }}>
                 {setTitle(ready.setName)}
@@ -207,12 +237,13 @@ export default function SearchedCard() {
               style={[type.title, { color: quiet ? color.secondary : color.ink }]}
               accessibilityLabel={
                 price
-                  ? `${gradeLabel(pick)} ${money(price.marketCents)}${change != null ? `, ${pct(change)} over ${hist!.days} days` : ''}`
+                  ? `${sealed ? 'Market' : gradeLabel(pick)} ${cardPrice(price.marketCents)}${change != null ? `, ${pct(change)} over ${hist!.days} days` : ''}`
                   : undefined
               }
             >
-              {price ? money(price.marketCents) : '—'}
+              {price ? cardPrice(price.marketCents) : '—'}
             </Text>
+            {thin ? <Text style={[type.text, { color: color.secondary }]}>{thin}</Text> : null}
             {change != null ? (
               <Text style={[type.text, { color: color.secondary }]}>
                 <Text style={{ color: change >= 0 ? color.gain : color.loss }}>{pct(change)}</Text> {hist!.days}d
@@ -220,6 +251,8 @@ export default function SearchedCard() {
             ) : null}
           </View>
         </View>
+
+        {pick !== 'raw' ? <SaleLines price={price} style={styles.gutter} /> : null}
 
         {draft ? (
           <View style={[styles.gutter, { paddingTop: space.xl }]}>
@@ -241,7 +274,7 @@ export default function SearchedCard() {
         ) : null}
 
         <View style={[styles.gutter, { paddingTop: selling ? 0 : space.xl }]}>
-          {selling ? null : (
+          {selling || sealed ? null : (
           <Segmented<Tab>
             value={isLow(pick) ? 'low' : (pick as Tab)}
             onChange={onTab}
@@ -262,7 +295,7 @@ export default function SearchedCard() {
                 Open <Text style={{ fontWeight: '600' }}>{money(buy.target)}</Text>
               </Text>
               <Text style={[type.body, styles.label]}>
-                pay up to <Text style={{ color: color.loss, fontWeight: '600' }}>{money(buy.max)}</Text>
+                pay up to <Text style={{ color: color.ink, fontWeight: '600' }}>{money(buy.max)}</Text>
               </Text>
             </View>
           ) : null}
@@ -270,26 +303,49 @@ export default function SearchedCard() {
           <View style={styles.chart}>
             {prices === undefined ? (
               <Text style={[type.text, { color: color.secondary }]}>Loading prices…</Text>
-            ) : charted && !quiet ? (
-              <PriceChart
-                values={series}
-                paidCents={null}
-                width={width - space.gutter * 2}
-                height={140}
-                tint={trendTint(series)}
-                asOf={price?.asOf}
-              />
+            ) : ranged ? (
+              <>
+                <PriceChart
+                  values={ranged.values}
+                  paidCents={null}
+                  width={width - space.gutter * 2}
+                  height={140}
+                  tint={trendTint(ranged.values, color)}
+                  asOf={ranged.asOf}
+                />
+                {ranges.length > 1 ? (
+                  <View style={styles.ranges}>
+                    {ranges.map((r) => {
+                      const on = r === shown;
+                      return (
+                        <Pressable
+                          key={r}
+                          onPress={() => setRange(r)}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={rangeLabel(r) === 'All' ? 'All time' : r === 365 ? 'One year' : r === 180 ? 'Six months' : `${r} days`}
+                        >
+                          <Text style={[type.text, { color: on ? color.ink : color.secondary, fontWeight: on ? '600' : '400' }]}>{rangeLabel(r)}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+                {sold ? <Text style={[type.secondary, { color: color.secondary, paddingTop: space.s }]}>{sold}</Text> : null}
+              </>
             ) : (
               <>
                 <Text style={[type.text, { color: color.secondary }]}>
-                  {price && !quiet ? thinLine(price) : emptyLine(pick, prices, otherGame, quiet ? price : null)}
+                  {price && !quiet ? thinLine(price) : sealed ? sealedEmpty(prices) : emptyLine(pick, prices, otherGame, quiet ? price : null)}
                 </Text>
                 {prices === null ? <TryAgain onPress={() => setAttempt((n) => n + 1)} /> : null}
+                {canEstimate(pick, prices, price, ready.game) ? <FindPriceRow card={cardForSearch(ready, pick)} /> : null}
               </>
             )}
           </View>
 
-          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} />
+          <CardAnalyticsView pick={pick} prices={prices} setName={ready.setName} more={more} onPick={selling ? () => {} : choose} onAll={openSet} con={buying} trade={trading} sealed={!!sealed} ebay={ready} />
           {prices?.capped ? (
             <Text style={[type.secondary, { color: color.secondary, paddingTop: space.m }]}>
               Graded prices for new cards are paused until tomorrow to save credits for your scans.
@@ -301,6 +357,32 @@ export default function SearchedCard() {
       <View style={[styles.gutter, { paddingBottom: Math.max(insets.bottom, space.l), paddingTop: space.m }]}>
         {draft ? (
           <PrimaryButton title={`Put up for sale at ${money(draft.askCents)}`} onPress={putUp} />
+        ) : trading ? (
+          price && !quiet ? (
+            <PrimaryButton
+              title={`Add to their side · ${money(price.marketCents)}`}
+              onPress={() => {
+                addTheirs({
+                  key: `${ready.productId}:${pick}`,
+                  productId: ready.productId,
+                  grade: pick,
+                  name: displayName(ready.name),
+                  setName: ready.setName,
+                  number: ready.number,
+                  setCode: ready.setCode,
+                  imageUrl: ready.imageUrl,
+                  game: ready.game,
+                  language: ready.language,
+                  marketCents: price.marketCents,
+                });
+                router.dismissTo('/con/trade');
+              }}
+            />
+          ) : (
+            <Text style={[type.text, { color: color.secondary, textAlign: 'center', minHeight: size.button, paddingTop: space.l }]}>
+              {price === undefined ? 'Loading prices' : 'No recent price at this grade. Pick another grade.'}
+            </Text>
+          )
         ) : buying ? (
           // Buying at a con: the next step is the seller's price, rated against your rules.
           // Or save the card to the wishlist with the price you're hunting for.
@@ -330,6 +412,8 @@ export default function SearchedCard() {
 
 /** PSA 7 to 1 as a quiet row of numbers under the toggle. Grades without recent sales go gray. */
 function LowGrades({ pick, prices, onPick }: { pick: Choice; prices: SearchPrices | null; onPick: (g: SearchGrade) => void }) {
+  const color = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.lowRow} accessibilityRole="tablist">
       {LOW_GRADES.map((g) => {
@@ -357,11 +441,23 @@ function LowGrades({ pick, prices, onPick }: { pick: Choice; prices: SearchPrice
 }
 
 function TryAgain({ onPress }: { onPress: () => void }) {
+  const color = useColors();
   return (
     <Pressable accessibilityRole="button" onPress={onPress} hitSlop={12} style={{ paddingTop: space.m }}>
       <Text style={[type.text, { color: color.ink, fontWeight: '600' }]}>Try again</Text>
     </Pressable>
   );
+}
+
+/**
+ * "Last sold Nov 6 · $412" (", 2 sold that day" when more than one), from the latest day with a
+ * sale. For a grade with none in 30 days (`quiet` is its grade) it leads with that.
+ */
+export function lastSoldLine(p: CardPrice | null | undefined, quiet: Choice | null): string | null {
+  const s = p?.lastSale;
+  if (!s) return null;
+  const line = `Last sold ${fmtDay(s.day)} · ${money(s.cents)}${s.count > 1 ? ` avg of ${s.count}` : ''}`;
+  return quiet && quiet !== 'raw' ? `No ${gradeLabel(quiet)} sales in 30 days. ${line}` : line;
 }
 
 /** A price we have but can't chart: say how much there is, not draw a flat line. */
@@ -371,16 +467,37 @@ function thinLine(p: CardPrice & { points?: number; since?: string }): string {
   return `${n <= 1 ? 'One price' : `Only ${n} prices`}${since}. The chart starts once there are a few more.`;
 }
 
+/**
+ * A grade with no real price can search sold listings for an estimate. Not when the price
+ * service is only paused or unreachable for a Pokémon grade (the real price comes back), and not
+ * for a quiet grade, which still has its last price.
+ */
+function canEstimate(pick: Choice, prices: SearchPrices | null | undefined, price: CardPrice | null | undefined, game: string): boolean {
+  if (!prices || price) return false;
+  if (pick !== 'raw' && game === 'pokemon' && prices.source === 'catalog') return false;
+  return true;
+}
+
 function emptyLine(pick: Choice, prices: SearchPrices | null, otherGame: string | null, quiet: CardPrice | null | undefined): string {
   if (!prices) return 'Prices aren’t reachable right now.';
   if (pick === 'raw') return prices.raw ? 'Price history starts once more days come in.' : 'No TCGplayer price for this card.';
   if (otherGame) return `Graded prices for ${GAME_NAME[otherGame] ?? otherGame} aren’t available yet.`;
   if (prices.capped && prices.source === 'catalog') return 'Graded prices load again tomorrow.';
   if (prices.source === 'catalog') return 'Graded prices aren’t reachable right now.';
-  // The price shown in the header for a quiet grade is the last 30-day median before it went quiet.
+  // The header price for a quiet grade: the last-5 median or last sale, else the last 30-day median.
   if (quiet)
-    return `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`;
+    return headlineLabel(quiet) ? `No ${gradeLabel(pick)} sales in 30 days.` : (
+      lastSoldLine(quiet, pick) ??
+      (lastReal(quiet)
+      ? `No ${gradeLabel(pick)} sales in 30 days. Last sale ${fmtDay(lastReal(quiet)!)}; ${money(quiet.marketCents)} is ${quiet.basis === 'median5' ? 'the median of the last 5 sales' : quiet.basis === 'lastSold' ? 'that sale' : 'the median around it'}.`
+      : `No ${gradeLabel(pick)} sales in 30 days. Last price ${money(quiet.marketCents)}, as of ${fmtDay(quiet.asOf)}.`)
+    );
   return `No ${gradeLabel(pick)} sales in the last 90 days.`;
+}
+
+function sealedEmpty(prices: SearchPrices | null): string {
+  if (!prices) return 'Prices aren’t reachable right now.';
+  return prices.raw ? 'Price history builds night by night. The chart starts after a few nights.' : 'No TCGplayer price for this yet.';
 }
 
 /** The search page's grade for a vault card: its PSA grade, else raw. */
@@ -391,6 +508,32 @@ function draftGrade(c: Card): Choice {
 
 /** A stand-in card for the slab render: the searched card at the picked grade, no cert. */
 function slabFor(c: CatalogCard, pick: Choice): Card {
+  if (c.sealedType)
+    return {
+      id: `search-${c.productId}`,
+      certNumber: null,
+      grader: 'raw',
+      grade: null,
+      name: c.name,
+      setName: c.setName,
+      setCode: c.setCode,
+      number: null,
+      language: c.language,
+      year: null,
+      imageFrontUrl: c.imageUrl,
+      sealed: c.sealedType,
+      productId: c.productId,
+      paidCents: null,
+      paidAt: null,
+      plan: 'hold',
+      floorOverrideCents: null,
+      askOverrideCents: null,
+      status: 'owned',
+      soldCents: null,
+      soldAt: null,
+      soldWhere: null,
+      createdAt: new Date(0).toISOString(),
+    };
   return {
     id: `search-${c.productId}`,
     certNumber: null,
@@ -416,12 +559,13 @@ function slabFor(c: CatalogCard, pick: Choice): Card {
   };
 }
 
-const styles = StyleSheet.create({
+const useStyles = themed((color) => StyleSheet.create({
   gutter: { paddingHorizontal: space.gutter },
   // Floats over the hero so the slab doesn't sit under an empty 44 pt bar.
   nav: { position: 'absolute', left: space.gutter - 10, zIndex: 1 },
   hero: { alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.m, paddingHorizontal: space.gutter },
+  ranges: { flexDirection: 'row', gap: space.xl, paddingTop: space.m },
   chart: { minHeight: 172, justifyContent: 'center', paddingTop: space.xl, paddingBottom: space.m },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.l },
   buyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: space.l },
@@ -429,4 +573,4 @@ const styles = StyleSheet.create({
   lowRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: space.s },
   lowCell: { minWidth: size.touch, height: size.touch, alignItems: 'center', justifyContent: 'center' },
   lowMark: { width: 16, height: 2, borderRadius: 1, marginTop: 4, backgroundColor: 'transparent' },
-});
+}));
