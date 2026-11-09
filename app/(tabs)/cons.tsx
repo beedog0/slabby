@@ -154,6 +154,11 @@ export default function ConTab() {
             <Pressable accessibilityRole="link" onPress={() => router.push('/search?con=1')} style={styles.quiet} hitSlop={8}>
               <Text style={[type.text, { color: color.ink }]}>Search a card to buy ›</Text>
             </Pressable>
+            {wished.length ? (
+              <Pressable accessibilityRole="link" onPress={() => router.push('/share-wishlist')} style={styles.quiet} hitSlop={8}>
+                <Text style={[type.text, { color: color.ink }]}>Share wishlist ›</Text>
+              </Pressable>
+            ) : null}
           </>
         )}
       </ScrollView>
