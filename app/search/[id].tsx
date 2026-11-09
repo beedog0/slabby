@@ -192,9 +192,11 @@ export default function SearchedCard() {
           <SlabView card={slab} width={slabW} interactive onDragChange={setTilting} />
         </View>
 
-        <View style={styles.titleRow}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={sealed ? 4 : 2} style={[type.title, { color: color.ink }]}>
+        {/* Sealed names run long ("… Booster Bundle"): the name takes the full width and the
+            price sits on one line under it. Cards keep name left, price right. */}
+        <View style={sealed ? styles.titleStack : styles.titleRow}>
+          <View style={sealed ? undefined : { flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={sealed ? undefined : 2} style={[type.title, { color: color.ink }]}>
               {sealed ? ready.name : displayName(ready.name)}
             </Text>
             <Text numberOfLines={2} style={[type.text, { color: color.secondary }]}>
@@ -205,7 +207,7 @@ export default function SearchedCard() {
               {detail ? ` · ${detail}` : ''}
             </Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
+          <View style={sealed ? styles.priceLine : { alignItems: 'flex-end' }}>
             <Text
               style={[type.title, { color: quiet ? color.secondary : color.ink }]}
               accessibilityLabel={
@@ -457,6 +459,8 @@ const styles = StyleSheet.create({
   nav: { position: 'absolute', left: space.gutter - 10, zIndex: 1 },
   hero: { alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.m, paddingHorizontal: space.gutter },
+  titleStack: { gap: space.s, paddingHorizontal: space.gutter },
+  priceLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: space.m },
   chart: { minHeight: 172, justifyContent: 'center', paddingTop: space.xl, paddingBottom: space.m },
   chartNote: { paddingTop: space.xl, paddingBottom: space.m },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.l },
