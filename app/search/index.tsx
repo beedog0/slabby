@@ -2,17 +2,18 @@
 // the vault. Results show tonight's raw market; open a card for PSA prices with charts.
 // Typing, filtering and sorting only query our own catalog table, never a paid API.
 // Quiet controls under the field: "Filter" (language, rarity, set), the sort dropdown, and
-// List / Grid (remembered, like home's view switch). Scrolling down slides the title, field and
-// game tabs away and keeps that control row pinned; scrolling up brings them back.
+// List / Grid (remembered, like home's view switch). Scrolling down slides the whole header away
+// (title, game tabs, field, control row and filter chips) so results get the screen. Scrolling up
+// anywhere brings back the field and the control row under it (Bryan: no scrolling all the way up
+// to search again); the title and game tabs return at the top. Also the Search tab (app/(tabs)/find).
 
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
-import { Animated, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Animated, FlatList, Modal, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArtImage } from '../../src/components/ArtImage';
 import { SheetScope, SheetScrollView, useSheetDrag } from '../../src/components/sheet/useSheetDrag';
 import { SEARCH_MODES, ViewSwitch } from '../../src/components/collection/ViewSwitch';
-import { Segmented } from '../../src/components/Segmented';
 import { BackIcon, Hairline, IconButton, PrimaryButton, SearchIcon } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
 import { buyPrices, cardNumber, displayName, type Game } from '../../src/services/search';
@@ -36,6 +37,10 @@ import {
   type Sort,
 } from '../../src/services/searchFilters';
 import { useDisplay } from '../../src/store/display';
+import { useRecent } from '../../src/store/recent';
+import { useVault } from '../../src/store/vault';
+import { rowFor } from '../../src/pricing/portfolio';
+import { SearchLanding } from '../../src/components/search/SearchLanding';
 import { useRules } from '../../src/store/rules';
 import { radius, shadow, size, space, type } from '../../src/theme/tokens';
 import { themed, useColors } from '../../src/theme/theme';
@@ -51,7 +56,10 @@ export default function Search() {
   // Con mode opens search with ?con=1: each result also shows what to pay, from the buying rules.
   const params = useLocalSearchParams<{ con?: string; q?: string }>();
   const con = params.con === '1';
+  const asTab = useSegments()[0] === '(tabs)';
+  const vaultCards = useVault((st) => st.cards);
   const rules = useRules((s) => s.rules);
+  const vaultRows = useMemo(() => vaultCards.map((c) => rowFor(c, rules)), [vaultCards, rules]);
   const { searchLayout: layout, setSearchLayout } = useDisplay();
   const { width } = useWindowDimensions();
   const cellW = Math.floor((width - space.gutter * 2 - GRID_GAP) / 2);
@@ -65,20 +73,32 @@ export default function Search() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuTop, setMenuTop] = useState(0);
-  const [topH, setTopH] = useState(0); // the part that slides away
-  const [headerH, setHeaderH] = useState(0); // all of it, pinned row included
+  const [topH, setTopH] = useState(0); // title and game tabs: back only at the top
+  const [headerH, setHeaderH] = useState(0); // all of it, field, control row and chips included
   const controlsRef = useRef<ComponentRef<typeof View>>(null);
   const listRef = useRef<FlatList<Found>>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
-  // Follows scroll direction: down hides up to topH, any scroll up reveals again.
-  const slide = useMemo(
-    () =>
-      Animated.diffClamp(scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' }), 0, Math.max(topH, 1)).interpolate({
-        inputRange: [0, Math.max(topH, 1)],
-        outputRange: [0, -Math.max(topH, 1)],
-      }),
-    [scrollY, topH],
-  );
+  // How far the header is slid up. The top part follows the list exactly; the field and control row
+  // under it hide on scroll down and come back on any scroll up, so search is always one flick away.
+  const slide = useRef(new Animated.Value(0)).current;
+  const scrollState = useRef({ y: 0, rowHidden: 0 });
+  const onListScroll = (y: number) => {
+    const st = scrollState.current;
+    const rowH = Math.max(0, headerH - topH);
+    const top = Math.max(0, y);
+    st.rowHidden = Math.max(0, Math.min(rowH, st.rowHidden + top - st.y));
+    st.y = top;
+    slide.setValue(-Math.min(top, topH + st.rowHidden));
+  };
+  const settle = (y: number, velocity: number) => {
+    if (velocity !== 0 || y <= 0 || y >= topH) return;
+    listRef.current?.scrollToOffset({ offset: y < topH / 2 ? 0 : topH, animated: true });
+  };
+  // Switching list and grid remounts the list at the top, without a scroll event.
+  useEffect(() => {
+    scrollState.current = { y: 0, rowHidden: 0 };
+    slide.setValue(0);
+  }, [layout, slide]);
   const openSort = () => {
     // The row moves with the header, so measure where it is now.
     controlsRef.current?.measureInWindow((_x, y, _w, h) => {
@@ -117,6 +137,14 @@ export default function Search() {
     return () => clearTimeout(t);
   }, [f]);
 
+  // A search that found something and was left standing for a moment counts as a recent search.
+  useEffect(() => {
+    const q = f.q.trim();
+    if (state !== 'done' || !results.length || q.length < 2) return;
+    const t = setTimeout(() => useRecent.getState().addQuery(q), 1500);
+    return () => clearTimeout(t);
+  }, [state, results, f.q]);
+
   const loading = progress != null && progress.total > 0 && progress.done < progress.total;
   const loadingLine = loading ? ` The catalog is still loading (${progress!.done} of ${progress!.total} sets), so some cards aren’t in yet.` : '';
   const nFilters = filterCount(f);
@@ -140,31 +168,20 @@ export default function Search() {
         onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
       >
         <View onLayout={(e) => setTopH(e.nativeEvent.layout.height)}>
-          <View style={styles.nav}>
-            <IconButton label="Back" onPress={() => router.back()}>
-              <BackIcon />
-            </IconButton>
-          </View>
-          <View style={styles.gutter}>
-            <Text style={[type.title, { color: color.ink, paddingBottom: space.l }]}>{con ? 'Search to buy' : 'Search'}</Text>
-            <View style={styles.field}>
-              <SearchIcon s={18} tint={color.secondary} />
-              <TextInput
-                value={f.q}
-                onChangeText={(q) => set({ q })}
-                autoFocus
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-                placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Umbreon VMAX 215'}
-                placeholderTextColor={color.secondary}
-                style={[type.body, styles.input]}
-                accessibilityLabel="Search cards"
-              />
+          {/* As the Search tab it's a top-level screen: no back button. */}
+          {asTab ? (
+            <View style={{ height: space.l }} />
+          ) : (
+            <View style={styles.nav}>
+              <IconButton label="Back" onPress={() => router.back()}>
+                <BackIcon />
+              </IconButton>
             </View>
-            <Segmented<GameFilter>
-              style={{ marginTop: space.m }}
+          )}
+          <View style={styles.gutter}>
+            {/* The tab bar already says Search; the tab keeps its header slim. */}
+            {asTab ? null : <Text style={[type.title, { color: color.ink, paddingBottom: space.m }]}>{con ? 'Search to buy' : 'Search'}</Text>}
+            <GameTabs
               value={f.game ?? 'all'}
               onChange={(g) =>
                 // Sets and rarities belong to one game; Japanese only exists for Pokémon.
@@ -181,6 +198,27 @@ export default function Search() {
                 { value: 'onepiece', label: 'One Piece' },
                 { value: 'riftbound', label: 'Riftbound' },
               ]}
+            />
+          </View>
+        </View>
+        {/* The field sits just above the control row so a mid-list scroll up brings both back. */}
+        <View style={styles.gutter}>
+          <View style={styles.field}>
+            <SearchIcon s={18} tint={color.secondary} />
+            <TextInput
+              value={f.q}
+              onChangeText={(q) => set({ q })}
+              // Pushed (con's Search to buy, a scan's name): type straight away. The tab never does:
+              // it opens onto its landing, keyboard down until you tap the field.
+              autoFocus={!asTab}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Card, set or number'}
+              placeholderTextColor={color.secondary}
+              style={[type.body, styles.input]}
+              accessibilityLabel="Search cards"
             />
           </View>
         </View>
@@ -222,7 +260,7 @@ export default function Search() {
             ) : null}
           </ScrollView>
         ) : null}
-        {/* A hairline under the pinned row once results scroll beneath it. */}
+        {/* A hairline under the header once results scroll beneath it. */}
         <Animated.View
           style={{
             height: StyleSheet.hairlineWidth * 2,
@@ -239,11 +277,28 @@ export default function Search() {
           ref={listRef}
           key={layout}
           data={hint ? [] : results}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+            listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => onListScroll(e.nativeEvent.contentOffset.y),
+          })}
           scrollEventThrottle={16}
+          // Never leave the title and game tabs half under the status bar: settle shown or hidden.
+          onScrollEndDrag={(e) => settle(e.nativeEvent.contentOffset.y, e.nativeEvent.velocity?.y ?? 0)}
+          onMomentumScrollEnd={(e) => settle(e.nativeEvent.contentOffset.y, 0)}
           scrollIndicatorInsets={{ top: headerH }}
           style={{ paddingTop: insets.top }}
-          ListEmptyComponent={hint ? <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text> : undefined}
+          ListEmptyComponent={
+            state === 'idle' && !con ? (
+              <SearchLanding
+                onQuery={(q) => set({ q })}
+                onOpen={(c) => openCard(c, false)}
+                vault={vaultRows}
+                note={loading ? `The catalog is still loading (${progress!.done} of ${progress!.total} sets), so some cards aren’t in yet.` : null}
+              />
+            ) : hint ? (
+              <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>{hint}</Text>
+            ) : undefined
+          }
           numColumns={layout === 'grid' ? 2 : 1}
           keyExtractor={(c) => String(c.productId)}
           keyboardShouldPersistTaps="handled"
@@ -458,9 +513,30 @@ function CheckRow({ label, detail, on, onPress }: { label: string; detail?: stri
   );
 }
 
+/** Which game to search: quiet words, the picked one in ink with a short underline. */
+function GameTabs({ value, onChange, options }: { value: GameFilter; onChange: (g: GameFilter) => void; options: { value: GameFilter; label: string }[] }) {
+  const color = useColors();
+  return (
+    <View style={{ flexDirection: 'row', gap: space.xl, height: size.touch, alignItems: 'center' }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable key={o.value} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onChange(o.value)} hitSlop={6}>
+            <Text style={[type.text, { color: on ? color.ink : color.secondary, fontWeight: on ? '600' : '400' }]}>{o.label}</Text>
+            <View style={{ height: size.selectLine, marginTop: 4, backgroundColor: on ? color.ink : 'transparent', borderRadius: 1 }} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 type ResultProps = { card: Found; con: boolean; rules: PricingRules; change: number | null; days: number };
 
-const openCard = (card: Found, con: boolean) => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`);
+const openCard = (card: Found, con: boolean) => {
+  useRecent.getState().addViewed(card);
+  router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`);
+};
 
 /** Grid tile: the card photo, then name, set · number and price, like home's grid. */
 function ResultTile({ card, width, con, rules, change, days }: ResultProps & { width: number }) {
@@ -503,7 +579,7 @@ function ResultRow({ card, con, rules, change, days }: { card: Found; con: boole
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push(con ? `/search/${card.productId}?con=1` : `/search/${card.productId}`)}
+      onPress={() => openCard(card, con)}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.5 }]}
     >
       <View style={styles.thumb}>{card.imageUrl ? <ArtImage uri={card.imageUrl} recyclingKey={String(card.productId)} style={{ flex: 1 }} /> : null}</View>

@@ -145,6 +145,17 @@ export const size = {
   skeletonBar: 14,
   /** Applied-filter chips under search's control row. */
   chip: 30,
+  // Bottom tab bar (above the home indicator).
+  tabBar: 54,
+  tabIcon: 24,
+  /** The black Scan button in the middle of the tab bar. */
+  tabScanW: 56,
+  tabScanH: 38,
+  // Profile.
+  avatar: 76,
+  avatarEdit: 96,
+  /** Profile's secondary (well) button: Edit profile. */
+  wellButton: 40,
 } as const;
 
 /** Sheet motion in ms. Opening eases out; closing is quicker so the next screen isn't kept waiting. */
@@ -173,6 +184,8 @@ export const type = {
   text: { ...tab, fontSize: 15, fontWeight: '400' },
   secondary: { ...tab, fontSize: 13, fontWeight: '400' },
   caption: { ...tab, fontSize: 12, fontWeight: '400' },
+  /** Tab bar labels. Sentence case, never tracked. */
+  tabLabel: { ...tab, fontSize: 11, fontWeight: '500' },
 } as const satisfies Record<string, TextStyle>;
 
 export const shadow = {
