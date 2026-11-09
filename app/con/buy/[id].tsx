@@ -13,6 +13,7 @@ import { PriceLine, type Tick } from '../../../src/components/PriceLine';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../../src/components/ui';
 import { money } from '../../../src/lib/format';
 import { BUY_RATING_LABEL, SUSPICIOUS_FRACTION, buyRating, looksLikeTypo } from '../../../src/pricing/rules';
+import { canAutoPrice } from '../../../src/pricing/lastSales';
 import { matchNewCard, refreshPrices } from '../../../src/services/comps';
 import { cardFromDetails } from '../../../src/services/psa';
 import {
@@ -74,7 +75,8 @@ export default function TheyreAsking() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [price?.marketCents, wish?.key]);
   const market = price?.marketCents ?? null;
-  const buy = buyPrices(market, rules);
+  // A last-sold headline (under 5 sales) never fills in a target or max.
+  const buy = canAutoPrice(price) ? buyPrices(market, rules) : null;
   const ask = (parseInt(digits || '0', 10) || 0) * 100;
   const has = digits.length > 0;
   const rating =

@@ -95,4 +95,15 @@ describe('buy signal', () => {
     expect(thinRead(price([5000], 0, { points: 1 }))).toEqual({ lastSale: null, saleDays: 1, low: null, high: null });
     expect(shortDay('2026-11-09')).toBe('Nov 9');
   });
+
+  it('no read on a last-sold headline', () => {
+    const s = series(162000, 124000, 124000);
+    const recent = [
+      { day: '2026-11-01', cents: 124000, count: 2 },
+      { day: '2026-10-01', cents: 130000, count: 1 },
+    ];
+    const p = price(s, 14, { basis: 'lastSold', recent });
+    expect(buySignal(p, true)).toBeNull();
+    expect(signalGap(p, true, false)).toBe('Only 3 sales in 6 months. A read needs at least 5.');
+  });
 });

@@ -20,6 +20,8 @@ import { SlabView } from '../../src/components/SlabView';
 import { BackIcon, Hairline, IconButton, PrimaryButton } from '../../src/components/ui';
 import { money, pct } from '../../src/lib/format';
 import { lastReal } from '../../src/pricing/buySignal';
+import { canAutoPrice } from '../../src/pricing/lastSales';
+import { SaleLines } from '../../src/components/search/SaleLines';
 import { chartable, history, realPoints } from '../../src/pricing/cardStats';
 import { CardAnalyticsView, openSetPage, setTitle } from '../../src/components/search/CardAnalytics';
 import type { CardPrice } from '../../src/services/comps';
@@ -170,7 +172,8 @@ export default function SearchedCard() {
   const detail = [no && `#${no}`, ready.language === 'ja' ? 'JP' : null].filter(Boolean).join(' · ');
   const openSet = () => openSetPage(ready, groupId);
   const otherGame = ready.game !== 'pokemon' ? ready.game : null;
-  const buy = buying && price && !quiet ? buyPrices(price.marketCents, rules) : null;
+  // A last-sold headline (under 5 sales) never fills in a buy target or max.
+  const buy = buying && price && !quiet && canAutoPrice(price) ? buyPrices(price.marketCents, rules) : null;
   // The sheet's market wins: for a raw card it's the print you picked.
   const sellMarket = draft ? (draft.marketCents ?? (price && !quiet ? price.marketCents : null)) : null;
   const sellCost = draft?.cost?.kind === 'pulled' ? { kind: 'pulled' as const, packCents: pack?.cents ?? null } : (draft?.cost ?? null);
@@ -221,6 +224,8 @@ export default function SearchedCard() {
             ) : null}
           </View>
         </View>
+
+        {pick !== 'raw' ? <SaleLines price={price} style={styles.gutter} /> : null}
 
         {draft ? (
           <View style={[styles.gutter, { paddingTop: space.xl }]}>
