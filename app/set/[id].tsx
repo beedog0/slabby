@@ -145,7 +145,7 @@ export default function SetPage() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: color.canvas, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: color.canvas }}>
       <FlatList
         data={shown}
         key={COLS}
@@ -153,7 +153,8 @@ export default function SetPage() {
         keyExtractor={(c) => String(c.productId)}
         ListHeaderComponent={header}
         columnWrapperStyle={{ gap: GAP, paddingHorizontal: space.gutter }}
-        contentContainerStyle={{ paddingBottom: insets.bottom + space.xl, gap: space.l }}
+        // Cards scroll up under the status bar instead of stopping at a blank white band (Bryan).
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom + space.xl, gap: space.l }}
         ListEmptyComponent={
           <Text style={[type.text, styles.gutter, { color: color.secondary, paddingTop: space.l }]}>
             {cards === null ? 'Loading the set…' : cards === 'error' ? 'Can’t load this set right now.' : sort === 'rising' || sort === 'falling' ? 'No price moves this week yet.' : picked.length ? 'No cards with those rarities.' : 'No cards here.'}
@@ -218,7 +219,7 @@ function Tile({ card, w, trade }: { card: Found; w: number; trade?: boolean }) {
       <View style={[{ width: w, height: Math.round(w * (88 / 63)), borderRadius: radius.thumb * 2, backgroundColor: color.well }, shadow.thumb]}>
         <ArtImage uri={card.imageUrl} label={card.name} recyclingKey={String(card.productId)} fit="contain" style={{ flex: 1, borderRadius: radius.thumb * 2 }} />
       </View>
-      <Text numberOfLines={1} style={[type.secondary, { color: color.ink, paddingTop: space.s }]}>
+      <Text numberOfLines={2} style={[type.secondary, { color: color.ink, paddingTop: space.s }]}>
         {displayName(card.name)}
       </Text>
       <Text numberOfLines={1} style={[type.secondary, { color: color.ink, fontWeight: '600' }]}>

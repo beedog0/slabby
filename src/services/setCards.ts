@@ -92,8 +92,9 @@ export async function cardsInSet(groupId: number, limit = 600): Promise<Found[]>
     .from('catalog')
     .select(COLS)
     .eq('group_id', groupId)
-    // Singles only: sealed product (0015) has no card number.
-    .not('number', 'is', null)
+    // Singles only. Sealed is marked by sealed_type (0015); a card TCGplayer hasn't numbered yet
+    // (new sets, promos) is still a card, so a missing number no longer hides it.
+    .is('sealed_type', null)
     .order('market_cents', { ascending: false, nullsFirst: false })
     .limit(limit);
   if (error) throw error;
