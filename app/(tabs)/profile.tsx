@@ -1,11 +1,11 @@
 // The Profile tab: the page you'd show someone, and the one that changes as you collect.
 //
-// Top to bottom: you (photo, name, @handle, friends, how long you've collected); what the
-// collection is worth with its 30-day line; the slab doing best for you (biggest gain on what you
-// paid, else the most valuable); your grade mix as one bar; recent activity (added and sold);
-// your wishlist; a few numbers; Share profile, the one button. Settings live in the … menu.
-// (Bryan: the old page felt "stale and blank": setup chores up top, a slab grid that repeated
-// the Collection tab, and nothing that changed day to day.)
+// Top to bottom, each section set off by a hairline: you (photo, name, @handle, friends, how long
+// you've collected); collection value with its 30-day line; Showcase, your four most valuable
+// slabs two across with this week's move; Wishlist with prices; Stats (gain on what you paid,
+// best buy, sales); Grades as one bar; Recent activity; Share profile, the one button. Settings
+// live in the … menu. (Bryan: the first version "felt stale and blank"; the second needed clear
+// separation, and the best buy shouldn't sit alone ahead of the showcase.)
 
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ComponentRef, type ReactNode } from 'react';
@@ -22,7 +22,7 @@ import { WishTile } from '../../src/components/WishTile';
 import { ChangeText } from '../../src/components/search/CatalogTile';
 import { cardLabel, changeText, money, saleDay } from '../../src/lib/format';
 import { collectionSeries, rowFor, weekChange } from '../../src/pricing/portfolio';
-import { gradeMix, profileStats, recentActivity, showcase, spotlight } from '../../src/pricing/profileStats';
+import { gradeMix, profileStats, recentActivity, showcase } from '../../src/pricing/profileStats';
 import { wishView } from '../../src/pricing/wishlistView';
 import { fetchFriends, publishShowcase } from '../../src/services/friends';
 import { publishProfile } from '../../src/services/profile';
@@ -69,9 +69,8 @@ export default function ProfileTab() {
 
   const rows = useMemo(() => cards.map((c) => rowFor(c, rules)), [cards, rules, prices]);
   const stats = useMemo(() => profileStats(rows), [rows]);
-  const spot = useMemo(() => spotlight(stats), [stats]);
-  // Showcase: the top four by value, leaving out the slab already spotlighted above.
-  const shelf = useMemo(() => showcase(rows, 5).filter((r) => r !== spot?.row).slice(0, 4), [rows, spot]);
+  // Showcase: the top four by value.
+  const shelf = useMemo(() => showcase(rows, 4), [rows]);
   const mix = useMemo(() => gradeMix(rows), [rows]);
   const activity = useMemo(() => recentActivity(rows), [rows]);
   const series = useMemo(() => collectionSeries(rows, 30), [rows]);
@@ -172,8 +171,9 @@ export default function ProfileTab() {
 
       {/* What it's worth, and where it's been this month. */}
       {stats.owned ? (
-        <View style={[styles.gutter, { paddingTop: space.xxl }]}>
-          <Text style={[type.secondary, { color: color.secondary }]}>Collection value</Text>
+        <View style={[styles.gutter, styles.section]}>
+          <Hairline />
+          <Text style={[type.secondary, { color: color.secondary, paddingTop: space.xl }]}>Collection value</Text>
           <Text numberOfLines={1} adjustsFontSizeToFit style={[type.displayS, { color: color.ink }]}>
             {money(stats.valueCents)}
           </Text>
@@ -182,12 +182,6 @@ export default function ProfileTab() {
             {month ? ' this month · ' : ''}
             {stats.owned} {stats.owned === 1 ? 'slab' : 'slabs'} · {stats.sets} {stats.sets === 1 ? 'set' : 'sets'}
           </Text>
-          {stats.paidCents ? (
-            <Text style={[type.text, { color: color.secondary }]}>
-              <Text style={{ color: upDown(stats.gainCents) }}>{signed(stats.gainCents)}</Text>
-              {` (${gainPct != null ? `${gainPct >= 0 ? '+' : '−'}${Math.abs(gainPct)}%` : ''}) on ${money(stats.paidCents)} paid`}
-            </Text>
-          ) : null}
           {series.length >= 2 ? (
             <View style={{ paddingTop: space.l }}>
               <MiniChart values={series} width={width - space.gutter * 2} height={size.homeChart - space.xl} />
@@ -199,31 +193,7 @@ export default function ProfileTab() {
         </View>
       ) : null}
 
-      {/* The slab doing best for you, posed, with why it's here. */}
-      {spot ? (
-        <Pressable accessibilityRole="button" onPress={() => router.push(`/card/${spot.row.card.id}`)} style={styles.spot}>
-          <SlabView card={spot.row.card} width={spotW} />
-          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-            <Text style={[type.secondary, { color: color.secondary }]}>{spot.gainCents != null ? 'Best buy' : 'Top slab'}</Text>
-            <Text style={[type.body, { color: color.ink }]}>{spot.row.card.name}</Text>
-            <Text style={[type.secondary, { color: color.secondary }]}>{cardLabel(spot.row.card)}</Text>
-            <Text style={[type.rowPrice, { color: color.ink, paddingTop: space.s }]}>{money(spot.row.price!.marketCents)}</Text>
-            {spot.gainCents != null ? (
-              <Text style={[type.secondary, { color: color.secondary }]}>
-                <Text style={{ color: color.gain }}>{signed(spot.gainCents)}</Text> on what you paid
-              </Text>
-            ) : null}
-          </View>
-        </Pressable>
-      ) : (
-        <View style={styles.emptyHero}>
-          <View style={[styles.ghost, { width: spotW, height: (spotW * size.heroH) / size.heroW }]} />
-          <Text style={[type.body, styles.center, { color: color.ink, paddingTop: space.xl }]}>Your best slab shows here</Text>
-          <Text style={[type.text, styles.center, { color: color.secondary }]}>Scan your first slab to start.</Text>
-        </View>
-      )}
-
-      {/* Showcase: the next most valuable, big, with price and this week's move under each. */}
+      {/* Showcase leads: your four most valuable, big, with price and this week's move under each. */}
       {shelf.length ? (
         <Block title="Showcase" action={{ label: 'See all', onPress: () => router.navigate('/') }}>
           <View style={styles.grid}>
@@ -244,7 +214,13 @@ export default function ProfileTab() {
             })}
           </View>
         </Block>
-      ) : null}
+      ) : (
+        <View style={styles.emptyHero}>
+          <View style={[styles.ghost, { width: spotW, height: (spotW * size.heroH) / size.heroW }]} />
+          <Text style={[type.body, styles.center, { color: color.ink, paddingTop: space.xl }]}>Your best slab shows here</Text>
+          <Text style={[type.text, styles.center, { color: color.secondary }]}>Scan your first slab to start.</Text>
+        </View>
+      )}
 
       {/* Wishlist: what you're hunting, with prices, and the way into its own page. */}
       {wished.length ? (
@@ -261,18 +237,45 @@ export default function ProfileTab() {
           </ScrollView>
         </Block>
       ) : (
-        <View style={[styles.gutter, { paddingTop: space.xxl }]}>
-          <Hairline />
-          <Pressable accessibilityRole="button" onPress={() => router.push('/wishlist')} style={({ pressed }) => [styles.wishRow, pressed && { opacity: 0.6 }]}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[type.body, { color: color.ink }]}>Wishlist</Text>
-              <Text style={[type.secondary, { color: color.secondary }]}>Cards you’re hunting and what you’d pay</Text>
-            </View>
-            <Text style={[type.text, { color: color.secondary }]}>›</Text>
-          </Pressable>
-          <Hairline />
-        </View>
+        <Block title="Wishlist" sub="Cards you’re hunting and what you’d pay" action={{ label: 'Open', onPress: () => router.push('/wishlist') }}>
+          {null}
+        </Block>
       )}
+
+      {/* Stats: the numbers, each on its own line. Best buy lives here, not as a second hero. */}
+      {stats.paidCents || stats.bestBuy || stats.sold ? (
+        <Block title="Stats">
+          {[
+            stats.paidCents ? (
+              <Line key="gain" label="Gain on what you paid" sub={`${gainPct != null ? `${gainPct >= 0 ? '+' : '−'}${Math.abs(gainPct)}% on ` : 'on '}${money(stats.paidCents)} paid`}>
+                <Text style={{ color: upDown(stats.gainCents) }}>{signed(stats.gainCents)}</Text>
+              </Line>
+            ) : null,
+            stats.bestBuy ? (
+              <Line
+                key="best"
+                label="Best buy"
+                sub={`${stats.bestBuy.row.card.name} · ${cardLabel(stats.bestBuy.row.card)}`}
+                onPress={() => router.push(`/card/${stats.bestBuy!.row.card.id}`)}
+              >
+                <Text style={{ color: color.gain }}>{signed(stats.bestBuy.gainCents)}</Text>
+              </Line>
+            ) : null,
+            stats.sold ? (
+              <Line key="sold" label={`Sold ${stats.sold} ${stats.sold === 1 ? 'card' : 'cards'}`} sub={`${signed(stats.profitCents)} profit`} subColor={upDown(stats.profitCents)}>
+                {money(stats.soldCents)}
+              </Line>
+            ) : null,
+          ]
+            .filter(Boolean)
+            .map((el, i) => (
+              <View key={i}>
+                {i ? <Hairline /> : null}
+                {el}
+              </View>
+            ))}
+        </Block>
+      ) : null}
 
       {/* Grade mix: one bar in ink tones, no color. */}
       {mix.length ? (
@@ -325,17 +328,8 @@ export default function ProfileTab() {
         </Block>
       ) : null}
 
-      {/* Sales, once there are some. */}
-      {stats.sold ? (
-        <Block title="Sales">
-          <Line label={`Sold ${stats.sold} ${stats.sold === 1 ? 'card' : 'cards'}`} sub={`${signed(stats.profitCents)} profit`} subColor={upDown(stats.profitCents)}>
-            {money(stats.soldCents)}
-          </Line>
-        </Block>
-      ) : null}
-
       <View style={styles.share}>
-        {spot ? (
+        {shelf.length ? (
           <PrimaryButton title="Share profile" onPress={() => router.push('/share-profile')} />
         ) : (
           <PrimaryButton title="Scan a slab" onPress={() => router.push('/scan')} />
@@ -362,7 +356,10 @@ function Block({
   const color = useColors();
   const styles = useStyles();
   return (
-    <View style={{ paddingTop: space.xxl }}>
+    <View style={styles.section}>
+      <View style={styles.gutter}>
+        <Hairline />
+      </View>
       <View style={[styles.gutter, styles.blockHead]}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[type.section, { color: color.ink }]}>{title}</Text>
@@ -380,17 +377,17 @@ function Block({
 }
 
 /** A stat line: label and a quiet line under it on the left, the number on the right. */
-function Line({ label, sub, subColor, children }: { label: string; sub?: string; subColor?: string; children: ReactNode }) {
+function Line({ label, sub, subColor, onPress, children }: { label: string; sub?: string; subColor?: string; onPress?: () => void; children: ReactNode }) {
   const color = useColors();
   const styles = useStyles();
   return (
-    <View style={styles.line}>
+    <Pressable accessibilityRole={onPress ? 'button' : undefined} disabled={!onPress} onPress={onPress} style={({ pressed }) => [styles.line, pressed && { opacity: 0.6 }]}>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[type.text, { color: color.ink }]}>{label}</Text>
         {sub ? <Text style={[type.secondary, { color: subColor ?? color.secondary }]}>{sub}</Text> : null}
       </View>
       <Text style={[type.numberM, { color: color.ink }]}>{children}</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -448,7 +445,8 @@ const useStyles = themed((color) =>
     grid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.l, rowGap: space.xl },
     priceLine: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: space.s },
     rail: { paddingHorizontal: space.gutter, gap: space.m },
-    blockHead: { flexDirection: 'row', alignItems: 'flex-end', gap: space.m, paddingBottom: space.m },
+    section: { paddingTop: space.xxl },
+    blockHead: { flexDirection: 'row', alignItems: 'flex-end', gap: space.m, paddingTop: space.xl, paddingBottom: space.l },
     blockAction: { minHeight: size.touch, justifyContent: 'flex-end', paddingBottom: 2 },
     wishRow: { minHeight: size.rowCon, flexDirection: 'row', alignItems: 'center', gap: space.m },
     line: { minHeight: size.rowVault, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingVertical: space.s },
