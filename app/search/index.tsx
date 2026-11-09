@@ -3,10 +3,11 @@
 // Typing, filtering and sorting only query our own catalog table, never a paid API.
 // Quiet controls under the field: "Filter" (language, rarity, set), the sort dropdown, and
 // List / Grid (remembered, like home's view switch). Scrolling down slides the whole header away
-// (title, field, game tabs, control row and filter chips) so results get the screen. Scrolling up
-// mid-list brings back only the slim control row; the title, field and game tabs return at the top.
+// (title, game tabs, field, control row and filter chips) so results get the screen. Scrolling up
+// anywhere brings back the field and the control row under it (Bryan: no scrolling all the way up
+// to search again); the title and game tabs return at the top. Also the Search tab (app/(tabs)/find).
 
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Animated, FlatList, Modal, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,6 +60,7 @@ export default function Search() {
   const params = useLocalSearchParams<{ con?: string; q?: string; trade?: string }>();
   const con = params.con === '1';
   const trade = params.trade === '1';
+  const asTab = useSegments()[0] === '(tabs)';
   const rules = useRules((s) => s.rules);
   const { searchLayout: layout, setSearchLayout } = useDisplay();
   const { width } = useWindowDimensions();
@@ -73,13 +75,13 @@ export default function Search() {
   const [sortOpen, setSortOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuTop, setMenuTop] = useState(0);
-  const [topH, setTopH] = useState(0); // title, field and game tabs: back only at the top
-  const [headerH, setHeaderH] = useState(0); // all of it, control row and chips included
+  const [topH, setTopH] = useState(0); // title and game tabs: back only at the top
+  const [headerH, setHeaderH] = useState(0); // all of it, field, control row and chips included
   const controlsRef = useRef<ComponentRef<typeof View>>(null);
   const listRef = useRef<FlatList<Found>>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
-  // How far the header is slid up. The top part follows the list exactly; the control row under it
-  // hides on scroll down and peeks back on any scroll up, so a mid-list scroll up costs one slim row.
+  // How far the header is slid up. The top part follows the list exactly; the field and control row
+  // under it hide on scroll down and come back on any scroll up, so search is always one flick away.
   const slide = useRef(new Animated.Value(0)).current;
   const scrollState = useRef({ y: 0, rowHidden: 0 });
   const onListScroll = (y: number) => {
@@ -159,31 +161,20 @@ export default function Search() {
         onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
       >
         <View onLayout={(e) => setTopH(e.nativeEvent.layout.height)}>
-          <View style={styles.nav}>
-            <IconButton label="Back" onPress={() => router.back()}>
-              <BackIcon />
-            </IconButton>
-          </View>
+          {/* As the Search tab it's a top-level screen: no back button. */}
+          {asTab ? (
+            <View style={{ height: space.l }} />
+          ) : (
+            <View style={styles.nav}>
+              <IconButton label="Back" onPress={() => router.back()}>
+                <BackIcon />
+              </IconButton>
+            </View>
+          )}
           <View style={styles.gutter}>
             <Text style={[type.title, { color: color.ink, paddingBottom: space.m }]}>{con ? 'Search to buy' : 'Search'}</Text>
-            <View style={styles.field}>
-              <SearchIcon s={18} tint={color.secondary} />
-              <TextInput
-                value={f.q}
-                onChangeText={(q) => set({ q })}
-                autoFocus
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-                placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Umbreon VMAX 215'}
-                placeholderTextColor={color.secondary}
-                style={[type.body, styles.input]}
-                accessibilityLabel="Search cards"
-              />
-            </View>
             <Segmented<GameFilter>
-              style={{ marginTop: space.s }}
+              style={{ marginBottom: space.m }}
               value={f.game ?? 'all'}
               onChange={(g) =>
                 // Sets and rarities belong to one game; Japanese only exists for Pokémon.
@@ -202,6 +193,25 @@ export default function Search() {
                 { value: 'onepiece', label: 'One Piece' },
                 { value: 'riftbound', label: 'Riftbound' },
               ]}
+            />
+          </View>
+        </View>
+        {/* The field sits just above the control row so a mid-list scroll up brings both back. */}
+        <View style={styles.gutter}>
+          <View style={styles.field}>
+            <SearchIcon s={18} tint={color.secondary} />
+            <TextInput
+              value={f.q}
+              onChangeText={(q) => set({ q })}
+              autoFocus
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              placeholder={f.sets.length === 1 ? `Search ${f.sets[0].name}` : 'Umbreon VMAX 215'}
+              placeholderTextColor={color.secondary}
+              style={[type.body, styles.input]}
+              accessibilityLabel="Search cards"
             />
           </View>
         </View>

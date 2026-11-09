@@ -14,6 +14,7 @@ import { useCon } from '../store/con';
 import { useCorrections } from '../store/corrections';
 import { useDisplay } from '../store/display';
 import { useEstimates } from '../store/estimates';
+import { useProfile } from '../store/profile';
 import { useRules } from '../store/rules';
 import { useTrade } from '../store/trade';
 import { useVault } from '../store/vault';
@@ -44,6 +45,7 @@ export const BACKED_UP: { key: string; store: PersistedStore }[] = [
   { key: 'slabby-appearance', store: useAppearance },
   { key: 'slabby.trade', store: useTrade },
   { key: 'slabby.estimates', store: useEstimates },
+  { key: 'slabby.profile', store: useProfile },
 ];
 
 /** Resolves once these stores have loaded from the phone, so nothing merges over a blank copy. */
