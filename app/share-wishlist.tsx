@@ -84,7 +84,7 @@ export default function ShareWishlist() {
           </View>
         ) : (
           <Text style={[type.text, { color: color.secondary, paddingHorizontal: space.gutter }]}>
-            Your wishlist is empty. Search a card and add it with what you’d pay, then share it here.
+            Nothing on your wishlist yet. Tap Cards to search any card and add it.
           </Text>
         )}
 
