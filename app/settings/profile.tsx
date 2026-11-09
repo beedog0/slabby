@@ -62,7 +62,7 @@ export default function EditProfile() {
   const pick = () =>
     pickProfilePhoto()
       .then((p) => p && setPhoto(p))
-      .catch(() => setError('Couldn’t open your photos. Try again.'));
+      .catch((e: Error) => setError(`Couldn’t open your photos. ${e?.message || 'Try again.'}`));
   const changePhoto = () =>
     photo
       ? openMenu({
